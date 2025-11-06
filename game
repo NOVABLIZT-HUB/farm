@@ -979,7 +979,7 @@ local function Start_Farm()
 				and c:FindFirstChild("TouchInterest")
 				and not c:GetAttribute("Collected") then
 				local dist = (HumanoidRootPart.Position - c.Position).Magnitude
-				if dist >= 80 and dist <= 140 then
+				if dist >= 1 and dist <= 140 then
 					farCoin = c
 					break
 				end
