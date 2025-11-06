@@ -908,142 +908,79 @@ local function ClearMap()
 	end
 end
 
-local function Start_Farm()
-	while true do
-		lastPing = tick()
+local function FindNearCoins()
+	debug_print("Fetching player data...")
+	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+	local coins = {}
 
-		-- === ROUND CHECK ===
-		if RoundTimerPart:GetAttribute("Time") == -1
-			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
-			or (RoundData and not RoundData[player.Name]) then
+	HumanoidRootPart = GetHumanoid()
+	if not HumanoidRootPart then
+		debug_print("HumanoidRootPart not found!")
+		return {}
+	end
 
-			debug_print("Entered round wait block.")
-			StatusText.Text = "Status: Waiting for round to start..."
-			SafetyPart.Position = Vector3.new(0, 100, 0)
+	if not map then
+		debug_print("Map not found!")
+		return {}
+	end
 
-			repeat
-				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-				HumanoidRootPart = GetHumanoid()
-				if HumanoidRootPart then
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
-				end
-				task.wait(1)
-			until RoundTimerPart:GetAttribute("Time") ~= -1
-				and RoundData[player.Name]
-				and not RoundData[player.Name]["Dead"]
+	if not AllCoins then
+		debug_print("CoinContainer not found!")
+		return {}
+	end
 
-			if HumanoidRootPart then
-				HumanoidRootPart.Anchored = false
-				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame
-					task.wait(0.1)
-				end
-			end
-
-			StatusText.Text = "Status: New round active!"
-			debug_print("New round active. Continuing farm.")
-		end
-
-		ClearMap()
-		RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-		HumanoidRootPart = GetHumanoid()
-
-		if not HumanoidRootPart then
-			debug_print("HumanoidRootPart missing, retrying...")
-			task.wait(1)
-			continue
-		end
-
-		if cfg["Coin Farm Mode"] ~= 1 then
-			debug_print("Invalid Coin Farm Mode, skipping...")
-			task.wait(1)
-			continue
-		end
-
-		-- === FARM LOOP ===
-		debug_print("Starting 1-far + 4-near cycle...")
-		local nearCoinDelay = 1
-		local farCoinDelay = 2.5
-
+	debug_print("Searching for nearby coins...")
+	local Chain = 0
+	local FoundOne = false
+	while task.wait() do
 		local AllCoins = CoinsFolder:GetChildren()
-		if #AllCoins == 0 then
-			debug_print("No coins found in folder, waiting...")
-			task.wait(2)
-			continue
+		local foundAny = false
+
+		RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+
+		if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
+			debug_print("Player is dead, stopping coin search.")
+			return coins
 		end
-
-		-- === FIND FAR COIN (80–140 studs) ===
-		local farCoin
-		for _, c in pairs(AllCoins) do
-			if c and c:IsA("Part") and c.Name == "Coin_Server"
-				and c:FindFirstChild("TouchInterest")
-				and not c:GetAttribute("Collected") then
-				local dist = (HumanoidRootPart.Position - c.Position).Magnitude
-				if dist >= 1 and dist <= 140 then
-					farCoin = c
-					break
-				end
-			end
+		if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 40 then
+			debug_print("Player has maximum coins, stopping coin search.")
+			return coins
 		end
+		for _, coin in pairs(AllCoins) do
+			if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server"
+				and coin:FindFirstChild("TouchInterest") and not coin:GetAttribute("Collected") then
 
-		if farCoin then
-			debug_print("Teleporting to FAR coin...")
-			HumanoidRootPart = GetHumanoid()
-			if HumanoidRootPart and farCoin and farCoin.Parent then
-				TeleportToCoin(farCoin)
-				debug_print("Arrived at far coin.")
-			else
-				debug_print("Failed to teleport to far coin (missing part).")
-			end
-		else
-			debug_print("No far coin found, waiting 2.5s...")
-			task.wait(farCoinDelay)
-			continue
-		end
+				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
 
-		-- === COLLECT 4 NEAR COINS (≤30 studs) ===
-		local collected = 0
-		local foundNear = false
-
-		for i = 1, 4 do
-			HumanoidRootPart = GetHumanoid()
-			if not HumanoidRootPart then break end
-
-			local nearestCoin, nearestDist = nil, math.huge
-			for _, c in pairs(CoinsFolder:GetChildren()) do
-				if c and c:IsA("Part") and c.Name == "Coin_Server"
-					and c:FindFirstChild("TouchInterest")
-					and not c:GetAttribute("Collected") then
-					local dist = (HumanoidRootPart.Position - c.Position).Magnitude
-					if dist <= 30 and dist < nearestDist then
-						nearestCoin = c
-						nearestDist = dist
+				if (distance <= 40 and not FoundOne) or (distance <= 10 and FoundOne) then
+					foundAny = true
+					FoundOne = true
+					if cfg["Coin Farm Mode"] == 1 then
+						Chain = Chain + 1
+						debug_print("Coin found within 20 studs at distance: " .. distance)
+						
+						TeleportToCoin(coin)
+						task.wait(1)
+						debug_print("Arrived at coin.")
+						if Chain >= 5 then
+							return coins
+						end
+						break
 					end
 				end
 			end
-
-			if nearestCoin then
-				foundNear = true
-				debug_print(string.format("Collecting NEAR coin #%d (%.1f studs)", collected + 1, nearestDist))
-				TeleportToCoin(nearestCoin)
-				collected += 1
-				task.wait(nearCoinDelay)
-			else
-				debug_print("No near coin found nearby.")
-				break
-			end
 		end
 
-		-- === WAIT BETWEEN GROUPS ===
-		if not foundNear then
-			debug_print("No near coins in range. Skipping near loop, waiting 2.5s...")
-		else
-			debug_print("Finished near coin group, waiting 2.5s before next far coin...")
+		if not foundAny then
+			StatusText.Text = "Status: No more coins nearby."
+			debug_print("No more coins within 20 studs â€” stopping loop.")
+			return coins
 		end
-		task.wait(farCoinDelay)
 	end
-end
 
+	debug_print("Found " .. #coins .. " coins nearby")
+	return coins
+end
 
 
 local function FindCoin()
@@ -1311,6 +1248,172 @@ end)
 
 local lastPing = tick()
 
+
+local function Start_Farm()
+	while true do
+		lastPing = tick()
+		if
+			RoundTimerPart:GetAttribute("Time") == -1
+			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
+			or (RoundData and not RoundData[player.Name])
+		then
+			print(RoundTimerPart:GetAttribute("Time") == -1, (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"]),(RoundData and not RoundData[player.Name]))
+			debug_print("Entered round wait block.")
+			if RoundTimerPart:GetAttribute("Time") == -1 then
+				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
+				debug_print("Round ended. Waiting for new round to start...")
+			else
+				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
+				debug_print("Waiting for round to end and new round to start...")
+			end
+			task.wait(0.5)
+			HumanoidRootPart = GetHumanoid()
+			SafetyPart.Position = Vector3.new(0, 100, 0)
+			repeat
+				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+				HumanoidRootPart = GetHumanoid()
+				if HumanoidRootPart then
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+				end
+				task.wait(1)
+			until RoundTimerPart:GetAttribute("Time") ~= -1
+				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
+			task.wait(1)
+
+			HumanoidRootPart = GetHumanoid()
+			debug_print("After round wait, got HumanoidRootPart: " .. tostring(HumanoidRootPart))
+			if HumanoidRootPart then
+				HumanoidRootPart.Anchored = false
+				debug_print("Unanchored HumanoidRootPart.")
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame
+					debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
+					task.wait(0.1)
+				end
+			end
+
+			StatusText.Text = "Status: New round active. Safe platform reached!"
+			debug_print("New round active. Safe platform reached!")
+		end
+
+		ClearMap()
+		
+		debug_print("Doing Find Coin")
+		local coin = FindCoin()
+		debug_print("Done Find Coin " .. tostring(coin) or tostring(coin.Name))
+		if type(coin) == "string" then
+			debug_print("FindCoin Response: " .. coin)
+			if coin == "Dead" then
+				StatusText.Text = "Status: You are dead!"
+				debug_print("[DEBUG] Player died, waiting for respawn...")
+				repeat
+					StatusText.Text = "Status: Respawning..."
+					task.wait(1)
+					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+					HumanoidRootPart = GetHumanoid()
+				until HumanoidRootPart
+
+				StatusText.Text = "Status: Respawned!"
+				debug_print("Player respawned!")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait(0.1)
+				end
+				continue
+			end
+
+			if coin == "WinRound1"  then
+				WinRound()
+				continue
+			elseif coin == "Full" then
+				if math.random(1,100) >= 5 then
+					Humanoid.Health = 0
+					task.wait(3)
+				end
+				StatusText.Text = "Status: Coin inventory full! Teleporting far away..."
+				debug_print("Coin inventory full! Teleporting far away...")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait()
+				end
+				continue
+			end
+			debug_print("No coin found, waiting...")
+			task.wait()
+			continue
+		end
+
+		if RoundTimerPart:GetAttribute("TTime") == -1 then
+			debug_print("Round ended during farming loop, skipping...")
+			continue
+		end
+
+		if not coin or not coin.Position then
+			StatusText.Text = "Status: Searching for coins..."
+			debug_print("Searching for coins...")
+			task.wait()
+			continue
+		end
+
+		local coinPos = coin.Position
+		if cfg["Coin Farm Mode"] == 1 then
+			debug_print("Moving to coin (mode 1)...")
+			
+			local StartedCoins = RoundData[player.Name]["Coins"] or 0
+
+			TeleportToCoin(coin)
+
+			Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+			if StartedCoins <= RoundData[player.Name]["Coins"] then
+				FindNearCoins()
+				task.wait(2.5)
+				StatusText.Text = "Status: Coin collected!"
+				debug_print("Coin collected!")
+			else
+				StatusText.Text = "Status: Coin No Collected Skipping wait!"
+				debug_print("Failed to collect Coin!")
+			end
+
+		elseif cfg["Coin Farm Mode"] == 2 then
+			if coin and coin.Parent and coin.Parent ~= Workspace then
+				coin.Parent = game.Workspace
+			end
+			local Distance = (coinPos - HumanoidRootPart.Position - Vector3.new(0, 5, 0)).Magnitude
+			local Time = math.floor(Distance / 20 * 10 + 0.5) / 10
+			StatusText.Text = "Status: Moving to coin: " .. Time .. " seconds"
+			debug_print("Moving to coin (mode 2)... Distance: " .. tostring(Distance) .. ", Time: " .. tostring(Time))
+			local TweenInfo = TweenInfo.new(Time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+			local Tween = TweenService:Create(
+				HumanoidRootPart,
+				TweenInfo,
+				{ CFrame = CFrame.new(coinPos - Vector3.new(0, 7, 0)) }
+			)
+			local TweenSafety =
+				TweenService:Create(SafetyPart, TweenInfo, { CFrame = CFrame.new(coinPos - Vector3.new(0, 10, 0)) })
+
+			if tonumber(Time) >= 10 or Distance >= 100 then
+				SafetyPart.Position = coinPos - Vector3.new(0, 10, 0)
+				HumanoidRootPart.CFrame = CFrame.new(coinPos)
+				debug_print("Teleported to far coin.")
+			else
+				Tween:Play()
+				TweenSafety:Play()
+				Tween.Completed:Wait()
+				debug_print("Tweened to coin.")
+			end
+			StatusText.Text = "Status: Coin collected!"
+			debug_print("Coin collected!")
+		else
+			debug_print("No valid Coin Farm Mode selected.")
+		end
+
+		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time")) .. ", Coins: " .. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
+		coin = nil
+	end
+end
+
 function SendMessage(message)
 	local http = game:GetService("HttpService")
 	local headers = {
@@ -1347,3 +1450,5 @@ while true do
 
 	lastPing = tick()
 end
+message.txt
+46 KB
