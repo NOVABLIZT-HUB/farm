@@ -977,7 +977,7 @@ local function Start_Farm()
 				WinRound()
 				continue
 			elseif coin == "Full" then
-				if math.random(1,100) >= 5 then
+				if math.random(1, 100) >= 5 then
 					Humanoid.Health = 0
 					task.wait(3)
 				end
@@ -1002,11 +1002,10 @@ local function Start_Farm()
 
 		-- === MAIN FARMING LOGIC ===
 		if cfg["Coin Farm Mode"] == 1 then
-			debug_print("Starting grouped coin farming...")
+			debug_print("Starting 1-far 4-near farming loop...")
 
-			local groupSize = 5
-			local groupDelay = 2.5
-			local singleCoinDelay = 1
+			local nearCoinDelay = 1
+			local farCoinDelay = 2.5
 
 			while task.wait() do
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
@@ -1016,91 +1015,63 @@ local function Start_Farm()
 
 				local AllCoins = CoinsFolder:GetChildren()
 				if #AllCoins == 0 then
-					debug_print("No coins available, waiting before next group...")
-					task.wait(groupDelay)
+					debug_print("No coins found, waiting...")
+					task.wait(farCoinDelay)
 					continue
 				end
 
-				local collectedThisGroup = 0
-				local FoundOne = false
-
-				-- === SMALL GROUP ===
-				while collectedThisGroup < groupSize do
-					local foundCoin, closestDist = nil, math.huge
-
-					for _, c in pairs(AllCoins) do
-						if c and c:IsA("Part") and c.Name == "Coin_Server"
-							and c:FindFirstChild("TouchInterest")
-							and not c:GetAttribute("Collected") then
-
-							local dist = (HumanoidRootPart.Position - c.Position).Magnitude
-							if dist < closestDist and dist <= 30 then
-								foundCoin = c
-								closestDist = dist
-							end
-						end
-					end
-
-					if foundCoin then
-						FoundOne = true
-						debug_print(string.format("Collecting coin #%d (%.1f studs)", collectedThisGroup + 1, closestDist))
-						TeleportToCoin(foundCoin)
-						collectedThisGroup += 1
-						task.wait(singleCoinDelay)
-					else
-						debug_print("No more nearby coins, ending group early.")
-						break
-					end
-				end
-
-				-- === NEXT GROUP (FAR COIN 80–140 STUDS) ===
-				local distantCoin, distantDist = nil, math.huge
+				-- === STEP 1: FIND AND TELEPORT TO 1 FAR COIN (80–140 studs) ===
+				local farCoin, farDist = nil, math.huge
 				for _, c in pairs(AllCoins) do
 					if c and c:IsA("Part") and c.Name == "Coin_Server"
 						and c:FindFirstChild("TouchInterest")
 						and not c:GetAttribute("Collected") then
-
 						local dist = (HumanoidRootPart.Position - c.Position).Magnitude
-						if dist >= 1 and dist <= 140 and dist < distantDist then
-							distantCoin = c
-							distantDist = dist
+						if dist >= 80 and dist <= 140 and dist < farDist then
+							farCoin = c
+							farDist = dist
 						end
 					end
 				end
 
-				if distantCoin then
-					debug_print(string.format("Teleporting to next group coin (%.1f studs away)...", distantDist))
-					TeleportToCoin(distantCoin)
+				if farCoin then
+					debug_print(string.format("Teleporting to FAR coin (%.1f studs)...", farDist))
+					TeleportToCoin(farCoin)
 				else
-					debug_print("No distant coin found (80–140 studs). Staying put.")
+					debug_print("No far coin found (80–140 studs). Skipping far step.")
 				end
 
-				task.wait(groupDelay)
-			end
+				-- === STEP 2: COLLECT 4 NEAR COINS (<=30 studs) ===
+				local collectedNear = 0
+				while collectedNear < 4 do
+					local nearestCoin, nearestDist = nil, math.huge
+					for _, c in pairs(CoinsFolder:GetChildren()) do
+						if c and c:IsA("Part") and c.Name == "Coin_Server"
+							and c:FindFirstChild("TouchInterest")
+							and not c:GetAttribute("Collected") then
+							local dist = (HumanoidRootPart.Position - c.Position).Magnitude
+							if dist <= 30 and dist < nearestDist then
+								nearestCoin = c
+								nearestDist = dist
+							end
+						end
+					end
 
-		elseif cfg["Coin Farm Mode"] == 2 then
-			-- Mode 2 tween logic (unchanged)
-			local coinPos = coin.Position
-			if coin and coin.Parent and coin.Parent ~= Workspace then
-				coin.Parent = Workspace
-			end
-			local Distance = (coinPos - HumanoidRootPart.Position - Vector3.new(0, 5, 0)).Magnitude
-			local Time = math.floor(Distance / 20 * 10 + 0.5) / 10
-			StatusText.Text = "Status: Moving to coin: " .. Time .. " seconds"
-			local TweenInfo = TweenInfo.new(Time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
-			local Tween = TweenService:Create(HumanoidRootPart, TweenInfo, { CFrame = CFrame.new(coinPos - Vector3.new(0, 7, 0)) })
-			local TweenSafety = TweenService:Create(SafetyPart, TweenInfo, { CFrame = CFrame.new(coinPos - Vector3.new(0, 10, 0)) })
+					if nearestCoin then
+						debug_print(string.format("Collecting NEAR coin #%d (%.1f studs)", collectedNear + 1, nearestDist))
+						TeleportToCoin(nearestCoin)
+						collectedNear += 1
+						task.wait(nearCoinDelay)
+					else
+						debug_print("No more near coins nearby.")
+						break
+					end
+				end
 
-			if tonumber(Time) >= 10 or Distance >= 100 then
-				SafetyPart.Position = coinPos - Vector3.new(0, 10, 0)
-				HumanoidRootPart.CFrame = CFrame.new(coinPos)
-			else
-				Tween:Play()
-				TweenSafety:Play()
-				Tween.Completed:Wait()
+				-- === STEP 3: WAIT BEFORE NEXT FAR COIN ===
+				debug_print("Finished 1-far + 4-near cycle, waiting 2.5s...")
+				task.wait(farCoinDelay)
 			end
-			StatusText.Text = "Status: Coin collected!"
-			debug_print("Coin collected!")
 		else
 			debug_print("No valid Coin Farm Mode selected.")
 		end
@@ -1108,8 +1079,6 @@ local function Start_Farm()
 		task.wait()
 	end
 end
-
-
 
 
 local function FindCoin()
