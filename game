@@ -1,0 +1,1488 @@
+if _G.Start then
+	print("Script is already running.")
+	return
+end
+
+_G.Start = true
+-- getgenv().Config = {}
+
+local Default_Config = {
+	--["Script_Key"] = "",
+	["CPU Saver"] = true,
+	["Coin Farm Mode"] = 1,
+
+	["Auto Open"] = {
+		["Enabled"] = false,
+		["Crate"] = "",
+	},
+
+	["Webhook"] = {
+		["URL"] = "",
+		["UserID"] = "",
+		["Only Good Webhook"] = false,
+	},
+
+	["Other"] = {
+		["Auto Prestige"] = true,
+		["Auto Restart on Update"] = false,
+		["Auto Craft"] = false, -- not implemented yet
+	},
+
+	
+	["Event"] = {
+		["Auto Do Battle Pass"] = true,
+	},
+
+	["Misc"] = {
+		["FARM_MURDERER_SHERIF_WINS"] = true,
+		["STOP_MURDERER_AFTER_KILLS"] = 20,
+		["FPS"] = 5,
+		["HopServer"] = false,
+		["MaxFails"] = 10
+	}
+}
+
+local function mergeConfig(default, user)
+	if type(default) ~= "table" then
+		return user
+	end
+	user = user or {}
+	for k, v in pairs(default) do
+		if type(v) == "table" then
+			user[k] = mergeConfig(v, user[k])
+		elseif user[k] == nil then
+			user[k] = v
+		end
+	end
+	return user
+end
+
+local cfg = (getgenv and getgenv().Config) or _G.Config or {}
+cfg = mergeConfig(Default_Config, cfg)
+
+local Version = "v2.4.5 Halloween Faster idk" .. "\n"
+local NewestVersion
+local usernameRevealed = false
+local ChromaAnimation = false
+local last_print = ""
+
+local SessionCrates = 0
+local TotalStagesBought = 0
+local TotalWeapons = 0
+local TotalGodlies, TotalChromas = 0, 0
+
+local TotalRoundswithout30coinsplus = 0
+
+local CoreGui = game:GetService("CoreGui")
+local TeleportService = game:GetService("TeleportService")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local Terrain = Workspace:WaitForChild("Terrain")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SoundService = game:GetService("SoundService")
+local PhysicsService = game:GetService("PhysicsService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
+local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
+local VirtualUser = game:GetService("VirtualUser")
+
+local Api = "https://games.roblox.com/v1/games/"
+local PlaceId = game.PlaceId
+local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
+
+local headers = {
+	["Content-Type"] = "application/json",
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
+}
+
+local map = nil
+local AllCoins = {}
+local knife = nil
+local gun = nil
+
+repeat
+	task.wait()
+until game:IsLoaded()
+	and game.Players.LocalPlayer.Character
+	and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	and Workspace:FindFirstChild("Lobby")
+
+if cfg["CPU Saver"] then
+	task.spawn(function()
+		while task.wait(5) do
+			setfpscap(cfg["Misc"]["FPS"])
+		end
+	end)
+end
+
+task.spawn(function()
+	if cfg["Other"]["Auto Restart on Update"] then
+		NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
+		while task.wait(600) do
+			NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
+			if NewestVersion ~= Version then
+				
+			end
+		end
+	end
+end)
+
+
+-- Clean up unnecessary Workspace objects
+Workspace:WaitForChild("Lobby"):Destroy()
+Workspace:WaitForChild("WeaponDisplays"):Destroy()
+Workspace:WaitForChild("PetContainer"):Destroy()
+Workspace:WaitForChild("EffectLoader"):Destroy()
+Workspace:WaitForChild("ServerStatus"):Destroy()
+Workspace:WaitForChild("GameSettings"):Destroy()
+
+-- Set up player and round references
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
+local Humanoid = character:WaitForChild("Humanoid")
+local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Database = ReplicatedStorage:WaitForChild("Database")
+local Sync = Database:WaitForChild("Sync")
+
+
+task.spawn(function()
+	local GC = getconnections or get_signal_cons
+
+	if GC then
+		for i, v in pairs(GC(player.Idled)) do
+			if v.Disable then
+				v:Disable()
+			elseif v.Disconnect then
+				v:Disconnect()
+			end
+		end
+	end
+
+	player.Idled:Connect(function()
+		VirtualUser:CaptureController()
+		VirtualUser:ClickButton2(Vector2.new())
+	end)
+
+end)
+
+
+-- Set up Modules
+local Modules = ReplicatedStorage:WaitForChild("Modules")
+local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
+
+local LevelModule = require(Modules.LevelModule)
+local ProfileData = require(Modules.ProfileData)
+local EventInfoService = require(SharedServices.EventInfoService)
+
+
+-- Populate Godly and Chroma item lists
+local GodlyList = {}
+local ChromaList = {}
+
+for _, BoxData in pairs(require(Sync.MysteryBox)) do
+	if not BoxData.Godly then
+		for _, Item in pairs(BoxData.GodlyTable) do
+			table.insert(GodlyList, Item)
+		end
+	elseif type(BoxData.Godly) == "string" then
+		table.insert(GodlyList, BoxData.Godly)
+	end
+	if BoxData.ChromaTable then
+		for _, Item in pairs(BoxData.ChromaTable) do
+			table.insert(ChromaList, Item)
+		end
+	end
+end
+
+local RoundData = Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+local Data = require(Modules.ProfileData)
+local LastRoundData = nil
+
+local StartedCoins = 0
+local Event = nil
+
+
+StartedCoins = Data.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
+Event = EventInfoService:GetCurrentEvent()
+
+local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
+local OwnedWeapons = Data["Weapons"]["Owned"]
+local totalCoins = StartedCoins
+
+local SafetyPart = Instance.new("Part")
+SafetyPart.Parent = Workspace
+SafetyPart.Size = Vector3.new(10, 1, 10)
+SafetyPart.Position = Vector3.new(0, 0, 0)
+SafetyPart.Anchored = true
+SafetyPart.Name = "SafetyPart"
+SafetyPart.Transparency = 1
+
+local CoinsFolder = Instance.new("Folder")
+CoinsFolder.Name = "CoinsFolder"
+CoinsFolder.Parent = Workspace
+
+-- Create LobbyPlatform for lobby positioning
+local LobbyPlatform = Instance.new("Part")
+LobbyPlatform.Parent = Workspace
+LobbyPlatform.Size = Vector3.new(100, 1, 100)
+LobbyPlatform.Position = Vector3.new(-100, 136, 30)
+LobbyPlatform.Anchored = true
+LobbyPlatform.Name = "LobbyPlatform"
+LobbyPlatform.Transparency = 1
+
+-- Position the player at the safety platform
+HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+
+--UI
+local ScreenGui = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local RoleDisplay = Instance.new("TextLabel")
+local PrestigeLabel = Instance.new("TextLabel")
+local LevelLabel = Instance.new("TextLabel")
+local Title = Instance.new("TextLabel")
+local TimerLabel = Instance.new("TextLabel")
+local RevealUsernameButton = Instance.new("TextButton")
+local Logo = Instance.new("ImageButton")
+local StatusText = Instance.new("TextLabel")
+local TotalGodlyLabel = Instance.new("TextLabel")
+local TotalWeaponsLabel = Instance.new("TextLabel")
+local TotalChromasLabel = Instance.new("TextLabel")
+local CurrentCoinsLabel = Instance.new("TextLabel")
+local RoundCoinsLabel = Instance.new("TextLabel")
+local SessionCoinsLabel = Instance.new("TextLabel")
+local VersionLabel = Instance.new("TextLabel")
+
+ScreenGui.Parent = CoreGui
+ScreenGui.IgnoreGuiInset = true
+
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+MainFrame.Size = UDim2.new(1, 0, 1, 0)
+
+if cfg["CPU Saver"] then
+	MainFrame.BackgroundTransparency = 0
+else
+	MainFrame.BackgroundTransparency = 0.5
+end
+
+RoleDisplay.Parent = MainFrame
+RoleDisplay.BackgroundTransparency = 1.000
+RoleDisplay.Position = UDim2.new(0.39165011, 0, 0.172029704, 0)
+RoleDisplay.Size = UDim2.new(0.200000018, 0, 0.100000001, 0)
+RoleDisplay.Font = Enum.Font.FredokaOne
+RoleDisplay.Text = "Role: Innocent (Placeholder)"
+RoleDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
+RoleDisplay.TextScaled = true
+
+PrestigeLabel.Parent = MainFrame
+PrestigeLabel.BackgroundTransparency = 1.000
+PrestigeLabel.Position = UDim2.new(0.390987396, 0, 0.376237631, 0)
+PrestigeLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
+PrestigeLabel.Font = Enum.Font.FredokaOne
+PrestigeLabel.Text = "Prestige: 0"
+PrestigeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+PrestigeLabel.TextScaled = true
+
+LevelLabel.Parent = MainFrame
+LevelLabel.BackgroundTransparency = 1.000
+LevelLabel.Position = UDim2.new(0.39165011, 0, 0.27722773, 0)
+LevelLabel.Size = UDim2.new(0.25, 0, 0.0962871313, 0)
+LevelLabel.Font = Enum.Font.FredokaOne
+LevelLabel.Text = "Level: 0"
+LevelLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+LevelLabel.TextScaled = true
+
+Title.Parent = MainFrame
+Title.BackgroundTransparency = 1.000
+Title.Position = UDim2.new(0.274353892, 0, 0.0284653474, 0)
+Title.Size = UDim2.new(0.450629562, 0, 0.128712878, 0)
+Title.Font = Enum.Font.FredokaOne
+Title.Text = "Hasty MM2 Coin Farmer"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextScaled = true
+
+TimerLabel.Parent = MainFrame
+TimerLabel.BackgroundTransparency = 1.000
+TimerLabel.Position = UDim2.new(0.25, 0, 0.8, 0)
+TimerLabel.Size = UDim2.new(0.6, 0, 0.15, 0)
+TimerLabel.Font = Enum.Font.FredokaOne
+TimerLabel.Text = "Time Farming: 00:00:00"
+TimerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TimerLabel.TextScaled = true
+
+RevealUsernameButton.Parent = MainFrame
+RevealUsernameButton.BackgroundTransparency = 1.000
+RevealUsernameButton.Position = UDim2.new(0.258805811, 0, 0.756079197, 0)
+RevealUsernameButton.Size = UDim2.new(0.465871423, 0, 0.074257426, 0)
+RevealUsernameButton.Font = Enum.Font.FredokaOne
+RevealUsernameButton.Text = "Reveal Username"
+RevealUsernameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RevealUsernameButton.TextScaled = true
+
+Logo.Parent = MainFrame
+Logo.Size = UDim2.new(0, 100, 0, 100)
+Logo.Image = "rbxassetid://72063995210355"
+
+StatusText.Parent = MainFrame
+StatusText.BackgroundTransparency = 1.000
+StatusText.Position = UDim2.new(0.259112, 0, 0.560643554, 0)
+StatusText.Size = UDim2.new(0.465871423, 0, 0.126237631, 0)
+StatusText.Font = Enum.Font.FredokaOne
+StatusText.Text = "Status: Loading"
+StatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
+StatusText.TextScaled = true
+
+TotalGodlyLabel.Parent = MainFrame
+TotalGodlyLabel.BackgroundTransparency = 1.000
+TotalGodlyLabel.Position = UDim2.new(0.0240000002, 100, 0.27722773, 0)
+TotalGodlyLabel.Size = UDim2.new(0.200000033, 0, 0.0962871313, 0)
+TotalGodlyLabel.Font = Enum.Font.FredokaOne
+TotalGodlyLabel.Text = "Godly: 0"
+TotalGodlyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TotalGodlyLabel.TextScaled = true
+
+TotalWeaponsLabel.Parent = MainFrame
+TotalWeaponsLabel.BackgroundTransparency = 1.000
+TotalWeaponsLabel.Position = UDim2.new(0.0240000002, 100, 0.376237631, 0)
+TotalWeaponsLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
+TotalWeaponsLabel.Font = Enum.Font.FredokaOne
+TotalWeaponsLabel.Text = "Total: 0"
+TotalWeaponsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TotalWeaponsLabel.TextScaled = true
+
+TotalChromasLabel.Parent = MainFrame
+TotalChromasLabel.BackgroundTransparency = 1.000
+TotalChromasLabel.Position = UDim2.new(0.0240000002, 100, 0.172029704, 0)
+TotalChromasLabel.Size = UDim2.new(0.200000018, 0, 0.100000001, 0)
+TotalChromasLabel.Font = Enum.Font.FredokaOne
+TotalChromasLabel.Text = "Chromas: 0"
+TotalChromasLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TotalChromasLabel.TextScaled = true
+
+CurrentCoinsLabel.Parent = MainFrame
+CurrentCoinsLabel.BackgroundTransparency = 1.000
+CurrentCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.16707921, 0)
+CurrentCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
+CurrentCoinsLabel.Font = Enum.Font.FredokaOne
+CurrentCoinsLabel.Text = "Current Coins: 0"
+CurrentCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+CurrentCoinsLabel.TextScaled = true
+
+RoundCoinsLabel.Parent = MainFrame
+RoundCoinsLabel.BackgroundTransparency = 1.000
+RoundCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.375, 0)
+RoundCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
+RoundCoinsLabel.Font = Enum.Font.FredokaOne
+RoundCoinsLabel.Text = "Round Coins: 0"
+RoundCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+RoundCoinsLabel.TextScaled = true
+
+SessionCoinsLabel.Parent = MainFrame
+SessionCoinsLabel.BackgroundTransparency = 1.000
+SessionCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.272277236, 0)
+SessionCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
+SessionCoinsLabel.Font = Enum.Font.FredokaOne
+SessionCoinsLabel.Text = "Session Coins: 0"
+SessionCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+SessionCoinsLabel.TextScaled = true
+
+VersionLabel.Parent = MainFrame
+VersionLabel.BackgroundTransparency = 1.0
+VersionLabel.Position = UDim2.new(0.85, 0, 0.95, 0)
+VersionLabel.Size = UDim2.new(0.15, 0, 0.05, 0)
+VersionLabel.Font = Enum.Font.SourceSansBold
+VersionLabel.Text = Version
+VersionLabel.TextColor3 = Color3.new(1, 1, 1)
+VersionLabel.TextScaled = true
+
+RevealUsernameButton.MouseButton1Click:Connect(function()
+	if not usernameRevealed then
+		RevealUsernameButton.Text = "Username: " .. player.Name
+		usernameRevealed = true
+	else
+		RevealUsernameButton.Text = "Reveal Username"
+		usernameRevealed = false
+	end
+end)
+
+local function CPUSaversIGMA()
+	if not cfg["CPU Saver"] then
+		return
+	end
+
+	local StartTime = tick()
+
+	Terrain.WaterReflectance = 0
+	Terrain.WaterTransparency = 1
+	Terrain.WaterWaveSize = 0
+	Terrain.WaterWaveSpeed = 0
+
+	Lighting.Brightness = 0
+	Lighting.GlobalShadows = false
+	Lighting.FogStart = 0
+	Lighting.FogEnd = math.huge
+	Lighting.ClockTime = 12
+	Lighting.Ambient = Color3.new(1, 1, 1)
+	Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+	Lighting.ExposureCompensation = 0
+	Lighting.ShadowSoftness = 0
+
+	if sethiddenproperty then
+		sethiddenproperty(Lighting, "Technology", Enum.Technology.Compatibility)
+		sethiddenproperty(Terrain, "Decoration", false)
+		sethiddenproperty(Workspace, "StreamingEnabled", true)
+		sethiddenproperty(Workspace, "StreamingPauseMode", Enum.StreamingPauseMode.ClientPhysicsPause)
+		sethiddenproperty(Players, "CharacterAutoLoads", false)
+	else
+		warn("sethiddenproperty not available.")
+	end
+
+	SoundService.RespectFilteringEnabled = true
+	SoundService:SetListener(Enum.ListenerType.Camera)
+	SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+
+	game:SetAttribute("DataModelMeshStreaming", false)
+	ReplicatedStorage:SetAttribute("ReplicateInstanceDestroy", false)
+
+	RunService:Set3dRenderingEnabled(false)
+	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+
+	player.PlayerGui:Destroy()
+	player.PlayerScripts:Destroy()
+
+	local success, err = pcall(function()
+		RunService:UnbindFromRenderStep("Humanoid")
+		RunService:UnbindFromRenderStep("Animation")
+	end)
+
+	local Services_To_Clear = {
+		game:GetService("Stats"),
+		Lighting,
+		CoreGui,
+		game:GetService("RobloxReplicatedStorage")
+	}
+
+	for _, Service in ipairs(Services_To_Clear) do
+		for _, package in ipairs(Service:GetChildren()) do
+			if package == ScreenGui then
+				continue
+			end
+			pcall(function()
+				package:Destroy()
+			end)
+		end
+	end
+
+
+	local function WorkspaceCleanerABitIDK(child)
+		task.wait(0.5)
+		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
+			child:Destroy()
+			return
+		end
+		if child:FindFirstChild("HumanoidRootPart") then
+			character = player.Character or player.CharacterAdded:Wait()
+		end
+		if
+			child:IsA("Model")
+			and child:FindFirstChild("HumanoidRootPart")
+			and child.Name ~= player.Name
+			and child ~= character
+		then
+			child:Destroy()
+		end
+	end
+
+	for _,child in Workspace:GetChildren() do
+		WorkspaceCleanerABitIDK(child)
+	end
+	Workspace.ChildAdded:Connect(function(child)
+			WorkspaceCleanerABitIDK(child)
+	end)
+
+	for  _, child in ipairs(Players:GetPlayers()) do
+		if child ~= player then
+			child:Destroy()
+		end
+	end
+
+	Players.ChildAdded:Connect(function(child)
+		if child ~= player then
+			child:Destroy()
+		end
+	end)
+	
+	print("Script completed. Took " .. (tick() - StartTime) .. " seconds.")
+end
+
+local function SendMessageEMBED(url, embed)
+	local data = {
+		["embeds"] = {
+			{
+				["title"] = embed.title,
+				["description"] = embed.description,
+				["color"] = embed.color,
+				["fields"] = embed.fields,
+				["timestamp"] = embed.timestamp,
+				["footer"] = {
+					["text"] = embed.footer.text,
+				},
+			},
+		},
+	}
+	request({
+		Url = url,
+		Method = "POST",
+		Headers = headers,
+		Body = HttpService:JSONEncode(data),
+	})
+end
+
+local function SendMessageWithEmbedAndPing(embed)
+	local data = {
+		["content"] = "<@" .. cfg["Webhook"]["UserID"] .. ">",
+		["embeds"] = {
+			{
+				["title"] = embed.title,
+				["description"] = embed.description,
+				["color"] = embed.color,
+				["fields"] = embed.fields,
+				["footer"] = {
+					["text"] = embed.footer.text,
+				},
+			},
+		},
+	}
+	request({
+		Url = cfg["Webhook"]["URL"],
+		Method = "POST",
+		Headers = headers,
+		Body = HttpService:JSONEncode(data),
+	})
+end
+
+
+consolecreate("DEBUG")
+local function debug_print(...)
+	last_print = ...
+	print("[" .. player.Name .. "] " .. ...)
+	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+end
+
+local tries = 0
+local ready = false
+local StartHumanoid = tick()
+local GetHumanoidConn = nil
+local function GetHumanoid()
+	character = player.Character
+	tries = 0
+
+	while tries < 60 do
+		character = character or player.Character
+		if character then
+			HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+			if HumanoidRootPart then
+				return HumanoidRootPart
+			end
+		end
+
+		ready = false
+		GetHumanoidConn = player.CharacterAdded:Connect(function(c)
+			character = c
+			ready = true
+		end)
+
+		StartHumanoid = tick()
+		while not ready and tick() - StartHumanoid < 1 do
+			wait(0.05)
+
+		end
+
+		GetHumanoidConn:Disconnect()
+		GetHumanoidConn = nil
+
+		tries = tries + 1
+	end
+
+	return nil
+end
+
+local function TeleportToCoin(coin)
+	coin.Parent = Workspace
+	StatusText.Text = "Status: Moving to coin..."
+	local coinPos = coin.Position
+
+	SafetyPart.Position = coinPos - Vector3.new(0, 5, 0)
+	HumanoidRootPart.CFrame = CFrame.new(coinPos + Vector3.new(0, 0, 0))
+	task.spawn(function()
+		if coin:FindFirstChild("TouchInterest") then
+			firetouchinterest(coin, HumanoidRootPart,0)
+			task.wait()
+			firetouchinterest(coin, HumanoidRootPart,0)
+		end
+	end)
+	task.wait(0.2)
+	coin.Parent = CoinsFolder
+end
+
+local startTime = os.time()
+local function updateTimer()
+	local elapsed = os.time() - startTime
+	TimerLabel.Text = string.format(
+		"Time Farming: %02d:%02d:%02d",
+		tonumber(math.floor(elapsed / 3600)),
+		tonumber(math.floor((elapsed % 3600) / 60)),
+		tonumber(elapsed % 60)
+	)
+end
+
+local function getCurrentCoins()
+	return Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0
+end
+
+
+
+local function updatePlayerInfo()
+	Data = require(Modules.ProfileData)
+	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+
+	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
+	LevelLabel.Text = "Level: " .. PlayerLevel .. " (" .. Data.NewXP .. "/" .. NextLevelXP .. ")"
+	PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
+
+	totalCoins = getCurrentCoins()
+	CurrentCoinsLabel.Text = "Current Coins: " .. totalCoins
+
+
+	OwnedWeapons = Data["Weapons"]["Owned"] or {}
+
+	TotalWeapons = 0
+	TotalGodlies, TotalChromas = 0, 0
+
+	for weapon, weaponamount in pairs(Data["Weapons"]["Owned"] or {}) do
+		if table.find(GodlyList, weapon) then
+			TotalGodlies = TotalGodlies + weaponamount
+		elseif table.find(ChromaList, weapon) then
+			TotalChromas = TotalChromas + weaponamount
+		end
+		TotalWeapons = TotalWeapons + weaponamount
+	end
+
+	TotalChromasLabel.Text = "Chromas: " .. tostring(TotalChromas)
+	TotalGodlyLabel.Text = "Godly: " .. tostring(TotalGodlies)
+	TotalWeaponsLabel.Text = "Total: " .. tostring(TotalWeapons)
+
+	if TotalChromas >= 1 and not ChromaAnimation then
+		ChromaAnimation = true
+		task.spawn(function()
+			while ChromaAnimation do
+				for i = 0, 1, 0.01 do
+					MainFrame.BackgroundColor3 = Color3.fromHSV(i, 1, 1)
+					task.wait()
+				end
+			end
+		end)
+	end
+
+	if cfg["Auto Open"]["Enabled"] and tonumber(Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0) >= 800 then
+		print("NIGGER")
+		local Item = ReplicatedStorage.Remotes.Shop.OpenCrate:InvokeServer(cfg["Auto Open"]["Crate"], "MysteryBox", "Candies2025")
+
+		SessionCrates = SessionCrates + 1
+		if
+			Item
+			and type(cfg["Webhook"]["URL"]) == "string"
+			and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks")
+		then
+			debug_print("Crate opened. Item received: " .. (Item or "Unknown"))
+			Data = require(Modules.ProfileData)
+			local OwnedWeapons = Data["Weapons"]["Owned"] or {}
+
+			TotalWeapons = #OwnedWeapons
+			TotalGodlies, TotalChromas = 0, 0
+			for weapon, weaponamount in pairs(Data["Weapons"]["Owned"] or {}) do
+				if table.find(GodlyList, weapon) then
+					TotalGodlies = TotalGodlies + weaponamount
+				elseif table.find(ChromaList, weapon) then
+					TotalChromas = TotalChromas + weaponamount
+				end
+			end
+			local embed = {
+				title = "",
+				description = "",
+				color = 65280,
+				fields = {},
+				footer = {
+					text = "Hasty MM2 Coin Farmer",
+				},
+				timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+			}
+
+			table.insert(embed.fields, {
+				name = "Item",
+				value = tostring(Item),
+				inline = false,
+			})
+			table.insert(embed.fields, {
+				name = "Username",
+				value = tostring(player.Name),
+				inline = false,
+			})
+			table.insert(embed.fields, {
+				name = "Total Godlies",
+				value = tostring(TotalGodlies),
+				inline = true,
+			})
+			table.insert(embed.fields, {
+				name = "Total Chromas",
+				value = tostring(TotalChromas),
+				inline = true,
+			})
+
+			if table.find(GodlyList, Item) then
+				embed.color = 16776960
+				embed.title = "Crate Opened with a Godly Item"
+				embed.description = "Congratulations! You received a rare Godly Item."
+				SendMessageWithEmbedAndPing(embed)
+			elseif table.find(ChromaList, Item) then
+				embed.color = 16711935
+				embed.title = "Crate Opened with a Chroma Item"
+				embed.description = "Nice! You received an exclusive Chroma Item."
+				SendMessageWithEmbedAndPing(embed)
+			else
+				if not cfg["Webhook"]["Only Good Webhook"] then
+					embed.title = "Crate Opened with an Ordinary Item"
+					embed.description = "You received a normal item."
+					embed.color = 65280
+					SendMessageEMBED(cfg["Webhook"]["URL"], embed)
+				end
+			end
+			embed = nil
+			Item = nil
+		end
+	end
+
+	if cfg["Other"]["Auto Prestige"] then
+		if PlayerLevel == 100 and player:GetAttribute("Prestige") < 10 then
+			Remotes.Inventory.Prestige:FireServer()
+			PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
+		end
+	end
+
+
+	local function ClaimRewards()
+		for tierStr, rewardData in pairs(EventInfoService:GetBattlePass().Rewards) do
+			local tier = tonumber(tierStr)
+			local isClaimed = ProfileData[Event.Title].ClaimedRewards[tierStr]
+			local isUnlocked = tier <= ProfileData[Event.Title].CurrentTier
+			local hasItem = rewardData.ItemID ~= ""
+			
+			if isUnlocked and not isClaimed and hasItem then
+				task.wait()
+				EventInfoService:GetEventRemotes().ClaimBattlePassReward:FireServer(tonumber(tierStr))
+			end
+		end
+	end
+	ClaimRewards()
+	if cfg["Event"]["Auto Do Battle Pass"] then
+		if tonumber(totalCoins) >= tonumber(800) then
+			if ProfileData[Event.Title].CurrentTier ~= 24 then
+
+				Remotes.Events.Generic.BuyTiers:FireServer(math.floor(totalCoins / 800))
+				task.wait()
+				TotalStagesBought = TotalStagesBought + 1
+				ClaimRewards()
+			elseif ProfileData[Event.Title].CurrentTier == 24 and tonumber(totalCoins) >= tonumber(90000) then
+				Remotes.Events.Generic.BuyFinalReward:FireServer()
+				task.wait()
+				if type(cfg["Webhook"]["URL"]) == "string" and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks") then
+					for weapon, weaponamount in pairs(OwnedWeapons) do
+						if table.find(GodlyList, weapon) then
+							TotalGodlies = TotalGodlies + weaponamount
+						elseif table.find(ChromaList, weapon) then
+							TotalChromas = TotalChromas + weaponamount
+						end
+						TotalWeapons = TotalWeapons + weaponamount
+					end
+					local embed = {
+						title = "Claimed Battle Pass Tier 25",
+						description = "",
+						color = 65280,
+						fields = {},
+						footer = {
+							text = "Hasty MM2 Coin Farmer",
+						},
+						timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+					}
+					table.insert(embed.fields, {
+						name = "Item",
+						value = tostring("Raygun"),
+						inline = false,
+					})
+					table.insert(embed.fields, {
+						name = "Username",
+						value = tostring(player.Name),
+						inline = false,
+					})
+					table.insert(embed.fields, {
+						name = "Total Godlies",
+						value = tostring(TotalGodlies),
+						inline = true,
+					})
+					table.insert(embed.fields, {
+						name = "Total Chromas",
+						value = tostring(TotalChromas),
+						inline = true,
+					})
+					SendMessageWithEmbedAndPing(cfg["Webhook"]["URL"], "<@" .. cfg["Webhook"]["UserID"] .. ">", embed)
+				end
+			end
+		end
+		ClaimRewards()
+	end
+
+	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 1000 + TotalStagesBought * 800))
+
+
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
+		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
+		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
+		LastRoundData = RoundData
+	elseif LastRoundData and LastRoundData[player.Name] then
+		if LastRoundData[player.Name]["Coins"] < 30 then
+			TotalRoundswithout30coinsplus = TotalRoundswithout30coinsplus + 1
+			LastRoundData = nil
+		end
+	else
+		RoleDisplay.Text = "Role: No Round"
+		RoundCoinsLabel.Text = "Round Coins: 0"
+	end
+
+	if TotalRoundswithout30coinsplus >= cfg["Misc"]["MaxFails"] and cfg["Misc"]["HopServer"] then
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+	end
+
+	Data = nil
+	PlayerLevel, NextLevelXP = nil, nil
+end
+
+task.spawn(function()
+	while true do
+		updateTimer()
+		updatePlayerInfo()
+		task.wait(.5)
+		task.spawn(function()
+			RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+		end)
+		task.wait(.5)
+	end
+end)
+
+-- NIGGER COLLECTOR???
+task.spawn(function()
+	while task.wait() do
+		for _, coin in ipairs(CoinsFolder:GetChildren()) do
+			if coin:FindFirstChild("TouchInterest") then
+				task.spawn(function()
+					firetouchinterest(coin, HumanoidRootPart, 0)
+					task.wait()
+					firetouchinterest(coin, HumanoidRootPart, 1)
+				end)
+			end
+		end
+	end
+end)
+
+local function ClearMap()
+	if map then
+		for _, child in ipairs(map:GetChildren()) do
+			if child:IsA("Model") and child.Name ~= "CoinContainer" then
+				child:Destroy()
+				print("Destroyed map object: " .. child.Name)
+			end
+		end
+	end
+end
+
+local function FindNearCoins()
+	debug_print("Fetching player data...")
+
+	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+	local coins = {}
+
+	HumanoidRootPart = GetHumanoid()
+	if not HumanoidRootPart then
+		debug_print("HumanoidRootPart not found!")
+		return {}
+	end
+
+	if not map then
+		debug_print("Map not found!")
+		return {}
+	end
+
+	if not CoinsFolder then
+		debug_print("CoinContainer not found!")
+		return {}
+	end
+
+	debug_print("Searching for nearby coins...")
+
+	local groupSize = 5
+	local groupDelay = 2.5
+	local singleCoinDelay = 1
+
+	while task.wait() do
+		local RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+		if RoundData and RoundData[player.Name] then
+			if RoundData[player.Name]["Dead"] then
+				debug_print("Player is dead, stopping coin search.")
+				return coins
+			end
+			if RoundData[player.Name]["Coins"] == 40 then
+				debug_print("Player has maximum coins, stopping coin search.")
+				return coins
+			end
+		end
+
+		local AllCoins = CoinsFolder:GetChildren()
+		if #AllCoins == 0 then
+			debug_print("No coins available in map. Waiting before next group...")
+			task.wait(groupDelay)
+			continue
+		end
+
+		-- === Collect a small group of coins ===
+		local collectedThisGroup = 0
+		local FoundOne = false
+
+		while collectedThisGroup < groupSize do
+			local foundCoin = nil
+			local closestDist = math.huge
+
+			for _, coin in pairs(AllCoins) do
+				if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server"
+					and coin:FindFirstChild("TouchInterest") and not coin:GetAttribute("Collected") then
+
+					local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
+					if distance < closestDist and distance <= 30 then
+						foundCoin = coin
+						closestDist = distance
+					end
+				end
+			end
+
+			if foundCoin then
+				FoundOne = true
+				debug_print(string.format("Collecting coin #%d in group (%.1f studs)", collectedThisGroup + 1, closestDist))
+				TeleportToCoin(foundCoin)
+				collectedThisGroup += 1
+				task.wait(singleCoinDelay)
+			else
+				debug_print("No coin in small range, breaking group early.")
+				break
+			end
+		end
+
+		-- === After finishing small group ===
+		local distantCoin = nil
+		local distantDist = math.huge
+
+		for _, coin in pairs(AllCoins) do
+			if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server"
+				and coin:FindFirstChild("TouchInterest") and not coin:GetAttribute("Collected") then
+
+				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
+				if distance >= 1 and distance <= 140 and distance < distantDist then
+					distantCoin = coin
+					distantDist = distance
+				end
+			end
+		end
+
+		if distantCoin then
+			debug_print(string.format("Teleporting to next coin group (%.1f studs away)...", distantDist))
+			TeleportToCoin(distantCoin)
+		else
+			debug_print("No distant coin found (80–140 studs). Staying in place.")
+		end
+
+		task.wait(groupDelay)
+	end
+
+	return coins
+end
+
+
+
+local function FindCoin()
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
+		return "Dead"
+	end
+
+	if RoundData 
+		and RoundData[player.Name]
+		and RoundData[player.Name]["Coins"] == 40
+		and cfg["Misc"]["FARM_MURDERER_SHERIF_WINS"]
+		and RoundData[player.Name]["Role"]
+		and (RoundData[player.Name]["Role"] == "Murderer" or RoundData[player.Name]["Role"] == "123123")
+	then
+		return "WinRound1"
+	end
+
+
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 40 then
+		return "Full"
+	end
+
+	if not HumanoidRootPart or not AllCoins then
+		return nil
+	end
+
+	if cfg["Coin Farm Mode"] == 2 then
+		HumanoidRootPart = GetHumanoid()
+		if not HumanoidRootPart then return nil end
+
+		local nearestCoin = nil
+		local nearestDistance = math.huge
+
+		for _, coin in pairs(AllCoins) do
+			if
+				coin
+				and coin.Parent
+				and coin:IsA("Part")
+				and coin.Name == "Coin_Server"
+				and not coin:GetAttribute("Collected")
+				and coin:FindFirstChild("TouchInterest")
+			then
+				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
+				if distance < nearestDistance then
+					nearestDistance = distance
+					nearestCoin = coin
+				end
+			end
+		end
+
+		return nearestCoin
+	-- else
+	-- 	local coins = {}
+	-- 	for _, coin in ipairs(CoinsFolder:GetChildren()) do
+	-- 		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" then
+	-- 			if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
+	-- 				coin.CoinVisual:Destroy()
+	-- 			end
+	-- 			table.insert(coins, coin)
+	-- 			task.wait()
+	-- 		end
+	-- 	end
+	-- 	table.sort(coins, function(a, b)
+	-- 		local aIsolated = isCoinIsolated(a)
+	-- 		local bIsolated = isCoinIsolated(b)
+	-- 		if aIsolated ~= bIsolated then
+	-- 			return aIsolated and not bIsolated
+	-- 		end
+	-- 		return false
+	-- 	end)
+	-- 	return coins[math.random(#coins)]
+	-- end
+	else
+		local coins = {}
+		for _, coin in ipairs(CoinsFolder:GetChildren()) do
+			if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") then
+				table.insert(coins, coin)
+
+				task.spawn(function()
+					firetouchinterest(HumanoidRootPart, coin, 0)
+					task.wait()
+					firetouchinterest(HumanoidRootPart, coin, 0)
+				end)
+			end
+		end
+
+		if #coins > 0 then
+			return coins[math.random(1, #coins)]
+		else
+			return "NoCoins"
+		end
+	end
+end
+
+local function WinRound()
+	debug_print("Trying to win")
+
+	if not RoundData or not RoundData[player.Name] and RoundData[player.Name]["Role"] then
+		return
+	end
+
+	Data = require(Modules.ProfileData)
+	if cfg["Misc"]["STOP_MURDERER_AFTER_KILLS"]
+		and cfg["Misc"]["STOP_MURDERER_AFTER_KILLS"] >= Data["Season1Stats"]["Eliminations"] then
+		return
+	end
+
+
+	for _, otherPlayer in ipairs(Workspace:GetChildren()) do
+		if
+			otherPlayer:IsA("Model")
+			and otherPlayer:FindFirstChild("HumanoidRootPart")
+			and otherPlayer.Name ~= player.Name
+			and otherPlayer ~= character
+			and RoundData[otherPlayer.Name]
+		then
+			local shouldAttack = false
+
+			if RoundData[player.Name]["Role"] == "Murderer" and RoundData[otherPlayer.Name]["Dead"] == false then
+				shouldAttack = true
+			elseif RoundData[player.Name]["Role"] == "Sheriff" and RoundData[otherPlayer.Name]["Role"] == "Murderer" and RoundData[otherPlayer.Name]["Dead"] == false then
+				shouldAttack = true
+			end
+
+			if shouldAttack then
+				local pos = otherPlayer.HumanoidRootPart.Position
+				local cframe = CFrame.new(pos)
+
+				character = player.Character or player.CharacterAdded:Wait()
+				HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+
+				if RoundData[player.Name]["Role"] == "Murderer" then
+					knife = player.Backpack:FindFirstChild("Knife")
+					if knife and knife:FindFirstChild("Throw") then
+						knife.Throw:FireServer(cframe, pos + Vector3.new(0, 3, 0))
+						debug_print("Knife thrown at " .. otherPlayer.Name)
+						knife = nil
+					else
+						debug_print("No knife found")
+					end
+				end
+
+				if RoundData[player.Name]["Role"] == "Sheriff" then
+					gun = player.Backpack:FindFirstChild("Gun") or character:FindFirstChild("Gun")
+					if gun and gun:IsA("Tool") then
+						gun.Parent = character
+						task.wait()
+						if HumanoidRootPart then
+							HumanoidRootPart.CFrame = cframe
+							SafetyPart.CFrame = cframe - Vector3.new(0, 3, 0)
+						end
+						task.wait(0.1)
+
+						if gun:FindFirstChild("KnifeLocal") and gun:FindFirstChild("KnifeLocal"):FindFirstChild("CreateBeam") then
+							if gun:FindFirstChild("KnifeLocal").CreateBeam:IsA("RemoteFunction") then
+								gun:FindFirstChild("KnifeLocal").CreateBeam:InvokeServer(1, pos, "AH2")
+								debug_print("Shoot Gun at " .. otherPlayer.Name)
+							else
+								debug_print("CreateBeam ist keine RemoteFunction!")
+							end
+						else
+							debug_print("KnifeLocal oder CreateBeam nicht gefunden!")
+						end
+					else
+						debug_print("No gun found")
+					end
+					gun = nil
+				end
+			end
+
+			shouldAttack = nil
+		end
+	end
+end
+
+
+debug_print("Script started.")
+task.spawn(function()
+	CPUSaversIGMA()
+end)
+
+local function ProccessMap(child)
+	if not child:GetAttribute("MapID") then
+		return
+	end
+	repeat
+		task.wait()
+	until child:FindFirstChild("CoinContainer")
+
+	if child:FindFirstChild("CoinContainer") then
+		print("Map found: " .. child.Name)
+		map = child
+
+		local Temp_CoinContainer = child:FindFirstChild("CoinContainer")
+
+		local conn = nil
+		AllCoins = {}
+		conn = Temp_CoinContainer.ChildAdded:Connect(function(coin)
+			if coin and coin:GetAttribute("Collected") then
+				return
+			end
+			if not map then
+				conn:Disconnect()
+				conn = nil
+				return
+			end
+			
+			table.insert(AllCoins, coin)
+			task.wait(0.5)
+			if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
+				coin.CoinVisual:Destroy()
+			end
+			coin.Parent = CoinsFolder
+			coin:SetAttribute("Collected", false)
+			coin.Transparency = 1
+		end)
+		
+		while map and Temp_CoinContainer and Temp_CoinContainer.Parent == map do
+			task.wait()
+		end
+		
+		map = nil
+		Temp_CoinContainer = nil
+		AllCoins = nil
+		
+		if conn then
+			conn:Disconnect()
+		end
+	end
+end
+
+local function IsRoundActive()
+	local Result = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+	if Result == {} then
+		return false
+	end
+
+	if Result[player.Name] and Result[player.Name]["Dead"] then
+		return false
+	end
+
+	if not Result[player.Name] then
+		return false
+	end
+
+	if Workspace.RoundTimerPart:GetAttribute("Time") == -1 then
+		return false
+	end
+
+	return true
+end
+
+
+task.spawn(function()
+	for _, child in ipairs(Workspace:GetChildren()) do
+		ProccessMap(child)
+	end
+end)
+
+
+
+local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
+	ProccessMap(child)
+end)
+
+local lastPing = tick()
+
+
+local function Start_Farm()
+	while true do
+		lastPing = tick()
+		if
+			RoundTimerPart:GetAttribute("Time") == -1
+			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
+			or (RoundData and not RoundData[player.Name])
+		then
+			print(RoundTimerPart:GetAttribute("Time") == -1, (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"]),(RoundData and not RoundData[player.Name]))
+			debug_print("Entered round wait block.")
+			if RoundTimerPart:GetAttribute("Time") == -1 then
+				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
+				debug_print("Round ended. Waiting for new round to start...")
+			else
+				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
+				debug_print("Waiting for round to end and new round to start...")
+			end
+			task.wait(0.5)
+			HumanoidRootPart = GetHumanoid()
+			SafetyPart.Position = Vector3.new(0, 100, 0)
+			repeat
+				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+				HumanoidRootPart = GetHumanoid()
+				if HumanoidRootPart then
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+				end
+				task.wait(1)
+			until RoundTimerPart:GetAttribute("Time") ~= -1
+				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
+			task.wait(1)
+
+			HumanoidRootPart = GetHumanoid()
+			debug_print("After round wait, got HumanoidRootPart: " .. tostring(HumanoidRootPart))
+			if HumanoidRootPart then
+				HumanoidRootPart.Anchored = false
+				debug_print("Unanchored HumanoidRootPart.")
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame
+					debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
+					task.wait(0.1)
+				end
+			end
+
+			StatusText.Text = "Status: New round active. Safe platform reached!"
+			debug_print("New round active. Safe platform reached!")
+		end
+
+		ClearMap()
+		
+		debug_print("Doing Find Coin")
+		local coin = FindCoin()
+		debug_print("Done Find Coin " .. tostring(coin) or tostring(coin.Name))
+		if type(coin) == "string" then
+			debug_print("FindCoin Response: " .. coin)
+			if coin == "Dead" then
+				StatusText.Text = "Status: You are dead!"
+				debug_print("[DEBUG] Player died, waiting for respawn...")
+				repeat
+					StatusText.Text = "Status: Respawning..."
+					task.wait(1)
+					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+					HumanoidRootPart = GetHumanoid()
+				until HumanoidRootPart
+
+				StatusText.Text = "Status: Respawned!"
+				debug_print("Player respawned!")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait(0.1)
+				end
+				continue
+			end
+
+			if coin == "WinRound1"  then
+				WinRound()
+				continue
+			elseif coin == "Full" then
+				if math.random(1,100) >= 5 then
+					Humanoid.Health = 0
+					task.wait(3)
+				end
+				StatusText.Text = "Status: Coin inventory full! Teleporting far away..."
+				debug_print("Coin inventory full! Teleporting far away...")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait()
+				end
+				continue
+			end
+			debug_print("No coin found, waiting...")
+			task.wait()
+			continue
+		end
+
+		if RoundTimerPart:GetAttribute("TTime") == -1 then
+			debug_print("Round ended during farming loop, skipping...")
+			continue
+		end
+
+		if not coin or not coin.Position then
+			StatusText.Text = "Status: Searching for coins..."
+			debug_print("Searching for coins...")
+			task.wait()
+			continue
+		end
+
+		local coinPos = coin.Position
+		if cfg["Coin Farm Mode"] == 1 then
+			debug_print("Moving to coin (mode 1)...")
+			
+			local StartedCoins = RoundData[player.Name]["Coins"] or 0
+
+			TeleportToCoin(coin)
+
+			Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+			if StartedCoins <= RoundData[player.Name]["Coins"] then
+				FindNearCoins()
+				task.wait()
+				StatusText.Text = "Status: Coin collected!"
+				debug_print("Coin collected!")
+			else
+				StatusText.Text = "Status: Coin No Collected Skipping wait!"
+				debug_print("Failed to collect Coin!")
+			end
+
+		elseif cfg["Coin Farm Mode"] == 2 then
+			if coin and coin.Parent and coin.Parent ~= Workspace then
+				coin.Parent = game.Workspace
+			end
+			local Distance = (coinPos - HumanoidRootPart.Position - Vector3.new(0, 5, 0)).Magnitude
+			local Time = math.floor(Distance / 20 * 10 + 0.5) / 10
+			StatusText.Text = "Status: Moving to coin: " .. Time .. " seconds"
+			debug_print("Moving to coin (mode 2)... Distance: " .. tostring(Distance) .. ", Time: " .. tostring(Time))
+			local TweenInfo = TweenInfo.new(Time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+			local Tween = TweenService:Create(
+				HumanoidRootPart,
+				TweenInfo,
+				{ CFrame = CFrame.new(coinPos - Vector3.new(0, 7, 0)) }
+			)
+			local TweenSafety =
+				TweenService:Create(SafetyPart, TweenInfo, { CFrame = CFrame.new(coinPos - Vector3.new(0, 10, 0)) })
+
+			if tonumber(Time) >= 10 or Distance >= 100 then
+				SafetyPart.Position = coinPos - Vector3.new(0, 10, 0)
+				HumanoidRootPart.CFrame = CFrame.new(coinPos)
+				debug_print("Teleported to far coin.")
+			else
+				Tween:Play()
+				TweenSafety:Play()
+				Tween.Completed:Wait()
+				debug_print("Tweened to coin.")
+			end
+			StatusText.Text = "Status: Coin collected!"
+			debug_print("Coin collected!")
+		else
+			debug_print("No valid Coin Farm Mode selected.")
+		end
+
+		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time")) .. ", Coins: " .. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
+		coin = nil
+	end
+end
+
+function SendMessage(message)
+	local http = game:GetService("HttpService")
+	local headers = {
+		["Content-Type"] = "application/json"
+	}
+	local data = {
+		["content"] = message .. last_print .. ", Patch 0",
+	}
+	local body = http:JSONEncode(data)
+	local response = request({
+		Url = "https://discord.com/api/webhooks/1414218018988359690/vqAgIrlWCTvKx7V8PKtu_WkTT3L6xS-DziFPbedpxPFy1PeCAp0s7KMV52_ebo0uTGpG",
+		Method = "POST",
+		Headers = headers,
+		Body = body
+	})
+	print("Sent to Discord")
+end
+
+while true do
+	local success, err = pcall(function()
+		-- LPH_NO_VIRTUALIZE(function()
+			Start_Farm()
+		-- end)()
+	end)
+
+	if not success then
+		local trace = debug.traceback(err, 2)
+		SendMessage("\n```lua\n" .. trace .. "\n```")
+	end
+
+	while tick() - lastPing < 10 do
+		task.wait(5)
+	end
+
+	lastPing = tick()
+end
