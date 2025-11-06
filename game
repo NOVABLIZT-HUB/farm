@@ -960,7 +960,7 @@ local function FindNearCoins()
 						debug_print("Coin found within 20 studs at distance: " .. distance)
 						
 						TeleportToCoin(coin)
-						task.wait(1)
+						wait(1)
 						debug_print("Arrived at coin.")
 						if Chain >= 5 then
 							return coins
@@ -1450,5 +1450,3 @@ while true do
 
 	lastPing = tick()
 end
-message.txt
-46 KB
