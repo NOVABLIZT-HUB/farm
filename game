@@ -1011,9 +1011,8 @@ local function FindNearCoins()
 			debug_print("No distant coin found (80–140 studs). Staying in place.")
 		end
 
-		task.wait(groupDelay)
 	end
-
+	task.wait(groupDelay)
 	return coins
 end
 
