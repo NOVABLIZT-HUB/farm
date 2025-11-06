@@ -952,7 +952,7 @@ local function FindNearCoins()
 
 				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
 
-				if (distance <= 40 and not FoundOne) or (distance <= 10 and FoundOne) then
+				if (distance <= 30 and not FoundOne) or (distance <= 10 and FoundOne) then
 					foundAny = true
 					FoundOne = true
 					if cfg["Coin Farm Mode"] == 1 then
