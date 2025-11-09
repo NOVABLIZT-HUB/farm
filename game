@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -671,41 +671,6 @@ local function GetHumanoid()
 	return nil
 end
 
-local function TeleportToCoin(coin)
-	if not HumanoidRootPart or not Humanoid then return end
-
-	HumanoidRootPart.CFrame = CFrame.new(coin.Position)
-	SafetyPart.Position = coin.Position
-	StatusText.Text = "Status: Moving to coin..."
-
-	task.spawn(function()
-		task.wait()
-		if coin:FindFirstChild("TouchInterest") then
-			firetouchinterest(coin, HumanoidRootPart, 0)
-			task.wait()
-			firetouchinterest(coin, HumanoidRootPart, 1)
-
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
-			until not coin:FindFirstChild("TouchInterest")
-		end
-	end)
-
-	task.delay(0.3, function()
-		if Humanoid and HumanoidRootPart then
-			Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
-			task.wait(math.random(1,2))
-			Humanoid:MoveTo(HumanoidRootPart.Position)
-		end
-	end)
-
-	task.wait()
-end
-
-
 local startTime = os.time()
 local function updateTimer()
 	TimerLabel.Text = string.format(
@@ -1034,7 +999,10 @@ local function FindNearCoins()
 					Chain = Chain + 1
 					debug_print("Coin found within 20 studs at distance: " .. distance)
 					
-					TeleportToCoin(coin)
+					-- We need to use our *new* TeleportToCoin function here.
+					-- The original FindNearCoins had its own TeleportToCoin logic, which is bad.
+					-- I will just call the global TeleportToCoin.
+					TeleportToCoin(coin) 
 
 					debug_print("Arrived at coin.")
 					if Chain >= 3 then
@@ -1065,6 +1033,7 @@ local function FindCoin()
 
 	if RoundData 
 		and RoundData[player.Name]
+		and RoundData[player.Name]["Coins"] == 40
 		and cfg["Misc"]["FARM_MURDERER_SHERIF_WINS"]
 		and RoundData[player.Name]["Role"]
 		and (RoundData[player.Name]["Role"] == "Murderer" or RoundData[player.Name]["Role"] == "123123")
@@ -1107,7 +1076,6 @@ local function FindCoin()
 		return "NoCoins"
 	end
 end
-
 local function WinRound()
 	debug_print("Trying to win")
 
@@ -1186,8 +1154,8 @@ end
 
 local function calculateTime(distance)
 	local t = 0.024 * distance + 0.2
-	if t < 2 then
-		t = 2 -- Reverted from 2.5
+	if t < 2.5 then
+		t = 2
 	end
 	return t
 end
@@ -1208,11 +1176,7 @@ local lastPing = tick()
 
 local chainCount = 1
 
--- NEW: Rate limiting variables
-local distanceInWindow = 0
-local windowStartTime = tick()
-
---// Teleport to Coin with same wait + walking as b.lua
+--// NEW TeleportToCoin function (replaces the old one)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
 		return
@@ -1221,9 +1185,7 @@ local function TeleportToCoin(coin)
 	local pos = coin.Position
 	HumanoidRootPart.CFrame = CFrame.new(pos)
 
-	-- REMOVED: Humanoid:MoveTo(pos) anti-kick logic
-
-	-- 🔹 Fast touch cycle (same timing as b.lua)
+	-- 🔹 Fast touch cycle
 	task.spawn(function()
 		task.wait()
 		if coin:FindFirstChild("TouchInterest") then
@@ -1236,56 +1198,11 @@ local function TeleportToCoin(coin)
 		end
 	end)
 
-	-- 🔹 Random walking movement (identical to b.lua)
-	task.delay(0.3, function()
-		if Humanoid and HumanoidRootPart then
-			local offset = Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
-			local walkPos = HumanoidRootPart.Position + offset
-			Humanoid:MoveTo(walkPos)
-			task.wait(math.random(1, 2)) -- 1–2 s random walk
-			Humanoid:MoveTo(HumanoidRootPart.Position)
-		end
-	end)
-
 	task.wait()
 end
 
--- NEW: Rate limiting function to prevent kicks
-local function CheckAndTeleport(coin, distanceToCoin)
-	local currentTime = tick()
 
-	-- 1. Check if the 6-second window is over. If so, reset.
-	if currentTime - windowStartTime > 6 then
-		debug_print("6s window reset. Budget was: " .. distanceInWindow)
-		distanceInWindow = 0
-		windowStartTime = currentTime
-	end
-
-	-- 2. Check if this new teleport will bust the budget.
-	if distanceInWindow + distanceToCoin > 200 then
-		-- 3. If it does, we must wait for the window to reset.
-		local waitTime = (windowStartTime + 6) - currentTime
-		debug_print("Budget exceeded (" .. (distanceInWindow + distanceToCoin) .. "/200). Waiting " .. waitTime .. "s to reset.")
-		if waitTime > 0 then
-			task.wait(waitTime)
-		end
-
-		-- 4. After waiting, the window is reset.
-		distanceInWindow = 0
-		windowStartTime = tick()
-	end
-
-	-- 5. Now we are clear to teleport.
-	-- Add the distance to our budget *before* teleporting.
-	distanceInWindow = distanceInWindow + distanceToCoin
-	debug_print("Teleporting " .. string.format("%.2f", distanceToCoin) .. " studs. Window total: " .. string.format("%.2f", distanceInWindow) .. "/200")
-	
-	-- 6. Call the actual teleport function.
-	TeleportToCoin(coin)
-end
-
-
---// Main Farm Loop (same timing as b.lua)
+--// NEW Main Farm Loop (replaces the old one)
 local function Start_Farm()
 	while task.wait() do
 		lastPing = tick()
@@ -1386,7 +1303,7 @@ local function Start_Farm()
 			continue
 		end
 
-		if RoundTimerPart:GetAttribute("TTime") == -1 then
+		if RoundTimerPart:GetAttribute("Time") == -1 then
 			debug_print("Round ended during farming loop, skipping...")
 			continue
 		end
@@ -1400,48 +1317,83 @@ local function Start_Farm()
 
 		local coinPos = coin.Position
 		local visited = {}
-		local Dist = math.min((HumanoidRootPart.Position - coin.Position).Magnitude, 100)
+		local Dist = (coin.Position - HumanoidRootPart.Position).Magnitude
 
-		CheckAndTeleport(coin, Dist) -- Was TeleportToCoin(coin)
+		TeleportToCoin(coin)
 		visited[coin] = true
+		chainCount = 1 -- Reset chainCount here
 
-		-- REMOVED: 'if Dist > 80' wait logic
-		-- REMOVED: 'totalChainDistance' tracking logic
+		-- Wait logic for the *first* coin
+		if Dist > 30 then
+			debug_print("Collected first coin (far, " .. string.format("%.2f", Dist) .. " studs). Waiting 2s.")
+			task.wait(2)
+		else
+			debug_print("Collected first coin (near, " .. string.format("%.2f", Dist) .. " studs).")
+		end
 
-		while chainCount <= 4 do
+		while chainCount <= 4 do -- Max 5 coins total (1 initial + 4 chain)
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
 
-			for _, coin in ipairs(AllCoins) do
-				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 15 and d < nearestDistance then
+			-- Find the absolute nearest coin within 50 studs
+			for _, c in ipairs(AllCoins) do
+				if c and c:FindFirstChild("TouchInterest") and not visited[c] then
+					local d = (c.Position - HumanoidRootPart.Position).Magnitude
+					if d <= 50 and d < nearestDistance then -- 50 stud chain limit
 						nearestDistance = d
-						nextCoin = coin
+						nextCoin = c
 					end
 				end
 			end
 
 			if nextCoin then
-				-- REMOVED: 110 stud cap check
-				-- REMOVED: 'totalChainDistance' tracking
-
-				CheckAndTeleport(nextCoin, nearestDistance) -- Was TeleportToCoin(nextCoin)
-				task.wait(1 + (math.random(-10, 10) / 100)) -- Reverted from 1.5s
+				-- Teleport to the coin
+				TeleportToCoin(nextCoin)
 				visited[nextCoin] = true
 				chainCount += 1
+
+				-- Check if we are at the max chain count
+				if chainCount > 4 then
+					debug_print("Collected LAST chain coin (max chain). Skipping wait.")
+					break -- Exit loop, will hit 3s wait
+				end
+
+				-- Look-ahead from our *new* position
+				local foundNext = false
+				for _, c_ahead in ipairs(AllCoins) do
+					if c_ahead and c_ahead:FindFirstChild("TouchInterest") and not visited[c_ahead] then
+						local d_ahead = (nextCoin.Position - c_ahead.Position).Magnitude
+						if d_ahead <= 50 then
+							foundNext = true
+							break
+						end
+					end
+				end
+
+				-- Only wait if there is another coin to go to
+				if foundNext then
+					-- Multi-level wait based on distance
+					if nearestDistance <= 20 then
+						debug_print("Collected near chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 1s.")
+						task.wait(1)
+					else
+						debug_print("Collected far chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 2s.")
+						task.wait(2)
+					end
+				else
+					debug_print("Collected LAST chain coin (no more found). Skipping wait.")
+					break -- Exit loop, will hit 3s wait
+				end
 			else
-				break
+				debug_print("No more chain coins found.")
+				break -- No more coins found in chain
 			end
 		end
 
-		print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100))
-		
-		-- REMOVED: 'totalChainDistance' debug print
-
-		-- Reverted to original wait
-		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
+		-- End of chain wait
+		debug_print("Chain finished. Waiting 3s.")
+		task.wait(3)
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
