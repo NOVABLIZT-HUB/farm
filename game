@@ -1028,7 +1028,7 @@ local function FindNearCoins()
 
 				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
 
-				if (distance <= 15 and not FoundOne) or (distance <= 10 and FoundOne) then
+				if (distance <= 20 and not FoundOne) or (distance <= 10 and FoundOne) then
 					foundAny =
 					 true
 					FoundOne = true
@@ -1374,7 +1374,7 @@ local function Start_Farm()
 			for _, coin in ipairs(AllCoins) do
 				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
 					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 15 and d < nearestDistance then
+					if d <= 21 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = coin
 					end
