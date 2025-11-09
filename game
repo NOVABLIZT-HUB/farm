@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1366,7 +1366,7 @@ local function Start_Farm()
 		TeleportToCoin(coin)
 		visited[coin] = true
 
-		while chainCount <= 3 do
+		while chainCount <= 4 do
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
