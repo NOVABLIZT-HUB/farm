@@ -1381,9 +1381,9 @@ end
 
 while true do
 	local success, err = pcall(function()
-		LPH_NO_VIRTUALIZE(function()
+		-- LPH_NO_VIRTUALIZE(function()
 			Start_Farm()
-		end)()
+		-- end)()
 	end)
 
 	if not success then
