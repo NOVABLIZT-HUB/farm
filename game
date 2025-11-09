@@ -1028,7 +1028,7 @@ local function FindNearCoins()
 
 				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
 
-				if (distance <= 15 and not FoundOne) or (distance <= 10 and FoundOne) then
+				if (distance <= 20 and not FoundOne) or (distance <= 10 and FoundOne) then
 					foundAny =true
 					FoundOne = true
 					Chain = Chain + 1
@@ -1040,7 +1040,7 @@ local function FindNearCoins()
 					if Chain >= 3 then
 						return coins
 					end
-					task.wait(0.5 + math.random(20,60)/100)
+					task.wait(1)
 					break
 				end
 			end
@@ -1373,7 +1373,7 @@ local function Start_Farm()
 			for _, coin in ipairs(AllCoins) do
 				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
 					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 15 and d < nearestDistance then
+					if d <= 20 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = coin
 					end
@@ -1382,7 +1382,7 @@ local function Start_Farm()
 
 			if nextCoin then
 				TeleportToCoin(nextCoin)
-				task.wait(1 + (math.random(-10, 10) / 100))
+				task.wait(1)
 				visited[nextCoin] = true
 				chainCount += 1
 			else
