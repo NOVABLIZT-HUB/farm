@@ -1181,6 +1181,7 @@ local function ProccessMap(child)
 	end
 
 	if conn then conn:Disconnect() end
+	AllCoins = {}
 end
 
 
