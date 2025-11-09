@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1065,7 +1065,6 @@ local function FindCoin()
 
 	if RoundData 
 		and RoundData[player.Name]
-		and RoundData[player.Name]["Coins"] == 40
 		and cfg["Misc"]["FARM_MURDERER_SHERIF_WINS"]
 		and RoundData[player.Name]["Role"]
 		and (RoundData[player.Name]["Role"] == "Murderer" or RoundData[player.Name]["Role"] == "123123")
@@ -1108,6 +1107,7 @@ local function FindCoin()
 		return "NoCoins"
 	end
 end
+
 local function WinRound()
 	debug_print("Trying to win")
 
@@ -1186,8 +1186,8 @@ end
 
 local function calculateTime(distance)
 	local t = 0.024 * distance + 0.2
-	if t < 2.5 then
-		t = 2
+	if t < 2 then
+		t = 2 -- Reverted from 2.5
 	end
 	return t
 end
@@ -1208,6 +1208,10 @@ local lastPing = tick()
 
 local chainCount = 1
 
+-- NEW: Rate limiting variables
+local distanceInWindow = 0
+local windowStartTime = tick()
+
 --// Teleport to Coin with same wait + walking as b.lua
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
@@ -1216,6 +1220,8 @@ local function TeleportToCoin(coin)
 
 	local pos = coin.Position
 	HumanoidRootPart.CFrame = CFrame.new(pos)
+
+	-- REMOVED: Humanoid:MoveTo(pos) anti-kick logic
 
 	-- 🔹 Fast touch cycle (same timing as b.lua)
 	task.spawn(function()
@@ -1242,6 +1248,40 @@ local function TeleportToCoin(coin)
 	end)
 
 	task.wait()
+end
+
+-- NEW: Rate limiting function to prevent kicks
+local function CheckAndTeleport(coin, distanceToCoin)
+	local currentTime = tick()
+
+	-- 1. Check if the 5-second window is over. If so, reset.
+	if currentTime - windowStartTime > 5 then
+		debug_print("5s window reset. Budget was: " .. distanceInWindow)
+		distanceInWindow = 0
+		windowStartTime = currentTime
+	end
+
+	-- 2. Check if this new teleport will bust the budget.
+	if distanceInWindow + distanceToCoin > 200 then
+		-- 3. If it does, we must wait for the window to reset.
+		local waitTime = (windowStartTime + 5) - currentTime
+		debug_print("Budget exceeded (" .. (distanceInWindow + distanceToCoin) .. "/200). Waiting " .. waitTime .. "s to reset.")
+		if waitTime > 0 then
+			task.wait(waitTime)
+		end
+
+		-- 4. After waiting, the window is reset.
+		distanceInWindow = 0
+		windowStartTime = tick()
+	end
+
+	-- 5. Now we are clear to teleport.
+	-- Add the distance to our budget *before* teleporting.
+	distanceInWindow = distanceInWindow + distanceToCoin
+	debug_print("Teleporting " .. string.format("%.2f", distanceToCoin) .. " studs. Window total: " .. string.format("%.2f", distanceInWindow) .. "/200")
+	
+	-- 6. Call the actual teleport function.
+	TeleportToCoin(coin)
 end
 
 
@@ -1360,19 +1400,13 @@ local function Start_Farm()
 
 		local coinPos = coin.Position
 		local visited = {}
-		local Dist = math.min((coin.Position - HumanoidRootPart.Position).Magnitude, 100)
+		local Dist = math.min((HumanoidRootPart.Position - coin.Position).Magnitude, 100)
 
-		TeleportToCoin(coin)
+		CheckAndTeleport(coin, Dist) -- Was TeleportToCoin(coin)
 		visited[coin] = true
 
-		-- NEW: Add conditional wait if first coin is far
-		if Dist > 80 then
-			debug_print("First coin was > 80 studs (" .. Dist .. "). Waiting 0.5s.")
-			task.wait(0.5)
-		end
-
-		-- NEW: Initialize total chain distance with the first coin's distance
-		local totalChainDistance = Dist
+		-- REMOVED: 'if Dist > 80' wait logic
+		-- REMOVED: 'totalChainDistance' tracking logic
 
 		while chainCount <= 4 do
 			task.wait()
@@ -1390,17 +1424,11 @@ local function Start_Farm()
 			end
 
 			if nextCoin then
-				-- NEW: Check if adding this coin exceeds the max chain distance
-				if (totalChainDistance + nearestDistance) > 110 then
-					debug_print("Next coin exceeds 110 studs (" .. (totalChainDistance + nearestDistance) .. "). Stopping chain.")
-					break -- Stop the chain
-				end
+				-- REMOVED: 110 stud cap check
+				-- REMOVED: 'totalChainDistance' tracking
 
-				-- NEW: Add distance from last coin to this new coin
-				totalChainDistance = totalChainDistance + nearestDistance
-
-				TeleportToCoin(nextCoin)
-				task.wait(1 + (math.random(-10, 10) / 100))
+				CheckAndTeleport(nextCoin, nearestDistance) -- Was TeleportToCoin(nextCoin)
+				task.wait(1 + (math.random(-10, 10) / 100)) -- Reverted from 1.5s
 				visited[nextCoin] = true
 				chainCount += 1
 			else
@@ -1410,10 +1438,9 @@ local function Start_Farm()
 
 		print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 		
-		-- NEW: Add debug print for total chain distance
-		debug_print("Total chain distance: " .. totalChainDistance)
+		-- REMOVED: 'totalChainDistance' debug print
 
-		-- Removed the extraWait logic, back to original wait
+		-- Reverted to original wait
 		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
