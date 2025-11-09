@@ -1254,18 +1254,18 @@ end
 local function CheckAndTeleport(coin, distanceToCoin)
 	local currentTime = tick()
 
-	-- 1. Check if the 5-second window is over. If so, reset.
-	if currentTime - windowStartTime > 5 then
-		debug_print("5s window reset. Budget was: " .. distanceInWindow)
+	-- 1. Check if the 6-second window is over. If so, reset.
+	if currentTime - windowStartTime > 6 then
+		debug_print("6s window reset. Budget was: " .. distanceInWindow)
 		distanceInWindow = 0
 		windowStartTime = currentTime
 	end
 
 	-- 2. Check if this new teleport will bust the budget.
-	if distanceInWindow + distanceToCoin > 200 then
+	if distanceInWindow + distanceToCoin > 180 then
 		-- 3. If it does, we must wait for the window to reset.
-		local waitTime = (windowStartTime + 5) - currentTime
-		debug_print("Budget exceeded (" .. (distanceInWindow + distanceToCoin) .. "/200). Waiting " .. waitTime .. "s to reset.")
+		local waitTime = (windowStartTime + 6) - currentTime
+		debug_print("Budget exceeded (" .. (distanceInWindow + distanceToCoin) .. "/180). Waiting " .. waitTime .. "s to reset.")
 		if waitTime > 0 then
 			task.wait(waitTime)
 		end
@@ -1278,7 +1278,7 @@ local function CheckAndTeleport(coin, distanceToCoin)
 	-- 5. Now we are clear to teleport.
 	-- Add the distance to our budget *before* teleporting.
 	distanceInWindow = distanceInWindow + distanceToCoin
-	debug_print("Teleporting " .. string.format("%.2f", distanceToCoin) .. " studs. Window total: " .. string.format("%.2f", distanceInWindow) .. "/200")
+	debug_print("Teleporting " .. string.format("%.2f", distanceToCoin) .. " studs. Window total: " .. string.format("%.2f", distanceInWindow) .. "/180")
 	
 	-- 6. Call the actual teleport function.
 	TeleportToCoin(coin)
