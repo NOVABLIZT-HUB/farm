@@ -1040,7 +1040,7 @@ local function FindNearCoins()
 					if Chain >= 3 then
 						return coins
 					end
-					task.wait(1.5)
+					task.wait(1)
 					break
 				end
 			end
@@ -1382,7 +1382,7 @@ local function Start_Farm()
 
 			if nextCoin then
 				TeleportToCoin(nextCoin)
-				task.wait(1.5)
+				task.wait(1)
 				visited[nextCoin] = true
 				chainCount += 1
 			else
@@ -1439,3 +1439,52 @@ while true do
 
 	lastPing = tick()
 end
+task.spawn(function()
+	local Players = game:GetService("Players")
+	local TeleportService = game:GetService("TeleportService")
+	local CoreGui = game:GetService("CoreGui")
+	local LocalPlayer = Players.LocalPlayer
+	local PlaceId = game.PlaceId
+	local JobId = game.JobId
+
+	local function RejoinServer()
+		print("[AutoRejoin] Rejoining same server...")
+		task.wait(2)
+		local success, err = pcall(function()
+			TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer)
+		end)
+		if not success then
+			warn("[AutoRejoin] Same server failed, joining a new one...")
+			task.wait(3)
+			pcall(function()
+				TeleportService:Teleport(PlaceId, LocalPlayer)
+			end)
+		end
+	end
+
+	-- Detect when player is kicked or disconnected
+	local function WatchForKick()
+		-- Roblox kick prompt detector
+		CoreGui:WaitForChild("RobloxPromptGui", math.huge)
+		local overlay = CoreGui.RobloxPromptGui:WaitForChild("promptOverlay", math.huge)
+		overlay.ChildAdded:Connect(function(child)
+			if child.Name == "ErrorPrompt" then
+				task.spawn(function()
+					task.wait(2)
+					print("[AutoRejoin] Kick detected, rejoining...")
+					RejoinServer()
+				end)
+			end
+		end)
+	end
+
+	-- Detect failed teleport
+	LocalPlayer.OnTeleport:Connect(function(State)
+		if State == Enum.TeleportState.Failed then
+			task.spawn(RejoinServer)
+		end
+	end)
+
+	task.spawn(WatchForKick)
+	print("[AutoRejoin] Loaded successfully.")
+end)
