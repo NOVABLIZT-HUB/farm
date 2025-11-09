@@ -959,6 +959,11 @@ task.spawn(function()
 	end
 end)
 
+--[[
+-- // BẮT ĐẦU PHẦN ĐÃ XÓA //
+-- Vòng lặp task.spawn này đã bị xóa vì nó gây lag và tốn tài nguyên không cần thiết.
+-- Hàm TeleportToCoin đã xử lý việc chạm vào coin rồi.
+
 task.spawn(function()
 	while task.wait() do
 		for _, coin in ipairs(CoinsFolder:GetChildren()) do
@@ -972,6 +977,8 @@ task.spawn(function()
 		end
 	end
 end)
+-- // KẾT THÚC PHẦN ĐÃ XÓA //
+--]]
 
 local function ClearMap()
 	if map then
@@ -1200,10 +1207,18 @@ task.spawn(function()
 end)
 
 
+-- // BẮT ĐẦU SỬA LỖI CONNECTION LEAK //
+-- Thay vì gán trực tiếp, ta kiểm tra xem _G.MM2MapHandler đã tồn tại chưa
+-- để tránh tạo kết nối trùng lặp khi script bị chạy lại.
+local MapMove_handler
+if not _G.MM2MapHandler then
+    _G.MM2MapHandler = Workspace.ChildAdded:Connect(function(child)
+	    ProccessMap(child)
+    end)
+end
+MapMove_handler = _G.MM2MapHandler
+-- // KẾT THÚC SỬA LỖI CONNECTION LEAK //
 
-local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
-	ProccessMap(child)
-end)
 
 local lastPing = tick()
 
@@ -1261,6 +1276,13 @@ local function Start_Farm()
 				(RoundData and not RoundData[player.Name])
 			)
 			debug_print("Entered round wait block.")
+
+			-- // BẮT ĐẦU SỬA LỖI TỐN RAM //
+			-- Dọn dẹp tất cả coin cũ từ vòng chơi trước để giải phóng bộ nhớ
+			debug_print("Clearing old coins from CoinsFolder...")
+			CoinsFolder:ClearAllChildren()
+			-- // KẾT THÚC SỬA LỖI TỐN RAM //
+
 			if RoundTimerPart:GetAttribute("Time") == -1 then
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				debug_print("Round ended. Waiting for new round to start...")
