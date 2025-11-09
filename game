@@ -1365,10 +1365,7 @@ local function Start_Farm()
 		TeleportToCoin(coin)
 		visited[coin] = true
 
-		-- NEW: Initialize total chain distance with the first coin's distance
-		local totalChainDistance = Dist
-
-		while chainCount <= 4 do
+		while chainCount <= 2 do
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
@@ -1376,7 +1373,7 @@ local function Start_Farm()
 			for _, coin in ipairs(AllCoins) do
 				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
 					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 15 and d < nearestDistance then
+					if d <= 20 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = coin
 					end
@@ -1384,15 +1381,6 @@ local function Start_Farm()
 			end
 
 			if nextCoin then
-				-- NEW: Check if adding this coin exceeds the max chain distance
-				if (totalChainDistance + nearestDistance) > 110 then
-					debug_print("Next coin exceeds 110 studs (" .. (totalChainDistance + nearestDistance) .. "). Stopping chain.")
-					break -- Stop the chain
-				end
-
-				-- NEW: Add distance from last coin to this new coin
-				totalChainDistance = totalChainDistance + nearestDistance
-
 				TeleportToCoin(nextCoin)
 				task.wait(1 + (math.random(-10, 10) / 100))
 				visited[nextCoin] = true
@@ -1403,11 +1391,6 @@ local function Start_Farm()
 		end
 
 		print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100))
-		
-		-- NEW: Add debug print for total chain distance
-		debug_print("Total chain distance: " .. totalChainDistance)
-
-		-- Removed the extraWait logic, back to original wait
 		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
