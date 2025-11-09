@@ -88,43 +88,6 @@ local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
-
--- Connection management & cleanup ------------------------------------------------
-local _CONNECTIONS = {}
-local function registerConnection(conn)
-    if conn and type(conn.Disconnect) == "function" then
-        table.insert(_CONNECTIONS, conn)
-    end
-end
-local function safeConnect(signal, fn)
-    local ok, c = pcall(function() return signal:Connect(fn) end)
-    if ok and c then registerConnection(c) end
-    return c
-end
-
-local function cleanupAllConnections()
-    for _, c in ipairs(_CONNECTIONS) do
-        pcall(function() c:Disconnect() end)
-    end
-    _CONNECTIONS = {}
-end
-
--- Graceful shutdown: destroy GUI and cleanup
-game:BindToClose(function()
-    pcall(function()
-        cleanupAllConnections()
-        if ScreenGui and typeof(ScreenGui.Destroy) == 'function' then
-            ScreenGui:Destroy()
-        end
-        if SafetyPart and typeof(SafetyPart.Destroy) == 'function' then
-            SafetyPart:Destroy()
-        end
-        if CoinsFolder and typeof(CoinsFolder.Destroy) == 'function' then
-            CoinsFolder:Destroy()
-        end
-    end)
-end)
--- End connection management -----------------------------------------------------
 local PlaceId = game.PlaceId
 local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
 
@@ -199,7 +162,7 @@ task.spawn(function()
 		end
 	end
 
-	safeConnect(player.Idled, function()
+	player.Idled:Connect(function()
 		VirtualUser:CaptureController()
 		VirtualUser:ClickButton2(Vector2.new())
 	end)
@@ -209,13 +172,10 @@ end)
 
 -- Set up Modules
 local Modules = ReplicatedStorage:WaitForChild("Modules")
-
--- Cache ProfileData to avoid repeated require() calls
-local ProfileDataModule = ProfileDataModule
 local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
 
 local LevelModule = require(Modules.LevelModule)
-local ProfileData = ProfileDataModule
+local ProfileData = require(Modules.ProfileData)
 local EventInfoService = require(SharedServices.EventInfoService)
 
 
@@ -239,7 +199,7 @@ for _, BoxData in pairs(require(Sync.MysteryBox)) do
 end
 
 local RoundData = Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-local Data = ProfileDataModule
+local Data = require(Modules.ProfileData)
 local LastRoundData = nil
 
 local StartedCoins = 0
@@ -450,19 +410,10 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 end)
 
 consolecreate("DEBUG")
-
-local _last_debug_time = 0
-local _debug_cooldown = 2 -- seconds
-
 local function debug_print(...)
-    local now = tick()
-    local msg = ...
-    if now - _last_debug_time >= _debug_cooldown then
-        _last_debug_time = now
-        last_print = msg
-        print("[" .. player.Name .. "] " .. msg)
-        pcall(function() consoleprint("[" .. player.Name .. "] " .. msg .. "\n") end)
-    end
+	last_print = ...
+	print("[" .. player.Name .. "] " .. ...)
+	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 end
 
 local function CPUSaversIGMA()
@@ -556,7 +507,7 @@ local function CPUSaversIGMA()
 	for _,child in Workspace:GetChildren() do
 		WorkspaceCleanerABitIDK(child)
 	end
-	safeConnect(Workspace.ChildAdded, function(child)
+	Workspace.ChildAdded:Connect(function(child)
 		WorkspaceCleanerABitIDK(child)
 	end)
 
@@ -566,7 +517,7 @@ local function CPUSaversIGMA()
 				GoodPeople[plr.Name] = true
 			end
 
-			safeConnect(plr.ChildAdded, function(c)
+			plr.ChildAdded:Connect(function(c)
 				if c.Name == "Backpack" then
 					c.ChildAdded:Connect(function(i)
 						if i.Name == "AlienPlushie" then
@@ -583,7 +534,7 @@ local function CPUSaversIGMA()
 
 			local bp = plr:FindFirstChild("Backpack")
 			if bp then
-				safeConnect(bp.ChildAdded, function(i)
+				bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
 					end
@@ -597,9 +548,9 @@ local function CPUSaversIGMA()
 		end
 	end
 
-	safeConnect(Players.PlayerAdded, function(plr)
+	Players.PlayerAdded:Connect(function(plr)
 		if plr ~= player then
-			safeConnect(plr.ChildAdded, function(c)
+			plr.ChildAdded:Connect(function(c)
 				if c.Name == "Backpack" then
 					c.ChildAdded:Connect(function(i)
 						if i.Name == "AlienPlushie" then
@@ -616,7 +567,7 @@ local function CPUSaversIGMA()
 
 			local bp = plr:FindFirstChild("Backpack")
 			if bp then
-				safeConnect(bp.ChildAdded, function(i)
+				bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
 						debug_print("")
@@ -699,7 +650,7 @@ local function GetHumanoid()
 		end
 
 		ready = false
-		GetHumanoidConn = safeConnect(player.CharacterAdded, function(c)
+		GetHumanoidConn = player.CharacterAdded:Connect(function(c)
 			character = c
 			ready = true
 		end)
@@ -773,7 +724,7 @@ end
 
 
 local function updatePlayerInfo()
-	Data = ProfileDataModule
+	Data = require(Modules.ProfileData)
 	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 
 	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
@@ -825,7 +776,7 @@ local function updatePlayerInfo()
 			and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks")
 		then
 			debug_print("Crate opened. Item received: " .. (Item or "Unknown"))
-			Data = ProfileDataModule
+			Data = require(Modules.ProfileData)
 			local OwnedWeapons = Data["Weapons"]["Owned"] or {}
 
 			TotalWeapons = #OwnedWeapons
@@ -1019,7 +970,6 @@ task.spawn(function()
 				end)
 			end
 		end
-		task.wait(0.5)
 	end
 end)
 
@@ -1078,7 +1028,7 @@ local function FindNearCoins()
 
 				local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
 
-				if (distance <= 20 and not FoundOne) or (distance <= 10 and FoundOne) then
+				if (distance <= 15 and not FoundOne) or (distance <= 10 and FoundOne) then
 					foundAny =
 					 true
 					FoundOne = true
@@ -1159,8 +1109,14 @@ local function FindCoin()
 		return "NoCoins"
 	end
 end
+local function WinRound()
+	debug_print("Trying to win")
 
-	local Data = ProfileDataModule
+	if not RoundData or not RoundData[player.Name] or not RoundData[player.Name]["Role"] then
+		return
+	end
+
+	local Data = require(Modules.ProfileData)
 	if cfg["Misc"]["STOP_MURDERER_AFTER_KILLS"]
 		and cfg["Misc"]["STOP_MURDERER_AFTER_KILLS"] >= Data["Season1Stats"]["Eliminations"] then
 		return
@@ -1206,7 +1162,7 @@ local function ProccessMap(child)
 
 	local conn = nil
 	AllCoins = {}
-	conn = safeConnect(child.CoinContainer.ChildAdded, function(coin)
+	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
 		if not coin or coin:GetAttribute("Collected") then return end
 
 		table.insert(AllCoins, coin)
@@ -1245,7 +1201,7 @@ end)
 
 
 
-local MapMove_handler = safeConnect(Workspace.ChildAdded, function(child)
+local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
 	ProccessMap(child)
 end)
 
@@ -1369,13 +1325,22 @@ local function Start_Farm()
 				continue
 			end
 
-						elseif coin == "Full" then
-	StatusText.Text = "Status: Collected 40 coins — resetting..."
-	debug_print("Collected 40 coins, auto resetting now.")
-	task.wait(1)
-	player.Character:BreakJoints()
-	task.wait(5)
-	continue
+			if coin == "WinRound1" then
+				WinRound()
+				continue
+			elseif coin == "Full" then
+				if math.random(1, 100) >= 5 then
+					Humanoid.Health = 0
+					task.wait(3)
+				end
+				StatusText.Text = "Status: Coin inventory full! Best script!"
+				debug_print("Coin inventory full! OK")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait()
+				end
+				continue
 			end
 			debug_print("No coin found, waiting...")
 			task.wait()
@@ -1401,7 +1366,7 @@ local function Start_Farm()
 		TeleportToCoin(coin)
 		visited[coin] = true
 
-		while chainCount <= 4 do
+		while chainCount <= 3 do
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
