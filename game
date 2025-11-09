@@ -694,12 +694,13 @@ local function TeleportToCoin(coin)
 		end
 	end)
 
-	task.wait(0.3)
-	if Humanoid and HumanoidRootPart then
-		Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
-		task.wait(math.random(1,2))
-		Humanoid:MoveTo(HumanoidRootPart.Position)
-	end
+	task.delay(0.3, function()
+		if Humanoid and HumanoidRootPart then
+			Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
+			task.wait(math.random(1,2))
+			Humanoid:MoveTo(HumanoidRootPart.Position)
+		end
+	end)
 
 	task.wait()
 end
@@ -958,6 +959,8 @@ task.spawn(function()
 	end
 end)
 
+-- // BẮT ĐẦU CODE ĐƯỢC THÊM LẠI //
+-- CẢNH BÁO: Khối code này có thể gây tốn RAM và lag
 task.spawn(function()
 	while task.wait() do
 		for _, coin in ipairs(CoinsFolder:GetChildren()) do
@@ -971,6 +974,7 @@ task.spawn(function()
 		end
 	end
 end)
+-- // KẾT THÚC CODE ĐƯỢC THÊM LẠI //
 
 local function ClearMap()
 	if map then
@@ -1181,7 +1185,6 @@ local function ProccessMap(child)
 	end
 
 	if conn then conn:Disconnect() end
-	AllCoins = {}
 end
 
 
@@ -1200,18 +1203,61 @@ task.spawn(function()
 end)
 
 
+-- // BẮT ĐẦU SỬA LỖI CONNECTION LEAK //
+-- Thay vì gán trực tiếp, ta kiểm tra xem _G.MM2MapHandler đã tồn tại chưa
+-- để tránh tạo kết nối trùng lặp khi script bị chạy lại.
+local MapMove_handler
+if not _G.MM2MapHandler then
+    _G.MM2MapHandler = Workspace.ChildAdded:Connect(function(child)
+	    ProccessMap(child)
+    end)
+end
+MapMove_handler = _G.MM2MapHandler
+-- // KẾT THÚC SỬA LỖI CONNECTION LEAK //
 
-local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
-	ProccessMap(child)
-end)
 
 local lastPing = tick()
-local chainCount = 1
-local nextCoin = nil
-local nearestDistance = math.huge
-local Dist = nil
-local visited = {}
 
+local chainCount = 1
+
+--// Teleport to Coin with same wait + walking as b.lua
+local function TeleportToCoin(coin)
+	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
+		return
+	end
+
+	local pos = coin.Position
+	HumanoidRootPart.CFrame = CFrame.new(pos)
+
+	-- 🔹 Fast touch cycle (same timing as b.lua)
+	task.spawn(function()
+		task.wait()
+		if coin:FindFirstChild("TouchInterest") then
+			repeat
+				firetouchinterest(coin, HumanoidRootPart, 0)
+				task.wait()
+				firetouchinterest(coin, HumanoidRootPart, 1)
+				task.wait()
+			until not coin:FindFirstChild("TouchInterest")
+		end
+	end)
+
+	-- 🔹 Random walking movement (identical to b.lua)
+	task.delay(0.3, function()
+		if Humanoid and HumanoidRootPart then
+			local offset = Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
+			local walkPos = HumanoidRootPart.Position + offset
+			Humanoid:MoveTo(walkPos)
+			task.wait(math.random(1, 2)) -- 1–2 s random walk
+			Humanoid:MoveTo(HumanoidRootPart.Position)
+		end
+	end)
+
+	task.wait()
+end
+
+
+--// Main Farm Loop (same timing as b.lua)
 local function Start_Farm()
 	while task.wait() do
 		lastPing = tick()
@@ -1220,8 +1266,19 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
-			print(RoundTimerPart:GetAttribute("Time") == -1, (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"]),(RoundData and not RoundData[player.Name]))
+			print(
+				RoundTimerPart:GetAttribute("Time") == -1,
+				(RoundData and RoundData[player.Name] and RoundData[DPlayer.Name]["Dead"]),
+				(RoundData and not RoundData[player.Name])
+			)
 			debug_print("Entered round wait block.")
+
+			-- // BẮT ĐẦU SỬA LỖI TỐN RAM //
+			-- Dọn dẹp tất cả coin cũ từ vòng chơi trước để giải phóng bộ nhớ
+			debug_print("Clearing old coins from CoinsFolder...")
+			CoinsFolder:ClearAllChildren()
+			-- // KẾT THÚC SỬA LỖI TỐN RAM //
+
 			if RoundTimerPart:GetAttribute("Time") == -1 then
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				debug_print("Round ended. Waiting for new round to start...")
@@ -1286,16 +1343,16 @@ local function Start_Farm()
 				continue
 			end
 
-			if coin == "WinRound1"  then
+			if coin == "WinRound1" then
 				WinRound()
 				continue
 			elseif coin == "Full" then
-				if math.random(1,100) >= 5 then
+				if math.random(1, 100) >= 5 then
 					Humanoid.Health = 0
 					task.wait(3)
 				end
-				StatusText.Text = "Status: Coin inventory full! Teleporting far away..."
-				debug_print("Coin inventory full! Teleporting far away...")
+				StatusText.Text = "Status: Coin inventory full! Best script!"
+				debug_print("Coin inventory full! OK")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
@@ -1320,22 +1377,22 @@ local function Start_Farm()
 			continue
 		end
 
-		coinPos = coin.Position
-		visited = {}
-		Dist = math.min((coin.Position - HumanoidRootPart.Position).Magnitude, 100)
+		local coinPos = coin.Position
+		local visited = {}
+		local Dist = math.min((coin.Position - HumanoidRootPart.Position).Magnitude, 100)
 
 		TeleportToCoin(coin)
 		visited[coin] = true
 
-
 		while chainCount <= 4 do
 			task.wait()
-			nextCoin = nil
-			nearestDistance = math.huge
+			local nextCoin = nil
+			local nearestDistance = math.huge
 
 			for _, coin in ipairs(AllCoins) do
 				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-					if (coin.Position - HumanoidRootPart.Position).Magnitude <= 20 and (coin.Position - HumanoidRootPart.Position).Magnitude < nearestDistance then
+					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
+					if d <= 20 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = coin
 					end
@@ -1351,15 +1408,19 @@ local function Start_Farm()
 				break
 			end
 		end
+
 		print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 
-		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time")) .. ", Coins: " .. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
+		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
+			.. ", Coins: "
+			.. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
 		coin = nil
 		chainCount = 1
-		coinPos = nil
 	end
 end
+
+
 
 function SendMessage(message)
 	local http = game:GetService("HttpService")
