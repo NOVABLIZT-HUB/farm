@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1376,7 +1376,7 @@ local function Start_Farm()
 			for _, coin in ipairs(AllCoins) do
 				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
 					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 20 and d < nearestDistance then
+					if d <= 15 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = coin
 					end
@@ -1384,6 +1384,12 @@ local function Start_Farm()
 			end
 
 			if nextCoin then
+				-- NEW: Check if adding this coin exceeds the max chain distance
+				if (totalChainDistance + nearestDistance) > 110 then
+					debug_print("Next coin exceeds 110 studs (" .. (totalChainDistance + nearestDistance) .. "). Stopping chain.")
+					break -- Stop the chain
+				end
+
 				-- NEW: Add distance from last coin to this new coin
 				totalChainDistance = totalChainDistance + nearestDistance
 
@@ -1401,14 +1407,8 @@ local function Start_Farm()
 		-- NEW: Add debug print for total chain distance
 		debug_print("Total chain distance: " .. totalChainDistance)
 
-		-- NEW: Check total distance and add 1 second wait if over 150
-		local extraWait = 0
-		if totalChainDistance > 150 then
-			debug_print("Total chain distance > 150 (" .. totalChainDistance .. " studs). Adding 1s wait.")
-			extraWait = 1
-		end
-
-		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100) + extraWait)
+		-- Removed the extraWait logic, back to original wait
+		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
