@@ -1351,10 +1351,10 @@ local function Start_Farm()
 		visited[coin] = true
 
 		-- Multi-level wait logic for the FIRST coin
-		if Dist < 15 then
+		if Dist < 5 then
 			debug_print(string.format("Collected first coin (near, %.2f studs). Waiting 1s.", Dist))
 			task.wait(1)
-		elseif Dist < 20 then
+		elseif Dist < 10 then
 			debug_print(string.format("Collected first coin (mid, %.2f studs). Waiting 1.5s.", Dist))
 			task.wait(1.5)
 		else
@@ -1371,7 +1371,7 @@ local function Start_Farm()
 			for _, c in ipairs(CoinsFolder:GetChildren()) do
 				if c and c:FindFirstChild("TouchInterest") and not visited[c] then
 					local d = (c.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 70 and d < nearestDistance then
+					if d <= 60 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = c
 					end
@@ -1392,7 +1392,7 @@ local function Start_Farm()
 					for _, c_ahead in ipairs(CoinsFolder:GetChildren()) do
 						if c_ahead and c_ahead:FindFirstChild("TouchInterest") and not visited[c_ahead] then
 							local d_ahead = (c_ahead.Position - HumanoidRootPart.Position).Magnitude
-							if d_ahead <= 70 and d_ahead < lookAheadDist then
+							if d_ahead <= 60 and d_ahead < lookAheadDist then
 								lookAheadDist = d_ahead
 								lookAheadCoin = c_ahead
 							end
@@ -1411,7 +1411,7 @@ local function Start_Farm()
 					break -- Exit the loop, as this was the last coin
 				else
 					-- Multi-level wait for chain coins
-					if distToNext <= 15 then
+					if distToNext <= 10 then
 						debug_print(string.format("Collected near chain coin (%.2f studs). Waiting 1s.", distToNext))
 						task.wait(1.5)
 					else
