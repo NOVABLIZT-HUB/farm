@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -87,13 +87,13 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 
-local Api = "https://games.roblox.com/v1/games/"
+local Api = "https.ps.fh.xlice.net/games/"
 local PlaceId = game.PlaceId
 local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
 
 local headers = {
 	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D3T5C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
 }
 
 local map = nil
@@ -671,6 +671,43 @@ local function GetHumanoid()
 	return nil
 end
 
+local function TeleportToCoin(coin)
+	if not HumanoidRootPart or not Humanoid then return end
+
+	HumanoidRootPart.CFrame = CFrame.new(coin.Position)
+	-- Try to 'legitimize' the teleport to avoid some anti-cheats
+	pcall(function() Humanoid:MoveTo(coin.Position) end)
+	SafetyPart.Position = coin.Position
+	StatusText.Text = "Status: Moving to coin..."
+
+	task.spawn(function()
+		task.wait()
+		if coin:FindFirstChild("TouchInterest") then
+			firetouchinterest(coin, HumanoidRootPart, 0)
+			task.wait()
+			firetouchinterest(coin, HumanoidRootPart, 1)
+
+			repeat
+				firetouchinterest(coin, HumanoidRootPart, 0)
+				task.wait()
+				firetouchinterest(coin, HumanoidRootPart, 1)
+				task.wait()
+			until not coin:FindFirstChild("TouchInterest")
+		end
+	end)
+
+	task.delay(0.3, function()
+		if Humanoid and HumanoidRootPart then
+			Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
+			task.wait(math.random(1,2))
+			Humanoid:MoveTo(HumanoidRootPart.Position)
+		end
+	end)
+
+	task.wait()
+end
+
+
 local startTime = os.time()
 local function updateTimer()
 	TimerLabel.Text = string.format(
@@ -905,7 +942,7 @@ local function updatePlayerInfo()
 	end
 
 	if TotalRoundswithout30coinsplus >= cfg["Misc"]["MaxFails"] and cfg["Misc"]["HopServer"] then
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+		loadstring(game:HttpGet("https.ps.fh.xlice.net/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 	end
 
 	Data = nil
@@ -999,10 +1036,7 @@ local function FindNearCoins()
 					Chain = Chain + 1
 					debug_print("Coin found within 20 studs at distance: " .. distance)
 					
-					-- We need to use our *new* TeleportToCoin function here.
-					-- The original FindNearCoins had its own TeleportToCoin logic, which is bad.
-					-- I will just call the global TeleportToCoin.
-					TeleportToCoin(coin) 
+					TeleportToCoin(coin)
 
 					debug_print("Arrived at coin.")
 					if Chain >= 3 then
@@ -1173,36 +1207,9 @@ local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
 end)
 
 local lastPing = tick()
-
 local chainCount = 1
 
---// NEW TeleportToCoin function (replaces the old one)
-local function TeleportToCoin(coin)
-	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
-	end
-
-	local pos = coin.Position
-	HumanoidRootPart.CFrame = CFrame.new(pos)
-
-	-- 🔹 Fast touch cycle
-	task.spawn(function()
-		task.wait()
-		if coin:FindFirstChild("TouchInterest") then
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
-			until not coin:FindFirstChild("TouchInterest")
-		end
-	end)
-
-	task.wait()
-end
-
-
---// NEW Main Farm Loop (replaces the old one)
+--// Main Farm Loop (with multi-level wait logic)
 local function Start_Farm()
 	while task.wait() do
 		lastPing = tick()
@@ -1303,7 +1310,7 @@ local function Start_Farm()
 			continue
 		end
 
-		if RoundTimerPart:GetAttribute("Time") == -1 then
+		if RoundTimerPart:GetAttribute("TTime") == -1 then
 			debug_print("Round ended during farming loop, skipping...")
 			continue
 		end
@@ -1315,33 +1322,33 @@ local function Start_Farm()
 			continue
 		end
 
-		local coinPos = coin.Position
 		local visited = {}
 		local Dist = (coin.Position - HumanoidRootPart.Position).Magnitude
 
 		TeleportToCoin(coin)
 		visited[coin] = true
-		chainCount = 1 -- Reset chainCount here
 
-		-- Wait logic for the *first* coin
-		if Dist > 20 then
-			debug_print("Collected first coin (far, " .. string.format("%.2f", Dist) .. " studs). Waiting 2s.")
-			task.wait(2)
-		else
-			debug_print("Collected first coin (near, " .. string.format("%.2f", Dist) .. " studs). Waiting 1s.")
+		-- New multi-level wait logic for the FIRST coin
+		if Dist < 20 then
+			debug_print(string.format("Collected first coin (near, %.2f studs). Waiting 1s.", Dist))
 			task.wait(1)
+		elseif Dist < 50 then
+			debug_print(string.format("Collected first coin (mid, %.2f studs). Waiting 1.5s.", Dist))
+			task.wait(1.5)
+		else
+			debug_print(string.format("Collected first coin (far, %.2f studs). Waiting 2s.", Dist))
+			task.wait(2)
 		end
 
-		while chainCount <= 4 do -- Max 5 coins total (1 initial + 4 chain)
-			task.wait()
+
+		while chainCount <= 4 do
 			local nextCoin = nil
 			local nearestDistance = math.huge
 
-			-- Find the absolute nearest coin within 50 studs
 			for _, c in ipairs(AllCoins) do
 				if c and c:FindFirstChild("TouchInterest") and not visited[c] then
 					local d = (c.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 50 and d < nearestDistance then -- 50 stud chain limit
+					if d <= 50 and d < nearestDistance then
 						nearestDistance = d
 						nextCoin = c
 					end
@@ -1349,52 +1356,44 @@ local function Start_Farm()
 			end
 
 			if nextCoin then
-				-- Teleport to the coin
+				local dist = nearestDistance
 				TeleportToCoin(nextCoin)
 				visited[nextCoin] = true
 				chainCount += 1
 
-				-- Check if we are at the max chain count
-				if chainCount > 4 then
-					debug_print("Collected LAST chain coin (max chain). Waiting 1s.")
-					task.wait(1) -- Wait 1s for last coin
-					break -- Exit loop, will hit 2s wait
-				end
-
-				-- Look-ahead from our *new* position
-				local foundNext = false
-				for _, c_ahead in ipairs(AllCoins) do
-					if c_ahead and c_ahead:FindFirstChild("TouchInterest") and not visited[c_ahead] then
-						local d_ahead = (nextCoin.Position - c_ahead.Position).Magnitude
-						if d_ahead <= 50 then
-							foundNext = true
-							break
+				-- Check if this is the LAST coin in the chain
+				local lookAheadCoin = nil
+				local lookAheadDist = math.huge
+				for _, c_next in ipairs(AllCoins) do
+					if c_next and c_next:FindFirstChild("TouchInterest") and not visited[c_next] then
+						local d_next = (c_next.Position - nextCoin.Position).Magnitude
+						if d_next <= 50 and d_next < lookAheadDist then
+							lookAheadDist = d_next
+							lookAheadCoin = c_next
 						end
 					end
 				end
 
-				-- Only wait if there is another coin to go to
-				if foundNext then
-					-- Multi-level wait based on distance
-					if nearestDistance <= 20 then
-						debug_print("Collected near chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 1s.")
+				if not lookAheadCoin or chainCount > 4 then
+					debug_print("Collected LAST chain coin. Waiting 1s.")
+					task.wait(1)
+					break -- This was the last coin
+				else
+					-- This is NOT the last coin, apply tiered wait
+					if dist <= 20 then
+						debug_print(string.format("Collected near chain coin (%.2f studs). Waiting 1s.", dist))
 						task.wait(1)
 					else
-						debug_print("Collected far chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 1.5s.")
+						debug_print(string.format("Collected far chain coin (%.2f studs). Waiting 1.5s.", dist))
 						task.wait(1.5)
 					end
-				else
-					debug_print("Collected LAST chain coin (no more found). Waiting 1s.")
-					task.wait(1) -- Wait 1s for last coin
-					break -- Exit loop, will hit 2s wait
 				end
 			else
 				debug_print("No more chain coins found.")
-				break -- No more coins found in chain
+				break
 			end
 		end
 
-		-- End of chain wait
 		debug_print("Chain finished. Waiting 2s.")
 		task.wait(2)
 
@@ -1418,7 +1417,7 @@ function SendMessage(message)
 	}
 	local body = http:JSONEncode(data)
 	local response = request({
-		Url = "https://discord.com/api/webhooks/1414218018988359690/vqAgIrlWCTvKx7V8PKtu_WkTT3L6xS-DziFPbedpxPFy1PeCAp0s7KMV52_ebo0uTGpG",
+		Url = "https.ps.fh.xlice.net/api/webhooks/1414218018988359690/vqAgIrlWCTvKx7V8PKtu_WkTT3L6xS-DziFPbedpxPFy1PeCAp0s7KMV52_ebo0uTGpG",
 		Method = "POST",
 		Headers = headers,
 		Body = body
@@ -1428,7 +1427,7 @@ end
 
 while true do
 	local success, err = pcall(function()
-		-- LPH_NO_VIRTVlize(function()
+		-- LPH_NO_VIRTUALIZE(function()
 			Start_Farm()
 		-- end)()
 	end)
