@@ -1356,7 +1356,7 @@ local function Start_Farm()
 			task.wait(1)
 		elseif Dist < 50 then
 			debug_print(string.format("Collected first coin (mid, %.2f studs). Waiting 1.5s.", Dist))
-			task.wait(2)
+			task.wait(1.5)
 		else
 			debug_print(string.format("Collected first coin (far, %.2f studs). Waiting 2s.", Dist))
 			task.wait(2)
@@ -1416,7 +1416,7 @@ local function Start_Farm()
 						task.wait(1)
 					else
 						debug_print(string.format("Collected far chain coin (%.2f studs). Waiting 1.5s.", distToNext))
-						task.wait(2)
+						task.wait(1.5)
 					end
 				end
 			else
