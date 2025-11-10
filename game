@@ -213,6 +213,14 @@ local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 local OwnedWeapons = Data["Weapons"]["Owned"]
 local totalCoins = StartedCoins
 
+local SafetyPart = Instance.new("Part")
+SafetyPart.Parent = Workspace
+SafetyPart.Size = Vector3.new(100, 1, 100)
+SafetyPart.Position = Vector3.new(0, 0, 0)
+SafetyPart.Anchored = true
+SafetyPart.Name = "SafetyPart"
+SafetyPart.Transparency = 1
+
 local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
@@ -226,19 +234,8 @@ LobbyPlatform.Anchored = true
 LobbyPlatform.Name = "LobbyPlatform"
 LobbyPlatform.Transparency = 1
 
--- Create a platform to follow the player and prevent falling
-local PlayerPlatform = Instance.new("Part")
-PlayerPlatform.Name = "PlayerPlatform"
-PlayerPlatform.Parent = Workspace
-PlayerPlatform.Anchored = true
-PlayerPlatform.CanCollide = false
-PlayerPlatform.Size = Vector3.new(10, 1, 10)
-PlayerPlatform.Color = Color3.fromRGB(34, 139, 34) -- Green
-PlayerPlatform.Material = Enum.Material.Grass
-PlayerPlatform.Transparency = 0.5
-
--- Position the player at the lobby platform
-HumanoidRootPart.CFrame = LobbyPlatform.CFrame + Vector3.new(0, 3, 0)
+-- Position the player at the safety platform
+HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
 
 --UI
 local ScreenGui = Instance.new("ScreenGui")
@@ -678,7 +675,7 @@ local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid then return end
 
 	HumanoidRootPart.CFrame = CFrame.new(coin.Position)
-	-- Removed SafetyPart.Position = coin.Position
+	SafetyPart.Position = coin.Position
 	StatusText.Text = "Status: Moving to coin..."
 
 	task.spawn(function()
@@ -697,13 +694,14 @@ local function TeleportToCoin(coin)
 		end
 	end)
 
-	task.delay(0.3, function()
-		if Humanoid and HumanoidRootPart then
-			Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
-			task.wait(math.random(1,2))
-			Humanoid:MoveTo(HumanoidRootPart.Position)
-		end
-	end)
+	-- Removed the task.delay with random movement
+	-- task.delay(0.3, function()
+	-- 	if Humanoid and HumanoidRootPart then
+	-- 		Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
+	-- 		task.wait(math.random(1,2))
+	-- 		Humanoid:MoveTo(HumanoidRootPart.Position)
+	-- 	end
+	-- end)
 
 	task.wait()
 end
@@ -1089,16 +1087,13 @@ local function FindCoin()
 	local coins = {}
 	for _, coin in ipairs(CoinsFolder:GetChildren()) do
 		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") then
-			local dist = (HumanoidRootPart.Position - coin.Position).Magnitude
-			if dist <= 200 then -- Only check coins within 200 studs
-				table.insert(coins, coin)
+			table.insert(coins, coin)
 
-				task.spawn(function()
-					firetouchinterest(HumanoidRootPart, coin, 0)
-					task.wait()
-					firetouchinterest(HumanoidRootPart, coin, 0)
-				end)
-			end
+			task.spawn(function()
+				firetouchinterest(HumanoidRootPart, coin, 0)
+				task.wait()
+				firetouchinterest(HumanoidRootPart, coin, 0)
+			end)
 		end
 	end
 
@@ -1204,12 +1199,6 @@ task.spawn(function()
 	end
 end)
 
--- Make the platform follow the player
-RunService.RenderStepped:Connect(function()
-	if HumanoidRootPart then
-		PlayerPlatform.CFrame = HumanoidRootPart.CFrame + Vector3.new(0, -4, 0)
-	end
-end)
 
 
 local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
@@ -1241,6 +1230,19 @@ local function TeleportToCoin(coin)
 			until not coin:FindFirstChild("TouchInterest")
 		end
 	end)
+
+	-- 🔹 Random walking movement (removed by user request)
+	-- task.delay(0.3, function()
+	-- 	if Humanoid and HumanoidRootPart then
+	-- 		local offset = Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
+	-- 		local walkPos = HumanoidRootPart.Position + offset
+	-- 		Humanoid:MoveTo(walkPos)
+	-- 		task.wait(math.random(1, 2)) -- 1–2 s random walk
+	-- 		Humanoid:MoveTo(HumanoidRootPart.Position)
+	-- 	end
+	-- end)
+
+	task.wait()
 end
 
 
@@ -1268,11 +1270,13 @@ local function Start_Farm()
 			end
 			task.wait(0.5)
 			HumanoidRootPart = GetHumanoid()
-			-- Removed forced teleport to lobby
+			SafetyPart.Position = Vector3.new(0, 100, 0)
 			repeat
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart = GetHumanoid()
-				-- Removed forced teleport to lobby
+				if HumanoidRootPart then
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
 				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
@@ -1283,11 +1287,15 @@ local function Start_Farm()
 			if HumanoidRootPart then
 				HumanoidRootPart.Anchored = false
 				debug_print("Unanchored HumanoidRootPart.")
-				-- Removed forced teleport to lobby
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame
+					debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
+					task.wait(0.1)
+				end
 			end
 
-			StatusText.Text = "Status: New round active. Spawning normally!"
-			debug_print("New round active. Spawning normally!")
+			StatusText.Text = "Status: New round active. Safe platform reached!"
+			debug_print("New round active. Safe platform reached!")
 		end
 
 		ClearMap()
@@ -1309,21 +1317,36 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
-				-- Removed forced teleport to lobby
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait(0.1)
+				end
 				continue
 			end
 
 			if coin == "WinRound1" then
-				WinRound()
+				-- WinRound() -- Auto-kill disabled by user request
+				debug_print("Full coins, role is Murderer/Sheriff. Waiting for round to end.")
+				StatusText.Text = "Status: Full coins. Waiting for round to end."
+				-- Wait at the safety platform
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait()
+				end
 				continue
 			elseif coin == "Full" then
-				if math.random(1, 100) >= 5 then
-					Humanoid.Health = 0
-					task.wait(3)
+				-- Auto-reset when full (40 coins) by user request
+				Humanoid.Health = 0
+				task.wait(3)
+				StatusText.Text = "Status: Coin inventory full! Resetting..."
+				debug_print("Coin inventory full! Resetting...")
+				SafetyPart.Position = Vector3.new(0, 100, 0)
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					task.wait()
 				end
-				StatusText.Text = "Status: Coin inventory full! Best script!"
-				debug_print("Coin inventory full! OK")
-				-- Removed forced teleport to lobby
 				continue
 			end
 			debug_print("No coin found, waiting...")
@@ -1345,88 +1368,43 @@ local function Start_Farm()
 
 		local coinPos = coin.Position
 		local visited = {}
-		local Dist = (coin.Position - HumanoidRootPart.Position).Magnitude
+		-- local Dist = math.min((coin.Position - HumanoidRootPart.Position).Magnitude, 100) -- No longer needed for wait calculation
 
-		TeleportToCoin(coin)
+		TeleportToCoin(coin) -- <--- FIRST TP (RANDOM)
 		visited[coin] = true
+		task.wait(2) -- <--- NEW: Wait 2 seconds after first TP
 
-		-- Multi-level wait logic for the FIRST coin
-		if Dist < 5 then
-			debug_print(string.format("Collected first coin (near, %.2f studs). Waiting 1s.", Dist))
-			task.wait(1)
-		elseif Dist < 10 then
-			debug_print(string.format("Collected first coin (mid, %.2f studs). Waiting 1.5s.", Dist))
-			task.wait(1.5)
-		else
-			debug_print(string.format("Collected first coin (far, %.2f studs). Waiting 2s.", Dist))
-			task.wait(2)
-		end
-		
-		chainCount = 1
-		while chainCount < 5 do -- Chain a max of 4 more coins
+		while chainCount <= 4 do -- <--- CHAIN LOOP
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
 
-			for _, c in ipairs(CoinsFolder:GetChildren()) do
-				if c and c:FindFirstChild("TouchInterest") and not visited[c] then
-					local d = (c.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 60 and d < nearestDistance then
+			for _, coin in ipairs(AllCoins) do
+				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
+					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
+					if d <= 60 and d < nearestDistance then -- <--- Reverted from 60 to 100
 						nearestDistance = d
-						nextCoin = c
+						nextCoin = coin
 					end
 				end
 			end
 
 			if nextCoin then
-				local distToNext = nearestDistance
 				TeleportToCoin(nextCoin)
+				
+				-- Reverted to the single wait logic
+				task.wait(2) -- Original wait for coins 10-100 studs away
+				
 				visited[nextCoin] = true
 				chainCount += 1
-
-				-- Check if this is the LAST coin in the chain
-				local isLastCoin = true
-				if chainCount < 5 then
-					local lookAheadCoin = nil
-					local lookAheadDist = math.huge
-					for _, c_ahead in ipairs(CoinsFolder:GetChildren()) do
-						if c_ahead and c_ahead:FindFirstChild("TouchInterest") and not visited[c_ahead] then
-							local d_ahead = (c_ahead.Position - HumanoidRootPart.Position).Magnitude
-							if d_ahead <= 60 and d_ahead < lookAheadDist then
-								lookAheadDist = d_ahead
-								lookAheadCoin = c_ahead
-							end
-						end
-					end
-					if lookAheadCoin then
-						isLastCoin = false
-					end
-				else
-					isLastCoin = true -- Max chain reached
-				end
-				
-				if isLastCoin then
-					debug_print("Collected LAST chain coin. Waiting 1s.")
-					task.wait(2)
-					break -- Exit the loop, as this was the last coin
-				else
-					-- Multi-level wait for chain coins
-					if distToNext <= 10 then
-						debug_print(string.format("Collected near chain coin (%.2f studs). Waiting 1s.", distToNext))
-						task.wait(1.5)
-					else
-						debug_print(string.format("Collected far chain coin (%.2f studs). Waiting 1.5s.", distToNext))
-						task.wait(2)
-					end
-				end
 			else
-				debug_print("No more chain coins found.")
-				break -- No more coins found in range
+				break
 			end
 		end
 
-		debug_print("Chain finished. Waiting 2s.")
-		task.wait(2)
+		-- print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100)) -- Old wait
+		-- task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100)) -- <--- OLD WAIT
+		task.wait(2) -- <--- NEW: Wait 2 seconds after chain loop (whether it found coins or not)
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
