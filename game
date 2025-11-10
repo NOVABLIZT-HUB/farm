@@ -1356,8 +1356,9 @@ local function Start_Farm()
 
 				-- Check if we are at the max chain count
 				if chainCount > 4 then
-					debug_print("Collected LAST chain coin (max chain). Skipping wait.")
-					break -- Exit loop, will hit 3s wait
+					debug_print("Collected LAST chain coin (max chain). Waiting 1s.")
+					task.wait(1) -- Wait 1s for last coin
+					break -- Exit loop, will hit 2s wait
 				end
 
 				-- Look-ahead from our *new* position
@@ -1383,8 +1384,9 @@ local function Start_Farm()
 						task.wait(2)
 					end
 				else
-					debug_print("Collected LAST chain coin (no more found). Skipping wait.")
-					break -- Exit loop, will hit 3s wait
+					debug_print("Collected LAST chain coin (no more found). Waiting 1s.")
+					task.wait(1) -- Wait 1s for last coin
+					break -- Exit loop, will hit 2s wait
 				end
 			else
 				debug_print("No more chain coins found.")
@@ -1393,8 +1395,8 @@ local function Start_Farm()
 		end
 
 		-- End of chain wait
-		debug_print("Chain finished. Waiting 3s.")
-		task.wait(3)
+		debug_print("Chain finished. Waiting 2s.")
+		task.wait(2)
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
@@ -1426,7 +1428,7 @@ end
 
 while true do
 	local success, err = pcall(function()
-		-- LPH_NO_VIRTUALIZE(function()
+		-- LPH_NO_VIRTVlize(function()
 			Start_Farm()
 		-- end)()
 	end)
