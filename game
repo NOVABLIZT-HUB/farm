@@ -1364,7 +1364,7 @@ local function Start_Farm()
 		visited[coin] = true
 
 		-- Multi-level wait logic for the FIRST coin
-		if Dist < 20 then
+		if Dist < 15 then
 			debug_print(string.format("Collected first coin (near, %.2f studs). Waiting 1s.", Dist))
 			task.wait(1)
 		elseif Dist < 50 then
@@ -1424,7 +1424,7 @@ local function Start_Farm()
 					break -- Exit the loop, as this was the last coin
 				else
 					-- Multi-level wait for chain coins
-					if distToNext <= 20 then
+					if distToNext <= 15 then
 						debug_print(string.format("Collected near chain coin (%.2f studs). Waiting 1s.", distToNext))
 						task.wait(1)
 					else
