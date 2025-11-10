@@ -1380,8 +1380,8 @@ local function Start_Farm()
 						debug_print("Collected near chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 1s.")
 						task.wait(1)
 					else
-						debug_print("Collected far chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 2s.")
-						task.wait(2)
+						debug_print("Collected far chain coin (" .. string.format("%.2f", nearestDistance) .. " studs). Waiting 1.5s.")
+						task.wait(1.5)
 					end
 				else
 					debug_print("Collected LAST chain coin (no more found). Waiting 1s.")
