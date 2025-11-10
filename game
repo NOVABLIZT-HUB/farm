@@ -1407,7 +1407,7 @@ local function Start_Farm()
 				
 				if isLastCoin then
 					debug_print("Collected LAST chain coin. Waiting 1s.")
-					task.wait(1)
+					task.wait(0.5)
 					break -- Exit the loop, as this was the last coin
 				else
 					-- Multi-level wait for chain coins
@@ -1426,7 +1426,7 @@ local function Start_Farm()
 		end
 
 		debug_print("Chain finished. Waiting 2s.")
-		task.wait(2)
+		task.wait(2.5)
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
