@@ -226,6 +226,20 @@ LobbyPlatform.Anchored = true
 LobbyPlatform.Name = "LobbyPlatform"
 LobbyPlatform.Transparency = 1
 
+-- Create a platform to follow the player and prevent falling
+local PlayerPlatform = Instance.new("Part")
+PlayerPlatform.Name = "PlayerPlatform"
+PlayerPlatform.Parent = Workspace
+PlayerPlatform.Anchored = true
+PlayerPlatform.CanCollide = false
+PlayerPlatform.Size = Vector3.new(10, 1, 10)
+PlayerPlatform.Color = Color3.fromRGB(34, 139, 34) -- Green
+PlayerPlatform.Material = Enum.Material.Grass
+PlayerPlatform.Transparency = 0.5
+
+-- Position the player at the lobby platform
+HumanoidRootPart.CFrame = LobbyPlatform.CFrame + Vector3.new(0, 3, 0)
+
 --UI
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
@@ -664,6 +678,7 @@ local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid then return end
 
 	HumanoidRootPart.CFrame = CFrame.new(coin.Position)
+	-- Removed SafetyPart.Position = coin.Position
 	StatusText.Text = "Status: Moving to coin..."
 
 	task.spawn(function()
@@ -1074,10 +1089,8 @@ local function FindCoin()
 	local coins = {}
 	for _, coin in ipairs(CoinsFolder:GetChildren()) do
 		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") then
-			
-			-- [[ THAY ĐỔI: Thêm lại kiểm tra 200 stud ]] --
-			local distance = (HumanoidRootPart.Position - coin.Position).Magnitude
-			if distance <= 200 then
+			local dist = (HumanoidRootPart.Position - coin.Position).Magnitude
+			if dist <= 200 then -- Only check coins within 200 studs
 				table.insert(coins, coin)
 
 				task.spawn(function()
@@ -1098,7 +1111,6 @@ local function FindCoin()
 
 		return startCoin
 	else
-		-- Trả về "NoCoins" nếu không tìm thấy đồng xu nào trong phạm vi 200 stud
 		return "NoCoins"
 	end
 end
@@ -1192,6 +1204,12 @@ task.spawn(function()
 	end
 end)
 
+-- Make the platform follow the player
+RunService.RenderStepped:Connect(function()
+	if HumanoidRootPart then
+		PlayerPlatform.CFrame = HumanoidRootPart.CFrame + Vector3.new(0, -4, 0)
+	end
+end)
 
 
 local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
@@ -1263,12 +1281,11 @@ local function Start_Farm()
 			end
 			task.wait(0.5)
 			HumanoidRootPart = GetHumanoid()
+			-- Removed forced teleport to lobby
 			repeat
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart = GetHumanoid()
-				if HumanoidRootPart then
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0) -- Đã xóa
-				end
+				-- Removed forced teleport to lobby
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
 				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
@@ -1279,10 +1296,11 @@ local function Start_Farm()
 			if HumanoidRootPart then
 				HumanoidRootPart.Anchored = false
 				debug_print("Unanchored HumanoidRootPart.")
+				-- Removed forced teleport to lobby
 			end
 
-			StatusText.Text = "Status: New round active. Safe platform reached!"
-			debug_print("New round active. Safe platform reached!")
+			StatusText.Text = "Status: New round active. Spawning normally!"
+			debug_print("New round active. Spawning normally!")
 		end
 
 		ClearMap()
@@ -1304,6 +1322,7 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
+				-- Removed forced teleport to lobby
 				continue
 			end
 
@@ -1317,6 +1336,7 @@ local function Start_Farm()
 				end
 				StatusText.Text = "Status: Coin inventory full! Best script!"
 				debug_print("Coin inventory full! OK")
+				-- Removed forced teleport to lobby
 				continue
 			end
 			debug_print("No coin found, waiting...")
@@ -1336,48 +1356,90 @@ local function Start_Farm()
 			continue
 		end
 
-		-- [[ DEBUG: Hiển thị khoảng cách của đồng xu đầu tiên ]] --
-		local rawDistance = (coin.Position - HumanoidRootPart.Position).Magnitude
-        debug_print("First coin selected is " .. math.floor(rawDistance) .. " studs away. (Teleporting)")
-		
 		local coinPos = coin.Position
 		local visited = {}
-		local Dist = math.min((coin.Position - HumanoidRootPart.Position).Magnitude, 100)
+		local Dist = (coin.Position - HumanoidRootPart.Position).Magnitude
 
 		TeleportToCoin(coin)
 		visited[coin] = true
 
-		while chainCount <= 4 do
+		-- Multi-level wait logic for the FIRST coin
+		if Dist < 20 then
+			debug_print(string.format("Collected first coin (near, %.2f studs). Waiting 1s.", Dist))
+			task.wait(1)
+		elseif Dist < 50 then
+			debug_print(string.format("Collected first coin (mid, %.2f studs). Waiting 1.5s.", Dist))
+			task.wait(1.5)
+		else
+			debug_print(string.format("Collected first coin (far, %.2f studs). Waiting 2s.", Dist))
+			task.wait(2)
+		end
+		
+		chainCount = 1
+		while chainCount < 5 do -- Chain a max of 4 more coins
 			task.wait()
 			local nextCoin = nil
 			local nearestDistance = math.huge
 
-			for _, coin in ipairs(AllCoins) do
-				if coin and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-					local d = (coin.Position - HumanoidRootPart.Position).Magnitude
-					if d <= 15 and d < nearestDistance then
+			for _, c in ipairs(CoinsFolder:GetChildren()) do
+				if c and c:FindFirstChild("TouchInterest") and not visited[c] then
+					local d = (c.Position - HumanoidRootPart.Position).Magnitude
+					if d <= 50 and d < nearestDistance then
 						nearestDistance = d
-						nextCoin = coin
+						nextCoin = c
 					end
 				end
 			end
 
 			if nextCoin then
-				-- [[ DEBUG: Hiển thị khoảng cách của đồng xu theo chuỗi ]] --
-				local chainDistance = (nextCoin.Position - HumanoidRootPart.Position).Magnitude
-                debug_print("Chaining to next coin " .. math.floor(chainDistance) .. " studs away.")
-				
+				local distToNext = nearestDistance
 				TeleportToCoin(nextCoin)
-				task.wait(1 + (math.random(-10, 10) / 100))
 				visited[nextCoin] = true
 				chainCount += 1
+
+				-- Check if this is the LAST coin in the chain
+				local isLastCoin = true
+				if chainCount < 5 then
+					local lookAheadCoin = nil
+					local lookAheadDist = math.huge
+					for _, c_ahead in ipairs(CoinsFolder:GetChildren()) do
+						if c_ahead and c_ahead:FindFirstChild("TouchInterest") and not visited[c_ahead] then
+							local d_ahead = (c_ahead.Position - HumanoidRootPart.Position).Magnitude
+							if d_ahead <= 50 and d_ahead < lookAheadDist then
+								lookAheadDist = d_ahead
+								lookAheadCoin = c_ahead
+							end
+						end
+					end
+					if lookAheadCoin then
+						isLastCoin = false
+					end
+				else
+					isLastCoin = true -- Max chain reached
+				end
+				
+				if isLastCoin then
+					debug_print("Collected LAST chain coin. Waiting 1s.")
+					task.wait(1)
+					break -- Exit the loop, as this was the last coin
+				else
+					-- Multi-level wait for chain coins
+					if distToNext <= 20 then
+						debug_print(string.format("Collected near chain coin (%.2f studs). Waiting 1s.", distToNext))
+						task.wait(1)
+					else
+						debug_print(string.format("Collected far chain coin (%.2f studs). Waiting 1.5s.", distToNext))
+						task.wait(1.5)
+					end
+				end
 			else
-				break
+				debug_print("No more chain coins found.")
+				break -- No more coins found in range
 			end
 		end
 
-		print(Dist, calculateTime(Dist) + ((math.random(-50, 20)) / 100))
-		task.wait(calculateTime(Dist) + ((math.random(-50, 20)) / 100))
+		debug_print("Chain finished. Waiting 2s.")
+		task.wait(2)
 
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
