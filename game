@@ -1241,19 +1241,6 @@ local function TeleportToCoin(coin)
 			until not coin:FindFirstChild("TouchInterest")
 		end
 	end)
-
-	-- 🔹 Random walking movement (identical to b.lua)
-	task.delay(0.3, function()
-		if Humanoid and HumanoidRootPart then
-			local offset = Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
-			local walkPos = HumanoidRootPart.Position + offset
-			Humanoid:MoveTo(walkPos)
-			task.wait(math.random(1, 2)) -- 1–2 s random walk
-			Humanoid:MoveTo(HumanoidRootPart.Position)
-		end
-	end)
-
-	task.wait()
 end
 
 
