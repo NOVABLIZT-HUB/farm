@@ -37,7 +37,12 @@ local Default_Config = {
 		-- ["STOP_MURDERER_AFTER_KILLS"] = 20,
 		-- ["FPS"] = 3,
 		["HopServer"] = false,
-		["MaxFails"] = 10
+		["MaxFails"] = 10,
+		["AutoShutdown"] = {
+			["Enabled"] = true,
+			["Minutes"] = 15,
+			["MinCoins"] = 100
+		}
 	}
 }
 
@@ -886,7 +891,8 @@ local function updatePlayerInfo()
 		ClaimRewards()
 	end
 
-	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 1000 + TotalStagesBought * 800))
+	-- SỬA LỖI: Cả crate và battle pass tier đều tốn 800, không phải 1000.
+	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 800 + TotalStagesBought * 800))
 
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
@@ -920,6 +926,48 @@ task.spawn(function()
 			RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 		end)
 		task.wait(.5)
+	end
+end)
+
+-- TÍNH NĂNG MỚI: Tự động tắt nếu farm không hiệu quả
+task.spawn(function()
+	if not cfg["Misc"]["AutoShutdown"]["Enabled"] then return end
+
+	local checkInterval = 60 -- Check mỗi 60 giây
+	local shutdownMinutes = cfg["Misc"]["AutoShutdown"]["Minutes"]
+	local minCoins = cfg["Misc"]["AutoShutdown"]["MinCoins"]
+	
+	-- Biến theo dõi cho logic kiểm tra định kỳ
+	local lastCheckTime = os.time()
+	local lastCheckFarmedCoins = 0
+
+	debug_print("Auto-Shutdown: Enabled. Will check every " .. shutdownMinutes .. " minutes for at least " .. minCoins .. " coins.")
+
+	while task.wait(checkInterval) do
+		local timeSinceLastCheckMinutes = (os.time() - lastCheckTime) / 60
+		
+		if timeSinceLastCheckMinutes >= shutdownMinutes then
+			-- Đã đến lúc kiểm tra
+			
+			-- 1. Lấy tổng số coin farm được HIỆN TẠI
+			local currentTotalCoins = getCurrentCoins()
+			local totalFarmedCoins = tonumber(currentTotalCoins - StartedCoins + (SessionCrates * 800 + TotalStagesBought * 800))
+			
+			-- 2. Tính số coin farm được TRONG KHOẢNG THỜI GIAN NÀY
+			local coinsInThisInterval = totalFarmedCoins - lastCheckFarmedCoins
+			
+			debug_print("Auto-Shutdown Check: Farmed " .. coinsInThisInterval .. " coins in the last " .. string.format("%.2f", timeSinceLastCheckMinutes) .. " minutes.")
+
+			if coinsInThisInterval < minCoins then
+				debug_print("AUTO-SHUTDOWN: Farmed only " .. coinsInThisInterval .. " coins, which is less than " .. minCoins .. " in the last " .. shutdownMinutes .. " minutes. Shutting down.")
+				game:Shutdown()
+			else
+				debug_print("Auto-Shutdown Check: Coin count is OK.")
+				-- 3. Đặt lại mốc kiểm tra
+				lastCheckTime = os.time()
+				lastCheckFarmedCoins = totalFarmedCoins
+			end
+		end
 	end
 end)
 
@@ -1208,7 +1256,7 @@ local function Start_Farm()
 			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("New round active. Safe platform reached!")
 			
-			scanMode = "global" -- This variable is no longer used by FindCoin but doesn't hurt
+			-- scanMode = "global"
 			debug_print("Forcing GLOBAL scan for first coin of the round.")
 			isFirstCoinOfRound = true
 			visited = {}
@@ -1351,8 +1399,8 @@ local function Start_Farm()
 			end
 			
 			if not chainCoin then
-				debug_print("No coin found in 180 stud range. Waiting 1 seconds.")
-				task.wait(1)
+				debug_print("No coin found in 180 stud range. Waiting 2 seconds.")
+				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
@@ -1376,8 +1424,8 @@ local function Start_Farm()
 					task.wait(1)
 				end
 
-				debug_print("Chain finished. Waiting 3 seconds.")
-				task.wait(3)
+				debug_print("Chain finished. Waiting 2 seconds.")
+				task.wait(2)
 			end
 		end
 
