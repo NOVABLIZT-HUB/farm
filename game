@@ -38,7 +38,6 @@ local Default_Config = {
 		-- ["FPS"] = 3,
 		["HopServer"] = false,
 		["MaxFails"] = 10
-		-- Đã xóa AutoShutdown
 	}
 }
 
