@@ -38,6 +38,7 @@ local Default_Config = {
 		-- ["FPS"] = 3,
 		["HopServer"] = false,
 		["MaxFails"] = 10
+		-- Đã xóa AutoShutdown
 	}
 }
 
@@ -410,11 +411,11 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 	end
 end)
 
-consolecreate("DEBUG") -- This function is specific to some executors and might be causing the script to stop.
+consolecreate("DEBUG")
 local function debug_print(...)
 	last_print = ...
 	print("[" .. player.Name .. "] " .. ...)
-	consoleprint("[" .. player.Name .. "] " .. ... .. "\n") -- This function is specific to some executors.
+	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 end
 
 local function CPUSaversIGMA()
@@ -880,13 +881,53 @@ local function updatePlayerInfo()
 			elseif ProfileData[Event.Title].CurrentTier == 24 and tonumber(totalCoins) >= tonumber(90000) then
 				Remotes.Events.Generic.BuyFinalReward:FireServer()
 				task.wait()
-				
+				if type(cfg["Webhook"]["URL"]) == "string" and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks") then
+					for weapon, weaponamount in pairs(OwnedWeapons) do
+						if table.find(GodlyList, weapon) then
+							TotalGodlies = TotalGodlies + weaponamount
+						elseif table.find(ChromaList, weapon) then
+							TotalChromas = TotalChromas + weaponamount
+						end
+						TotalWeapons = TotalWeapons + weaponamount
+					end
+					local embed = {
+						title = "Claimed Battle Pass Tier 25",
+						description = "",
+						color = 65280,
+						fields = {},
+						footer = {
+							text = "Hasty MM2 Coin Farmer",
+						},
+						timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+					}
+					table.insert(embed.fields, {
+						name = "Item",
+						value = tostring("Raygun"),
+						inline = false,
+					})
+					table.insert(embed.fields, {
+						name = "Username",
+						value = tostring(player.Name),
+						inline = false,
+					})
+					table.insert(embed.fields, {
+						name = "Total Godlies",
+						value = tostring(TotalGodlies),
+						inline = true,
+					})
+					table.insert(embed.fields, {
+						name = "Total Chromas",
+						value = tostring(TotalChromas),
+						inline = true,
+					})
+					SendMessageWithEmbedAndPing(cfg["Webhook"]["URL"], "<@" .. cfg["Webhook"]["UserID"] .. ">", embed)
+				end
 			end
 		end
 		ClaimRewards()
 	end
 
-	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 1000 + TotalStagesBought * 800))
+	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 800 + TotalStagesBought * 800))
 
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
@@ -922,6 +963,8 @@ task.spawn(function()
 		task.wait(.5)
 	end
 end)
+
+-- ĐÃ XÓA TASK.SPAWN CỦA AUTOSHUTDOWN
 
 task.spawn(function()
 	while task.wait() do
@@ -1208,7 +1251,7 @@ local function Start_Farm()
 			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("New round active. Safe platform reached!")
 			
-			scanMode = "global" -- This variable is no longer used by FindCoin but doesn't hurt
+			-- scanMode = "global"
 			debug_print("Forcing GLOBAL scan for first coin of the round.")
 			isFirstCoinOfRound = true
 			visited = {}
@@ -1351,8 +1394,8 @@ local function Start_Farm()
 			end
 			
 			if not chainCoin then
-				debug_print("No coin found in 180 stud range. Waiting 1 seconds.")
-				task.wait(1)
+				debug_print("No coin found in 180 stud range. Waiting 2 seconds.")
+				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
@@ -1376,7 +1419,7 @@ local function Start_Farm()
 					task.wait(1)
 				end
 
-				debug_print("Chain finished. Waiting 3 seconds.")
+				debug_print("Chain finished. Waiting 2 seconds.")
 				task.wait(3)
 			end
 		end
