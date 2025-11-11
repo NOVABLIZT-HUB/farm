@@ -38,6 +38,7 @@ local Default_Config = {
 		-- ["FPS"] = 3,
 		["HopServer"] = false,
 		["MaxFails"] = 10
+		-- Đã xóa AutoShutdown
 	}
 }
 
@@ -841,7 +842,7 @@ local function Start_Farm()
 			
 			if not chainCoin then
 				debug_print("No coin found in 180 stud range. Waiting 2 seconds.")
-				task.wait(1)
+				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
