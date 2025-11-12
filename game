@@ -44,14 +44,14 @@ local Default_Config = {
 		["FirstCoin"] = 3, -- Thời gian chờ sau coin 1/40
 		["Chain_1"] = 2,   -- Thời gian chờ sau coin 1/5
 		["Chain_2"] = 2,   -- Thời gian chờ sau coin 2/5
-		["Chain_3"] = 1,   -- Thời gian chờ sau coin 3/5
+		["Chain_3"] = 1.5,   -- Thời gian chờ sau coin 3/5
 		["Chain_4"] = 1.5, -- Thời gian chờ sau coin 4/5
-		["Chain_5"] = 1,   -- Thời gian chờ sau coin 5/5
+		["Chain_5"] = 1.5,   -- Thời gian chờ sau coin 5/5
 		
 		["EndChain_Table"] = {
 			[1] = 2, -- Chờ 2 giây nếu chuỗi gãy sau coin 1
 			[2] = 2, -- Chờ 3 giây nếu chuỗi gãy sau coin 2
-			[3] = 3, -- Chờ 3 giây nếu chuỗi gãy sau coin 3
+			[3] = 2.5, -- Chờ 3 giây nếu chuỗi gãy sau coin 3
 			[4] = 2.5, -- Chờ 3 giây nếu chuỗi gãy sau coin 4
 			[5] = 3  -- Chờ 3 giây nếu chuỗi gãy sau coin 5
 		},
