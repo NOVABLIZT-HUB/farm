@@ -1400,8 +1400,8 @@ local function Start_Farm()
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				local chainCount = 1
-				debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 1 second.")
-				task.wait(1)
+				debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 2 second.")
+				task.wait(2)
 
 				for i = 2, 5 do
 					debug_print("Finding best coin in 40 studs (Neighbor)...")
