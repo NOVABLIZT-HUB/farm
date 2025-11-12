@@ -1416,11 +1416,11 @@ local function Start_Farm()
 					visited[neighborCoin] = true
 					chainCount = chainCount + 1
 					debug_print("Collected chain coin #" .. chainCount .. "/5 (best in 40). Waiting 1 second.")
-					task.wait(1)
+					task.wait(1.5)
 				end
 
 				debug_print("Chain finished. Waiting 3 seconds.")
-				task.wait(3)
+				task.wait(2)
 			end
 		end
 
