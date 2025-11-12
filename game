@@ -1419,7 +1419,7 @@ local function Start_Farm()
 					task.wait(1)
 				end
 
-				debug_print("Chain finished. Waiting 2 seconds.")
+				debug_print("Chain finished. Waiting 3 seconds.")
 				task.wait(3)
 			end
 		end
