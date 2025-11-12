@@ -998,15 +998,15 @@ end)
 
 local lastPing = tick()
 
---// Teleport to Coin (Sửa đổi: Chặn và trả về true/false)
+--// Teleport to Coin (modified to have no walking)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return false
+		return
 	end
-	
+
 	if not coin:FindFirstChild("TouchInterest") then
 		debug_print("Coin " .. coin.Name .. " already collected by someone else.")
-		return false -- Coin đã bị lượm
+		return
 	end
 
 	local pos = coin.Position
@@ -1021,7 +1021,6 @@ local function TeleportToCoin(coin)
 
 	-- Lượm coin (đồng bộ, không dùng task.spawn)
 	local startTime = tick()
-	local success = false
 	repeat
 		firetouchinterest(coin, HumanoidRootPart, 0)
 		task.wait()
@@ -1029,17 +1028,11 @@ local function TeleportToCoin(coin)
 		task.wait()
 		
 		if not coin:FindFirstChild("TouchInterest") then
-			success = true
 			break
 		end
 	until (tick() - startTime) > 1 -- Chờ tối đa 1 giây
 
-	if not success then
-		debug_print("Failed to collect coin (timeout or lag).")
-		return false
-	end
-
-	return true -- Lượm thành công
+	task.wait(0.1) -- Chờ một chút để 'firetouchinterest' chạy
 end
 
 -- TÌM COIN TỐT NHẤT (LOGIC MỚI)
@@ -1263,18 +1256,12 @@ local function Start_Farm()
 				continue
 			end
 
-			local success = TeleportToCoin(coinToTeleport)
+			TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
-			
-			if success then
-				local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-				debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-				task.wait(3)
-			else
-				debug_print("Failed to collect FirstCoin. Waiting 1 second and skipping.")
-				task.wait(1)
-			end
+			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
+			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
+			task.wait(3)
 
 		else
 			
@@ -1342,50 +1329,39 @@ local function Start_Farm()
 			else
 				local chainCount = 0
 				
-				local success = TeleportToCoin(chainCoin)
+				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				
-				if not success then
-					debug_print("Failed to collect Chain_1. Waiting 1 second and breaking chain.")
-					task.wait(1)
-				else
-					chainCount = 1
-					debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 1 second.")
-					task.wait(1)
+				chainCount = 1
+				debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 2 second.")
+				task.wait(2)
 
-					for i = 2, 5 do
-						debug_print("Finding best coin in 20 studs (Neighbor)...")
-						local neighborCoin = FindBestCoin(20, 40)
+				for i = 2, 5 do
+					debug_print("Finding best coin in 20 studs (Neighbor)...")
+					local neighborCoin = FindBestCoin(20, 40)
 
-						if not neighborCoin then
-							debug_print("No coin in 20 stud. Waiting 1s, then expanding to 50 stud.")
-							task.wait(1)
-							neighborCoin = FindBestCoin(50, 40)
-						end
-
-						if not neighborCoin then
-							debug_print("No neighbor coin found in 20 or 50 studs. Chain broken.")
-							break
-						end
-
-						local neighborSuccess = TeleportToCoin(neighborCoin)
-						visited[neighborCoin] = true
-
-						if not neighborSuccess then
-							debug_print("Failed to collect Chain_" .. (chainCount + 1) .. ". Waiting 1 second and continuing search.")
-							task.wait(1)
-							-- Không 'break', script sẽ tự động 'continue' vòng lặp for
-						else
-							chainCount = chainCount + 1
-							debug_print("Collected chain coin #" .. chainCount .. "/5. Waiting 1 second.")
-							task.wait(1)
-						end
+					if not neighborCoin then
+						debug_print("No coin in 20 stud. Waiting 1s, then expanding to 50 stud.")
+						task.wait(1)
+						neighborCoin = FindBestCoin(50, 40)
 					end
 
-					if chainCount > 0 then
-						debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 3 seconds.")
-						task.wait(3)
+					if not neighborCoin then
+						debug_print("No neighbor coin found in 20 or 50 studs. Chain broken.")
+						break
 					end
+
+					TeleportToCoin(neighborCoin)
+					visited[neighborCoin] = true
+
+					chainCount = chainCount + 1
+					debug_print("Collected chain coin #" .. chainCount .. "/5. Waiting 1 second.")
+					task.wait(1)
+				end
+
+				if chainCount > 0 then
+					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 3 seconds.")
+					task.wait(3)
 				end
 			end
 		end
