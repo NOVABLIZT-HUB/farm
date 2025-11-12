@@ -1385,11 +1385,11 @@ local function Start_Farm()
 				continue
 			end
 
-			debug_print("Finding best coin in 100 studs (Priority)...")
-			local chainCoin = FindBestCoin(100, 40)
+			debug_print("Finding best coin in 80 studs (Priority)...")
+			local chainCoin = FindBestCoin(80, 40)
 
 			if not chainCoin then
-				debug_print("No coin in 100 studs. Expanding search to 180 studs...")
+				debug_print("No coin in 80 studs. Expanding search to 180 studs...")
 				chainCoin = FindBestCoin(180, 40)
 			end
 			
@@ -1400,8 +1400,8 @@ local function Start_Farm()
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				local chainCount = 1
-				debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 2 second.")
-				task.wait(2)
+				debug_print("Collected chain coin #1/5 (best in 80/180). Waiting 1 second.")
+				task.wait(1)
 
 				for i = 2, 5 do
 					debug_print("Finding best coin in 40 studs (Neighbor)...")
