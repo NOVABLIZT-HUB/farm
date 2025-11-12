@@ -24,7 +24,7 @@ local Default_Config = {
 	["Other"] = {
 		["Auto Prestige"] = true,
 		-- ["Auto Restart on Update"] = false,
-		-- ["Auto Craft"] = false,
+		-- ["Auto Craft"] = false, 
 	},
 
 	
@@ -38,7 +38,26 @@ local Default_Config = {
 		-- ["FPS"] = 3,
 		["HopServer"] = false,
 		["MaxFails"] = 10
-		-- Đã xóa AutoShutdown
+	},
+
+	["WaitTimes"] = {
+		["FirstCoin"] = 3, -- Thời gian chờ sau coin 1/40
+		["Chain_1"] = 2,   -- Thời gian chờ sau coin 1/5
+		["Chain_2"] = 2,   -- Thời gian chờ sau coin 2/5
+		["Chain_3"] = 1,   -- Thời gian chờ sau coin 3/5
+		["Chain_4"] = 1.5, -- Thời gian chờ sau coin 4/5
+		["Chain_5"] = 1,   -- Thời gian chờ sau coin 5/5
+		
+		["EndChain_Table"] = {
+			[1] = 2, -- Chờ 2 giây nếu chuỗi gãy sau coin 1
+			[2] = 2, -- Chờ 3 giây nếu chuỗi gãy sau coin 2
+			[3] = 3, -- Chờ 3 giây nếu chuỗi gãy sau coin 3
+			[4] = 2.5, -- Chờ 3 giây nếu chuỗi gãy sau coin 4
+			[5] = 3  -- Chờ 3 giây nếu chuỗi gãy sau coin 5
+		},
+		
+		["NoCoin"] = 2,     -- Thời gian chờ khi không tìm thấy coin nào
+		["FailCoin"] = 1    -- Thời gian chờ khi lượm hụt coin
 	}
 }
 
@@ -99,10 +118,8 @@ local headers = {
 
 local map = nil
 local AllCoins = {}
--- local knife = nil
--- local gun = nil
 local GoodPeople = {}
-local visited = {}
+local visited = {} -- Bảng để theo dõi các coin đã lượm
 
 repeat
 	task.wait()
@@ -114,7 +131,7 @@ until game:IsLoaded()
 if cfg["CPU Saver"] then
 	task.spawn(function()
 		while task.wait(5) do
-			-- setfpscap(cfg["Misc"]["FPS"])
+			-- setfpscap(cfg["Misc"]["FPS"]) 
 		end
 	end)
 end
@@ -411,11 +428,11 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 	end
 end)
 
-consolecreate("DEBUG")
+consolecreate("DEBUG") -- This function is specific to some executors and might be causing the script to stop.
 local function debug_print(...)
 	last_print = ...
 	print("[" .. player.Name .. "] " .. ...)
-	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+	consoleprint("[" .. player.Name .. "] " .. ... .. "\n") -- This function is specific to some executors.
 end
 
 local function CPUSaversIGMA()
@@ -641,13 +658,15 @@ local GetHumanoidConn = nil
 local function GetHumanoid()
 	character = player.Character
 	tries = 0
+	Humanoid = nil
+	HumanoidRootPart = nil
 
 	while tries < 60 do
 		character = character or player.Character
 		if character then
-			HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
 			Humanoid = character:FindFirstChild("Humanoid")
-			if HumanoidRootPart and Humanoid then
+			HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+			if Humanoid and HumanoidRootPart then
 				return HumanoidRootPart, Humanoid
 			end
 		end
@@ -673,43 +692,6 @@ local function GetHumanoid()
 
 	return nil, nil
 end
-
--- This is the first TeleportToCoin function (used by FindNearCoins, if it were still here)
--- We will add the one that is actually *used* by Start_Farm later.
--- local function TeleportToCoin(coin)
--- 	if not HumanoidRootPart or not Humanoid then return end
--- 
--- 	HumanoidRootPart.CFrame = CFrame.new(coin.Position)
--- 	SafetyPart.Position = coin.Position
--- 	StatusText.Text = "Status: Moving to coin..."
--- 
--- 	task.spawn(function()
--- 		task.wait()
--- 		if coin:FindFirstChild("TouchInterest") then
--- 			firetouchinterest(coin, HumanoidRootPart, 0)
--- 			task.wait()
--- 			firetouchinterest(coin, HumanoidRootPart, 1)
--- 
--- 			repeat
--- 				firetouchinterest(coin, HumanoidRootPart, 0)
--- 				task.wait()
--- 				firetouchinterest(coin, HumanoidRootPart, 1)
--- 				task.wait()
--- 			until not coin:FindFirstChild("TouchInterest")
--- 		end
--- 	end)
--- 
--- 	task.delay(0.3, function()
--- 		if Humanoid and HumanoidRootPart then
--- 			Humanoid:MoveTo(HumanoidRootPart.Position + Vector3.new(math.random(-5,5),0,math.random(-5,5)))
--- 			task.wait(math.random(1,2))
--- 			Humanoid:MoveTo(HumanoidRootPart.Position)
--- 		end
--- 	end)
--- 
--- 	task.wait()
--- end
-
 
 local startTime = os.time()
 local function updateTimer()
@@ -964,8 +946,6 @@ task.spawn(function()
 	end
 end)
 
--- ĐÃ XÓA TASK.SPAWN CỦA AUTOSHUTDOWN
-
 task.spawn(function()
 	while task.wait() do
 		for _, coin in ipairs(CoinsFolder:GetChildren()) do
@@ -990,8 +970,6 @@ local function ClearMap()
 		end
 	end
 end
-
--- This is where FindNearCoins used to be. It's replaced by the logic in Start_Farm.
 
 local function ProccessMap(child)
 	if not child:GetAttribute("MapID") then return end
@@ -1047,50 +1025,48 @@ end)
 
 local lastPing = tick()
 
--- local chainCount = 1
-
---// Teleport to Coin (modified to have no walking)
+--// Teleport to Coin (Sửa đổi: Chặn và trả về true/false)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
+		return false
+	end
+	
+	if not coin:FindFirstChild("TouchInterest") then
+		debug_print("Coin " .. coin.Name .. " already collected by someone else.")
+		return false -- Coin đã bị lượm
 	end
 
 	local pos = coin.Position
 	local currentPos = HumanoidRootPart.Position
 	local direction = (pos - currentPos)
 
-	-- Kiểm tra xem khoảng cách có quá nhỏ không (để tránh lỗi .Unit trên vector 0)
 	if direction.Magnitude < 0.1 then
 		HumanoidRootPart.CFrame = CFrame.new(pos)
 	else
 		HumanoidRootPart.CFrame = CFrame.new(pos, pos + direction)
 	end
 
-	-- 🔹 Fast touch cycle
-	task.spawn(function()
+	-- Lượm coin (đồng bộ, không dùng task.spawn)
+	local startTime = tick()
+	local success = false
+	repeat
+		firetouchinterest(coin, HumanoidRootPart, 0)
 		task.wait()
-		if coin:FindFirstChild("TouchInterest") then
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
-			until not coin:FindFirstChild("TouchInterest")
+		firetouchinterest(coin, HumanoidRootPart, 1)
+		task.wait()
+		
+		if not coin:FindFirstChild("TouchInterest") then
+			success = true
+			break
 		end
-	end)
-    
-    -- 🔹 No random walking movement
-	-- task.delay(0.3, function()
-	-- 	if Humanoid and HumanoidRootPart then
-	-- 		local offset = Vector3.new(math.random(-5, 5), 0, math.random(-5, 5))
-	-- 		local walkPos = HumanoidRootPart.Position + offset
-	-- 		Humanoid:MoveTo(walkPos)
-	-- 		task.wait(math.random(1, 2)) -- 1–2 s random walk
-	-- 		Humanoid:MoveTo(HumanoidRootPart.Position)
-	-- 	end
-	-- end)
+	until (tick() - startTime) > 1 -- Chờ tối đa 1 giây
 
-	task.wait(0.1)
+	if not success then
+		debug_print("Failed to collect coin (timeout or lag).")
+		return false
+	end
+
+	return true -- Lượm thành công
 end
 
 -- TÌM COIN TỐT NHẤT (LOGIC MỚI)
@@ -1116,7 +1092,7 @@ local function FindBestCoin(searchRadius, neighborRadius)
 	end
 
 	if #coinsInRadius == 0 then
-		return nil
+		return nil -- Không có coin nào trong bán kính tìm kiếm
 	end
 
 	-- 2. Tìm coin có nhiều "hàng xóm" nhất
@@ -1144,13 +1120,13 @@ local function FindBestCoin(searchRadius, neighborRadius)
 end
 
 
-local function FindCoin(isFirst)
+local function FindCoin(isFirst) -- Hàm này BÂY GIỜ CHỈ DÙNG CHO COIN 1/40
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
 	end
 
 
-	-- if RoundData
+	-- if RoundData 
 	-- 	and RoundData[player.Name]
 	-- 	and RoundData[player.Name]["Coins"] == 40
 	-- 	and cfg["Misc"]["FARM_MURDERER_SHERIF_WINS"]
@@ -1182,25 +1158,27 @@ local function FindCoin(isFirst)
 	end
 	
 	if isFirst then
+		-- Lần đầu tiên: Chọn 1 coin ngẫu nhiên bất kỳ
 		debug_print("FindCoin (Global): Picking a random coin from " .. #allValidCoins .. " total.")
 		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		return bestCoin
 	else
-		-- debug_print("FindCoin (Global - Fallback):...")
-		return "NoCoins"
+		-- KHÔNG BAO GIỜ NÊN CHẠY VÀO ĐÂY NỮA
+		-- Chỉ được gọi để check 'Dead' hoặc 'Full'
+		-- debug_print("FindCoin (Global - Fallback):...") 
+		return "NoCoins" -- Trả về "NoCoins" để logic chính chạy
 	end
 end
-
+-- [[ ĐÃ XÓA BỎ HÀM WinRound ]]
 
 debug_print("Script started.")
 task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- local scanMode = "global"
-
+--// Main Farm Loop (Logic Chain: 1/40 (3s) -> 180stud Nearest (1s) -> 4x 50stud Nearest (1s) -> 2s break)
 local function Start_Farm()
-	local isFirstCoinOfRound = true
+	local isFirstCoinOfRound = true -- Thêm biến trạng thái
 
 	while task.wait() do
 		lastPing = tick()
@@ -1251,17 +1229,16 @@ local function Start_Farm()
 			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("New round active. Safe platform reached!")
 			
-			-- scanMode = "global"
 			debug_print("Forcing GLOBAL scan for first coin of the round.")
-			isFirstCoinOfRound = true
-			visited = {}
+			isFirstCoinOfRound = true -- Reset lại cờ khi vào round mới
+			visited = {} -- Xóa lịch sử 'visited' khi vào round mới
 		end
 
 		ClearMap()
 		
 		if isFirstCoinOfRound then
 			debug_print("Doing Find Coin (First)...")
-			local coinToTeleport = FindCoin(true)
+			local coinToTeleport = FindCoin(true) -- Chỉ tìm coin đầu tiên
 			
 			if type(coinToTeleport) == "string" then
 				debug_print("FindCoin Response: " .. coinToTeleport)
@@ -1285,10 +1262,12 @@ local function Start_Farm()
 					continue
 				end
 
+				-- [[ ĐÃ XÓA BỎ LOGIC "WinRound1" ]]
 				if coinToTeleport == "Full" then
 					StatusText.Text = "Status: Coin inventory full! Resetting."
 					debug_print("Coin inventory full! Forcing reset...")
 					
+					-- Buộc reset bằng cách liên tục đặt health = 0
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 						Humanoid.Health = 0
@@ -1296,8 +1275,9 @@ local function Start_Farm()
 					end
 
 					debug_print("Reset command sent. Waiting for respawn logic...")
-					task.wait(1)
+					task.wait(1) -- Chờ 1s để trạng thái 'Dead' được cập nhật
 					
+					-- SỬA LỖI: Buộc chờ hồi sinh
 					debug_print("[DEBUG] Player died (from 'Full'), waiting for respawn...")
 					repeat
 						StatusText.Text = "Status: Respawning..."
@@ -1316,7 +1296,7 @@ local function Start_Farm()
 					continue
 				end
 				debug_print("No first coin found, waiting 2s...")
-				task.wait(2)
+				task.wait(cfg["WaitTimes"]["NoCoin"])
 				continue
 			end
 
@@ -1326,16 +1306,24 @@ local function Start_Farm()
 				continue
 			end
 
-			TeleportToCoin(coinToTeleport)
+			local success = TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
-			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-			task.wait(3)
+			
+			if success then
+				local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
+				debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting " .. cfg["WaitTimes"]["FirstCoin"] .. " seconds.")
+				task.wait(cfg["WaitTimes"]["FirstCoin"])
+			else
+				debug_print("Failed to collect FirstCoin. Waiting " .. cfg["WaitTimes"]["FailCoin"] .. " second and skipping.")
+				task.wait(cfg["WaitTimes"]["FailCoin"])
+			end
 
 		else
+			-- Logic farm chuỗi (Chain)
 			
-			local status = FindCoin(false)
+			-- 1. Kiểm tra trạng thái Dead/Full trước khi farm
+			local status = FindCoin(false) -- Dùng FindCoin chỉ để check status
 			if status == "Dead" then
 				StatusText.Text = "Status: You are dead!"
 				debug_print("[DEBUG] Player died, waiting for respawn...")
@@ -1358,6 +1346,7 @@ local function Start_Farm()
 				StatusText.Text = "Status: Coin inventory full! Resetting."
 				debug_print("Coin inventory full! Forcing reset...")
 				
+				-- Buộc reset bằng cách liên tục đặt health = 0
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
@@ -1365,8 +1354,9 @@ local function Start_Farm()
 				end
 
 				debug_print("Reset command sent. Waiting for respawn logic...")
-				task.wait(1)
+				task.wait(1) -- Chờ 1s để trạng thái 'Dead' được cập nhật
 				
+				-- SỬA LỖI: Buộc chờ hồi sinh
 				debug_print("[DEBUG] Player died (from 'Full' in chain), waiting for respawn...")
 				repeat
 					StatusText.Text = "Status: Respawning..."
@@ -1385,42 +1375,64 @@ local function Start_Farm()
 				continue
 			end
 
-			debug_print("Finding best coin in 80 studs (Priority)...")
-			local chainCoin = FindBestCoin(100, 40)
+			-- 2. Bắt đầu logic farm chuỗi
+			debug_print("Finding best coin in 100 studs (Priority)...")
+			local chainCoin = FindBestCoin(100, 40) -- Ưu tiên tìm coin tốt nhất < 100 stud
 
 			if not chainCoin then
-				debug_print("No coin in 80 studs. Expanding search to 180 studs...")
-				chainCoin = FindBestCoin(180, 40)
+				-- Không tìm thấy coin nào trong 100 stud, mở rộng ra 180 stud
+				debug_print("No coin in 100 studs. Expanding search to 180 studs...")
+				chainCoin = FindBestCoin(180, 40) -- Tìm coin tốt nhất < 180 stud
 			end
 			
 			if not chainCoin then
-				debug_print("No coin found in 180 stud range. Waiting 2 seconds.")
-				task.wait(2)
+				-- Không tìm thấy coin nào ngay cả trong 180 stud
+				debug_print("No coin found in 180 stud range. Waiting " .. cfg["WaitTimes"]["NoCoin"] .. " seconds.")
+				task.wait(cfg["WaitTimes"]["NoCoin"])
 			else
-				TeleportToCoin(chainCoin)
+				local chainCount = 0
+				
+				local success = TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
-				local chainCount = 1
-				debug_print("Collected chain coin #1/5 (best in 100/180). Waiting 1 second.")
-				task.wait(1.5)
+				
+				if not success then
+					debug_print("Failed to collect Chain_1. Waiting " .. cfg["WaitTimes"]["FailCoin"] .. " second and breaking chain.")
+					task.wait(cfg["WaitTimes"]["FailCoin"])
+				else
+					chainCount = 1
+					debug_print("Collected chain coin #1/5 (best in 100/180). Waiting " .. cfg["WaitTimes"]["Chain_1"] .. " second.")
+					task.wait(cfg["WaitTimes"]["Chain_1"])
 
-				for i = 2, 5 do
-					debug_print("Finding best coin in 40 studs (Neighbor)...")
-					local neighborCoin = FindBestCoin(40, 40)
+					for i = 2, 5 do
+						debug_print("Finding best coin in 40 studs (Neighbor)...")
+						local neighborCoin = FindBestCoin(40, 40) -- Tìm coin tốt nhất < 40 stud (từ vị trí HIỆN TẠI)
 
-					if not neighborCoin then
-						debug_print("No neighbor coin found in 40 studs. Chain broken.")
-						break
+						if not neighborCoin then
+							debug_print("No neighbor coin found in 40 studs. Chain broken.")
+							break -- Gãy chuỗi, thoát vòng lặp for
+						end
+
+						local neighborSuccess = TeleportToCoin(neighborCoin)
+						visited[neighborCoin] = true
+
+						if not neighborSuccess then
+							debug_print("Failed to collect Chain_" .. (chainCount + 1) .. ". Waiting " .. cfg["WaitTimes"]["FailCoin"] .. " second and breaking chain.")
+							task.wait(cfg["WaitTimes"]["FailCoin"])
+							break
+						else
+							chainCount = chainCount + 1
+							debug_print("Collected chain coin #" .. chainCount .. "/5 (best in 40). Waiting " .. cfg["WaitTimes"]["Chain_" .. chainCount] .. " second.")
+							task.wait(cfg["WaitTimes"]["Chain_" .. chainCount])
+						end
 					end
 
-					TeleportToCoin(neighborCoin)
-					visited[neighborCoin] = true
-					chainCount = chainCount + 1
-					debug_print("Collected chain coin #" .. chainCount .. "/5 (best in 40). Waiting 1 second.")
-					task.wait(1.5)
+					-- LOGIC MỚI: Chờ EndChain dựa trên chainCount
+					if chainCount > 0 then
+						local endChainWait = cfg["WaitTimes"]["EndChain_Table"][chainCount]
+						debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting " .. endChainWait .. " seconds.")
+						task.wait(endChainWait)
+					end
 				end
-
-				debug_print("Chain finished. Waiting 3 seconds.")
-				task.wait(2)
 			end
 		end
 
@@ -1428,8 +1440,6 @@ local function Start_Farm()
 		debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time"))
 			.. ", Coins: "
 			.. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
-		-- coinToTeleport = nil
-		-- chainCount = 1
 	end
 end
 
