@@ -1018,7 +1018,7 @@ local function TeleportToCoin(coin)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
 	end
 
-	-- Lượm coin (chặn, nhưng không trả về true/false)
+	-- Lượm coin (chặn)
 	local startTime = tick()
 	
 	repeat
@@ -1391,13 +1391,13 @@ local function Start_Farm()
 					-- 1. Chờ 0.5s, Quét 10 stud
 					debug_print("Waiting 0.5s, then scanning 10 stud (Nearest)...")
 					task.wait(0.5)
-					local coin10 = FindNearestUnvisitedCoin(20) -- Tìm coin GẦN NHẤT
+					local coin20 = FindNearestUnvisitedCoin(20) -- Tìm coin GẦN NHẤT
 
-					if coin10 then
+					if coin20 then
 						debug_print("Found *nearest* coin in 10 stud (Priority 1). Collecting.")
-						TeleportToCoin(coin10)
-						visited[coin10] = true
-						collectedCoin = coin10
+						TeleportToCoin(coin20)
+						visited[coin20] = true
+						collectedCoin = coin20
 					else
 						-- 2. Chờ 0.3s (tổng 0.8s), Quét 25 stud
 						debug_print("No coin in 10 stud. Waiting 0.3s (total 0.8s), then scanning 25 stud (Nearest)...")
@@ -1411,12 +1411,12 @@ local function Start_Farm()
 							collectedCoin = coin25
 						else
 							-- 3. Chờ 1.2s (tổng 2.0s), Quét 50 stud
-							debug_print("No coin in 25 stud. Waiting 1.2s (total 2.0s), then scanning 50 stud (Nearest)...")
+							debug_print("No coin in 25 stud. Waiting 1.2s (total 2.0s), then scanning 50 stud (Best)...")
 							task.wait(1)
-							local coin50 = FindNearestUnvisitedCoin(50) -- Tìm coin GẦN NHẤT
+							local coin50 = FindBestCoin(50, 20) -- Đã thay đổi: Tìm coin TỐT NHẤT
 
 							if coin50 then
-								debug_print("Found *nearest* coin in 50 stud (Priority 3). Collecting.")
+								debug_print("Found *best* coin in 50 stud (Priority 3). Collecting.")
 								TeleportToCoin(coin50)
 								visited[coin50] = true
 								collectedCoin = coin50
@@ -1437,7 +1437,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(1)
+					task.wait(2)
 				end
 			end
 		end
