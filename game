@@ -993,13 +993,13 @@ end)
 
 local lastPing = tick()
 
---// Teleport to Coin (Đã sửa lỗi CFrame ổn định, đã loại bỏ logic kiểm tra lượm hụt)
+--// Teleport to Coin (Đã sửa lỗi CFRAME ỔN ĐỊNH)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
 		return
 	end
 
-	-- Kiểm tra 1 (Vẫn giữ): Coin có còn không?
+	-- Kiểm tra 1: Coin có còn không?
 	if not coin:FindFirstChild("TouchInterest") then
 		debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
 		return
@@ -1138,26 +1138,6 @@ local function FindRandomUnvisitedCoin(radius)
 end
 
 
--- HÀM CHỜ THÔNG MINH
-local function SmartWait(duration, proximityRadius)
-	local startTime = tick()
-	local checkInterval = 0.2 -- Check 5 lần/giây
-	
-	while (tick() - startTime) < duration do
-		-- Đã thay đổi: Tìm coin TỐT NHẤT (với neighborRadius = 40)
-		local bonusCoin = FindBestCoin(proximityRadius, 40) 
-		if bonusCoin then
-			debug_print("[SmartWait] Interrupted! Found *best* bonus coin at " .. string.format("%.2f", (bonusCoin.Position - HumanoidRootPart.Position).Magnitude) .. " studs.")
-			return bonusCoin
-		end
-		
-		task.wait(checkInterval)
-	end
-	
-	return nil
-end
-
-
 local function FindCoin(isFirst) -- Hàm này CHỈ DÙNG CHO COIN 1/40
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
@@ -1198,7 +1178,7 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
---// Main Farm Loop (Logic Smart Chain)
+--// Main Farm Loop (Logic Waterfall)
 local function Start_Farm()
 	local isFirstCoinOfRound = true
 
@@ -1329,7 +1309,7 @@ local function Start_Farm()
 			isFirstCoinOfRound = false
 			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
 			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-			task.wait(3)
+			task.wait(2)
 
 		else
 			
@@ -1383,7 +1363,7 @@ local function Start_Farm()
 				continue
 			end
 
-			-- LOGIC FARM MỚI (THEO YÊU CẦU)
+			-- LOGIC FARM MỚI (WATERFALL)
 			local chainCount = 0
 
 			debug_print("Finding *random* coin in 50 studs (Priority)...")
@@ -1403,53 +1383,54 @@ local function Start_Farm()
 				chainCount = 1
 				debug_print("Collected chain coin #1/5 (random in 50/100).")
 
-				-- Bắt đầu lượm 4 coin tiếp theo
-				while chainCount < 5 do
-					local loopStartTime = tick() -- Ghi lại thời điểm bắt đầu chờ
-					
-					-- LOGIC SỬA ĐỔI: Chờ 0.8s, sau đó quét 1.2s
-					debug_print("Waiting 0.8s (blind cooldown)...")
-					task.wait(0.8)
-					
-					debug_print("Blind wait over. Now SmartWaiting 1.2s (listening for 25 stud *best* bonus)...")
-					local bonusCoin = SmartWait(1.2, 25) -- Quét 1.2 giây (tổng 2 giây)
-					
+				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "WATERFALL")
+				for i = 2, 5 do
 					local collectedCoin = nil
 					
-					if bonusCoin then
-						-- Đã tìm thấy bonus coin. Kiểm tra thời gian chờ tối thiểu 1s.
-						local timePassed = tick() - loopStartTime
-						if timePassed < 1 then
-							local waitExtra = 1 - timePassed
-							debug_print("Bonus coin found early! Enforcing 1s minimum wait (waiting " .. string.format("%.2f", waitExtra) .. "s extra)")
-							task.wait(waitExtra)
-						end
-						
-						-- Ưu tiên lượm bonus coin
-						debug_print("Collecting *best* bonus coin as chain #" .. (chainCount + 1) .. "/5")
-						TeleportToCoin(bonusCoin)
-						visited[bonusCoin] = true
-						collectedCoin = bonusCoin
-					else
-						-- Không có bonus, tìm bình thường
-						debug_print("SmartWait finished. Finding *best* coin in 50 studs...")
-						local neighborCoin = FindBestCoin(50, 40)
+					-- 1. Chờ 0.5s, Quét 10 stud
+					debug_print("Waiting 0.5s, then scanning 10 stud...")
+					task.wait(0.5)
+					local coin10 = FindBestCoin(10, 10) -- Tìm coin TỐT NHẤT
 
-						if not neighborCoin then
-							debug_print("No neighbor coin found in 50 studs. Chain broken.")
-							break -- Gãy chuỗi
+					if coin10 then
+						debug_print("Found *best* coin in 10 stud (Priority 1). Collecting.")
+						TeleportToCoin(coin10)
+						visited[coin10] = true
+						collectedCoin = coin10
+					else
+						-- 2. Chờ 0.3s (tổng 0.8s), Quét 25 stud
+						debug_print("No coin in 10 stud. Waiting 0.3s (total 0.8s), then scanning 25 stud...")
+						task.wait(0.3)
+						local coin25 = FindBestCoin(25, 10) -- Tìm coin TỐT NHẤT
+
+						if coin25 then
+							debug_print("Found *best* coin in 25 stud (Priority 2). Collecting.")
+							TeleportToCoin(coin25)
+							visited[coin25] = true
+							collectedCoin = coin25
+						else
+							-- 3. Chờ 1.2s (tổng 2.0s), Quét 50 stud
+							debug_print("No coin in 25 stud. Waiting 1.2s (total 2.0s), then scanning 50 stud...")
+							task.wait(1.2)
+							local coin50 = FindBestCoin(50, 10) -- Tìm coin TỐT NHẤT
+
+							if coin50 then
+								debug_print("Found *best* coin in 50 stud (Priority 3). Collecting.")
+								TeleportToCoin(coin50)
+								visited[coin50] = true
+								collectedCoin = coin50
+							else
+								debug_print("No neighbor coin found in 10, 25, or 50 studs. Chain broken.")
+								break -- Gãy chuỗi
+							end
 						end
-						
-						TeleportToCoin(neighborCoin)
-						visited[neighborCoin] = true
-						collectedCoin = neighborCoin
 					end
 
 					if collectedCoin then
 						chainCount = chainCount + 1
+						debug_print("Collected chain coin #" .. chainCount .. "/5.")
+						-- Vòng lặp for sẽ tiếp tục (i = 3, 4, 5)
 					end
-					
-					-- Vòng lặp while sẽ quay lại
 				end
 
 				-- LOGIC CUỐI CHUỖI
