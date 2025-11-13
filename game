@@ -1413,7 +1413,7 @@ local function Start_Farm()
 							-- 3. Chờ 1.2s (tổng 2.0s), Quét 50 stud
 							debug_print("No coin in 25 stud. Waiting 1.2s (total 2.0s), then scanning 50 stud (Best)...")
 							task.wait(1)
-							local coin50 = FindBestCoin(50, 20) -- Đã thay đổi: Tìm coin TỐT NHẤT
+							local coin50 = FindBestCoin(50, 15) -- Đã thay đổi: Tìm coin TỐT NHẤT
 
 							if coin50 then
 								debug_print("Found *best* coin in 50 stud (Priority 3). Collecting.")
