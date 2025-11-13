@@ -1402,7 +1402,7 @@ local function Start_Farm()
 						-- 2. Chờ 0.3s (tổng 0.8s), Quét 25 stud
 						debug_print("No coin in 10 stud. Waiting 0.3s (total 0.8s), then scanning 25 stud (Nearest)...")
 						task.wait(0.5)
-						local coin25 = FindNearestUnvisitedCoin(25) -- Tìm coin GẦN NHẤT
+						local coin25 = FindNearestUnvisitedCoin(30) -- Tìm coin GẦN NHẤT
 
 						if coin25 then
 							debug_print("Found *nearest* coin in 25 stud (Priority 2). Collecting.")
