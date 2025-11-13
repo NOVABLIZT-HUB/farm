@@ -993,35 +993,45 @@ end)
 
 local lastPing = tick()
 
---// Teleport to Coin (modified to have no walking)
+--// Teleport to Coin (Sửa lỗi CFrame ổn định)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
 		return
 	end
 
-	local pos = coin.Position
-	local currentPos = HumanoidRootPart.Position
-	local direction = (pos - currentPos)
-
-	if direction.Magnitude < 0.1 then
-		HumanoidRootPart.CFrame = CFrame.new(pos)
-	else
-		HumanoidRootPart.CFrame = CFrame.new(pos, pos + direction)
+	-- Kiểm tra 1 (Vẫn giữ): Coin có còn không?
+	if not coin:FindFirstChild("TouchInterest") then
+		debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
+		return
 	end
 
-	task.spawn(function()
+	local pos = coin.Position
+	local currentPos = HumanoidRootPart.Position
+	local directionVector = (pos - currentPos)
+
+	if directionVector.Magnitude < 0.1 then
+		HumanoidRootPart.CFrame = CFrame.new(pos)
+	else
+		-- Chuẩn hóa (normalize) 'direction' để đảm bảo CFrame luôn ổn định
+		local directionUnit = directionVector.Unit
+		local lookAtPos = pos + (directionUnit * 5) -- Luôn nhìn về phía trước 5 stud
+		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
+	end
+
+	-- Lượm coin (chặn, nhưng không trả về true/false)
+	local startTime = tick()
+	
+	repeat
+		firetouchinterest(coin, HumanoidRootPart, 0)
 		task.wait()
-		if coin:FindFirstChild("TouchInterest") then
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
-			until not coin:FindFirstChild("TouchInterest")
+		firetouchinterest(coin, HumanoidRootPart, 1)
+		task.wait()
+		
+		-- Kiểm tra 2: Coin đã biến mất (lượm thành công)
+		if not coin or not coin:FindFirstChild("TouchInterest") then
+			break
 		end
-	end)
-    
-	task.wait(0.1)
+	until (tick() - startTime) > 1 -- Thử lượm trong 1 giây
 end
 
 -- TÌM COIN TỐT NHẤT (THEO YÊU CẦU)
@@ -1266,7 +1276,7 @@ local function Start_Farm()
 					debug_print("Player respawned!")
 					SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector2.new(0, 3, 0)
+						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1302,7 +1312,7 @@ local function Start_Farm()
 					end
 					continue
 				end
-				debug_print("No first coin found, waiting 2s...")
+				debug_print("No first coin found, waiting 1s...")
 				task.wait(1)
 				continue
 			end
@@ -1392,23 +1402,21 @@ local function Start_Farm()
 				chainCount = 1
 				debug_print("Collected chain coin #1/5 (random in 50/100).")
 
-				-- Bắt đầu lượm 4 coin tiếp theo (Logic này giữ nguyên)
+				-- Bắt đầu lượm 4 coin tiếp theo
 				while chainCount < 5 do
-					local loopStartTime = tick()
+					local loopStartTime = tick() -- Ghi lại thời điểm bắt đầu chờ
 					
-					debug_print("Waiting 2s (listening for 25 stud bonus)...")
-					local bonusCoin = SmartWait(2, 25)
+					-- LOGIC SỬA ĐỔI: Chờ 0.8s, sau đó quét 1.2s
+					debug_print("Waiting 0.8s (blind cooldown)...")
+					task.wait(0.8)
+					
+					debug_print("Blind wait over. Now SmartWaiting 1.2s (listening for 25 stud bonus)...")
+					local bonusCoin = SmartWait(1.2, 25) -- Quét 1.2 giây (tổng 2 giây)
 					
 					local collectedCoin = nil
 					
 					if bonusCoin then
-						-- Đã tìm thấy bonus coin. Kiểm tra thời gian chờ tối thiểu 1s.
-						local timePassed = tick() - loopStartTime
-						if timePassed < 1 then
-							local waitExtra = 1 - timePassed
-							debug_print("Bonus coin found early! Enforcing 1s minimum wait (waiting " .. string.format("%.2f", waitExtra) .. "s extra)")
-							task.wait(waitExtra)
-						end
+						-- Đã tìm thấy bonus coin. (Logic chờ 0.8s đã đảm bảo > 0.8s)
 						
 						-- Ưu tiên lượm bonus coin
 						debug_print("Collecting bonus coin as chain #" .. (chainCount + 1) .. "/5")
@@ -1430,7 +1438,9 @@ local function Start_Farm()
 						collectedCoin = neighborCoin
 					end
 
-					chainCount = chainCount + 1
+					if collectedCoin then
+						chainCount = chainCount + 1
+					end
 					
 					-- Vòng lặp while sẽ quay lại
 				end
