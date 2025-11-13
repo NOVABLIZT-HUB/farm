@@ -993,7 +993,7 @@ end)
 
 local lastPing = tick()
 
---// Teleport to Coin (Sửa lỗi CFrame ổn định)
+--// Teleport to Coin (Đã sửa lỗi CFrame ổn định, đã loại bỏ logic kiểm tra lượm hụt)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
 		return
@@ -1018,7 +1018,7 @@ local function TeleportToCoin(coin)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
 	end
 
-	-- Lượm coin (chặn, nhưng không trả về true/false)
+	-- Lượm coin (chặn)
 	local startTime = tick()
 	
 	repeat
@@ -1082,7 +1082,7 @@ local function FindBestCoin(searchRadius, neighborRadius)
 	return bestCoin
 end
 
--- TÌM COIN GẦN NHẤT (CHO SMARTWAIT)
+-- TÌM COIN GẦN NHẤT
 local function FindNearestUnvisitedCoin(radius)
 	if not HumanoidRootPart then return nil end
 
@@ -1144,9 +1144,10 @@ local function SmartWait(duration, proximityRadius)
 	local checkInterval = 0.2 -- Check 5 lần/giây
 	
 	while (tick() - startTime) < duration do
-		local bonusCoin = FindNearestUnvisitedCoin(proximityRadius)
+		-- Đã thay đổi: Tìm coin TỐT NHẤT (với neighborRadius = 40)
+		local bonusCoin = FindBestCoin(proximityRadius, 40) 
 		if bonusCoin then
-			debug_print("[SmartWait] Interrupted! Found bonus coin at " .. string.format("%.2f", (bonusCoin.Position - HumanoidRootPart.Position).Magnitude) .. " studs.")
+			debug_print("[SmartWait] Interrupted! Found *best* bonus coin at " .. string.format("%.2f", (bonusCoin.Position - HumanoidRootPart.Position).Magnitude) .. " studs.")
 			return bonusCoin
 		end
 		
@@ -1410,23 +1411,29 @@ local function Start_Farm()
 					debug_print("Waiting 0.8s (blind cooldown)...")
 					task.wait(0.8)
 					
-					debug_print("Blind wait over. Now SmartWaiting 1.2s (listening for 25 stud bonus)...")
+					debug_print("Blind wait over. Now SmartWaiting 1.2s (listening for 25 stud *best* bonus)...")
 					local bonusCoin = SmartWait(1.2, 25) -- Quét 1.2 giây (tổng 2 giây)
 					
 					local collectedCoin = nil
 					
 					if bonusCoin then
-						-- Đã tìm thấy bonus coin. (Logic chờ 0.8s đã đảm bảo > 0.8s)
+						-- Đã tìm thấy bonus coin. Kiểm tra thời gian chờ tối thiểu 1s.
+						local timePassed = tick() - loopStartTime
+						if timePassed < 1 then
+							local waitExtra = 1 - timePassed
+							debug_print("Bonus coin found early! Enforcing 1s minimum wait (waiting " .. string.format("%.2f", waitExtra) .. "s extra)")
+							task.wait(waitExtra)
+						end
 						
 						-- Ưu tiên lượm bonus coin
-						debug_print("Collecting bonus coin as chain #" .. (chainCount + 1) .. "/5")
+						debug_print("Collecting *best* bonus coin as chain #" .. (chainCount + 1) .. "/5")
 						TeleportToCoin(bonusCoin)
 						visited[bonusCoin] = true
 						collectedCoin = bonusCoin
 					else
 						-- Không có bonus, tìm bình thường
-						debug_print("SmartWait finished. Finding nearest coin in 50 studs...")
-						local neighborCoin = FindNearestUnvisitedCoin(50)
+						debug_print("SmartWait finished. Finding *best* coin in 50 studs...")
+						local neighborCoin = FindBestCoin(50, 40)
 
 						if not neighborCoin then
 							debug_print("No neighbor coin found in 50 studs. Chain broken.")
