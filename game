@@ -1276,7 +1276,7 @@ local function RandomWaterfallWait(
 end
 
 
-local function FindCoin(isFirst) 
+local function FindCoin(isFirst)
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
 	end
@@ -1306,7 +1306,6 @@ local function FindCoin(isFirst)
 		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		return bestCoin
 	else
-		-- Logic tìm coin đầu chuỗi (random 50/100)
 		local chainCoin = FindRandomUnvisitedCoin(50)
 		if not chainCoin then
 			chainCoin = FindRandomUnvisitedCoin(100)
@@ -1314,10 +1313,10 @@ local function FindCoin(isFirst)
 		
 		if chainCoin then
 			return chainCoin
-	else
-		return "NoCoins"
+		else
+			return "NoCoins"
+		end
 	end
-end
 end
 
 debug_print("Script started.")
@@ -1325,7 +1324,6 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
---// Main Farm Loop (Logic Random Waterfall)
 local function Start_Farm()
 	local isFirstCoinOfRound = true
 
@@ -1387,7 +1385,7 @@ local function Start_Farm()
 		if isFirstCoinOfRound then
 			debug_print("Doing Find Coin (First)...")
 			local coinToTeleport = FindCoin(true)
-		
+			
 			if type(coinToTeleport) == "string" then
 				debug_print("FindCoin Response: " .. coinToTeleport)
 				if coinToTeleport == "Dead" then
@@ -1399,7 +1397,7 @@ local function Start_Farm()
 						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 						HumanoidRootPart, Humanoid = GetHumanoid()
 					until HumanoidRootPart
-				
+
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
 					SafetyPart.Position = Vector3.new(0, 100, 0)
@@ -1409,17 +1407,17 @@ local function Start_Farm()
 					end
 					continue
 				end
-			
+
 				if coinToTeleport == "Full" then
 					StatusText.Text = "Status: Coin inventory full! Resetting."
 					debug_print("Coin inventory full! Forcing reset...")
-				
+					
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 						Humanoid.Health = 0
 						task.wait(0.1)
 					end
-				
+
 					debug_print("Reset command sent. Waiting for respawn logic...")
 					task.wait(1)
 					
@@ -1444,24 +1442,22 @@ local function Start_Farm()
 				task.wait(1)
 				continue
 			end
-		
+
 			if not coinToTeleport or not coinToTeleport.Position then
 				debug_print("Searching for first coin...")
-				StatusText.Text ="Searching first coin..."
 				task.wait()
 				continue
 			end
-		
-			StatusText.Text = "Teleporting to first coin..."
+
 			TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
 			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
 			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
 			task.wait(3)
-		
+
 		else
-		
+			
 			local status = FindCoin(false)
 			if status == "Dead" then
 				StatusText.Text = "Status: You are dead!"
@@ -1472,7 +1468,7 @@ local function Start_Farm()
 					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
-			
+
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
@@ -1484,13 +1480,13 @@ local function Start_Farm()
 			elseif status == "Full" then
 				StatusText.Text = "Status: Coin inventory full! Resetting."
 				debug_print("Coin inventory full! Forcing reset...")
-			
+				
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
 					task.wait(0.1)
 				end
-			
+
 				debug_print("Reset command sent. Waiting for respawn logic...")
 				task.wait(1)
 				
@@ -1511,21 +1507,21 @@ local function Start_Farm()
 				end
 				continue
 			end
-		
+
 			-- LOGIC FARM MỚI (RANDOM WATERFALL)
 			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (Random 50/100)
-		
+			
 			if not chainCoin then
 				debug_print("No coin found in 50/100 stud range. Waiting 2 seconds.")
 				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
-			
+				
 				chainCount = 1
 				debug_print("Collected chain coin #1/5 (random in 50/100).")
 				-- KHÔNG CHỜ (đã gộp vào RandomWaterfallWait)
-			
+				
 				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
 				for i = 2, 5 do
 					-- Gọi hàm quét thông minh theo tầng
@@ -1535,7 +1531,7 @@ local function Start_Farm()
 						35, 0.2, 0.4,  -- P3: 35 stud, 0.2-0.4s
 						50, 0.5        -- P4: 50 stud, 0.5s
 					)
-				
+
 					if not nextCoin then
 						debug_print("RandomWaterfallWait returned nil. Chain broken.")
 						break -- Gãy chuỗi 5 coin
@@ -1562,7 +1558,6 @@ local function Start_Farm()
 			.. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
 	end
 end
-
 
 
 function SendMessage(message)
