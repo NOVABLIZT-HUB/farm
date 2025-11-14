@@ -121,7 +121,7 @@ until game:IsLoaded()
 if cfg["CPU Saver"] then
 	task.spawn(function()
 		while task.wait(5) do
-			-- setfpscap(cfg["Misc"]["FPS"]) -- This function might not exist on your executor
+			setfpscap(cfg["Misc"]["FPS"])
 		end
 	end)
 end
@@ -907,12 +907,12 @@ local function updatePlayerInfo()
 
 	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
 	
-	if cfg["Misc"]["AutoShutdownCoins"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdownCoins"]["MinCoins"] ~= 0 then
-	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdownCoins"]["Minutes"] * 60 then
+	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
+	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
 	        TotalSessionChecks = TotalSessionChecks + 1
 		
-	        local expectedCoins = cfg["Misc"]["AutoShutdownCoins"]["MinCoins"] * TotalSessionChecks
+	        local expectedCoins = cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks
 		
 	        if totalCoins <= expectedCoins then
 	            -- do something (shutdown)
