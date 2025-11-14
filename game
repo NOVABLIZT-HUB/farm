@@ -1145,7 +1145,7 @@ local function SmartWaterfallWait(proximityRadius1, time1, proximityRadius2, tim
 	
 	-- 1. Chờ 0.5s (Blind) - THEO YÊU CẦU
 	debug_print("Waiting 0.5s (Blind)...")
-	task.wait(0.5)
+	task.wait(0.5 + (0.7 - 0.5) * math.random())
 	
 	-- 2. Quét 15 stud (từ 0.5s đến 1.0s) - THEO YÊU CẦU
 	debug_print("Scanning 15 stud (until 1.0s)...")
