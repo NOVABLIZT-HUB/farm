@@ -95,7 +95,7 @@ local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excl
 
 local headers = {
 	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA0387ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF"
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA0387ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B3849D9AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF"
 }
 
 local map = nil
@@ -1138,6 +1138,50 @@ local function FindRandomUnvisitedCoin(radius)
 end
 
 
+-- HÀM MỚI: CHỜ THÔNG MINH THEO TẦNG (SmartWaterfallWait)
+local function SmartWaterfallWait(proximityRadius1, time1, proximityRadius2, time2, finalRadius)
+	local startTime = tick()
+	local scanInterval = 0.1 -- Quét 5 lần/giây
+	
+	-- 1. Chờ 0.5s (Blind) - THEO YÊU CẦU
+	debug_print("Waiting 0.5s (Blind)...")
+	task.wait(0.5)
+	
+	-- 2. Quét 15 stud (từ 0.5s đến 1.0s) - THEO YÊU CẦU
+	debug_print("Scanning 15 stud (until 1.0s)...")
+	while (tick() - startTime) < time1 do
+		local bonusCoin15 = FindNearestUnvisitedCoin(proximityRadius1)
+		if bonusCoin15 then 
+			debug_print("Found *nearest* coin in 15 stud (Priority 1). Collecting.")
+			return bonusCoin15 -- Trả về coin
+		end
+		task.wait(scanInterval)
+	end
+	
+	-- 3. Quét 25 stud (từ 1.0s đến 2.0s) - THEO YÊU CẦU
+	debug_print("Scanning 25 stud (until 2.0s)...")
+	while (tick() - startTime) < time2 do
+		local bonusCoin25 = FindNearestUnvisitedCoin(proximityRadius2)
+		if bonusCoin25 then 
+			debug_print("Found *nearest* coin in 25 stud (Priority 2). Collecting.")
+			return bonusCoin25 -- Trả về coin
+		end
+		task.wait(scanInterval)
+	end
+	
+	-- 4. Tìm 50 stud (sau 2.0s) - THEO YÊU CẦU
+	debug_print("No bonus found. Finding best 50 stud coin (Priority 3).")
+	local coin50 = FindBestCoin(finalRadius, 15) -- ĐÃ SỬA: Tìm coin TỐT NHẤT
+	if coin50 then
+		debug_print("Found *best* coin in 50 stud. Collecting.")
+		return coin50 -- Trả về coin
+	end
+	
+	debug_print("No neighbor coin found in 15, 25, or 50 studs. Chain broken.")
+	return nil -- Gãy chuỗi
+end
+
+
 local function FindCoin(isFirst) -- Hàm này CHỈ DÙNG CHO COIN 1/40
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
@@ -1178,7 +1222,7 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
---// Main Farm Loop (Logic Waterfall + Nearest)
+--// Main Farm Loop (Logic Smart Waterfall)
 local function Start_Farm()
 	local isFirstCoinOfRound = true
 
@@ -1353,7 +1397,7 @@ local function Start_Farm()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
-				StatusText.Text = "Status: Respawned!"
+				StatusText.Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
@@ -1363,7 +1407,7 @@ local function Start_Farm()
 				continue
 			end
 
-			-- LOGIC FARM MỚI (WATERFALL + NEAREST)
+			-- LOGIC FARM MỚI (CHUỖI 5 COIN)
 			local chainCount = 0
 
 			debug_print("Finding *random* coin in 50 studs (Priority)...")
@@ -1381,53 +1425,21 @@ local function Start_Farm()
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				chainCount = 1
-				debug_print("Collected chain coin #1/5 (random in 50/100). Waiting 1s...")
-				task.wait(1) -- Chờ 1 giây sau coin #1
+				debug_print("Collected chain coin #1/5 (random in 50/100).")
+				-- ĐÃ XÓA: task.wait(1)
 
-				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "WATERFALL" + "NEAREST")
+				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "SMART WATERFALL")
 				for i = 2, 5 do
-					local collectedCoin = nil
-					
-					-- 1. Chờ 0.5s, Quét 10 stud
-					debug_print("Waiting 0.5s, then scanning 10 stud (Nearest)...")
-					task.wait(0.5)
-					local coin20 = FindNearestUnvisitedCoin(15) -- Tìm coin GẦN NHẤT
+					-- Gọi hàm quét thông minh theo tầng
+					-- Quét 15 stud (đến 1.0s), Quét 25 stud (đến 2.0s), Quét 50 stud (sau 2.0s)
+					local nextCoin = SmartWaterfallWait(15, 1.0, 25, 2.0, 50)
 
-					if coin20 then
-						debug_print("Found *nearest* coin in 10 stud (Priority 1). Collecting.")
-						TeleportToCoin(coin20)
-						visited[coin20] = true
-						collectedCoin = coin20
+					if not nextCoin then
+						debug_print("SmartWaterfallWait returned nil. Chain broken.")
+						break -- Gãy chuỗi 5 coin
 					else
-						-- 2. Chờ 0.3s (tổng 0.8s), Quét 25 stud
-						debug_print("No coin in 10 stud. Waiting 0.3s (total 0.8s), then scanning 25 stud (Nearest)...")
-						task.wait(0.5)
-						local coin25 = FindNearestUnvisitedCoin(25) -- Tìm coin GẦN NHẤT
-
-						if coin25 then
-							debug_print("Found *nearest* coin in 25 stud (Priority 2). Collecting.")
-							TeleportToCoin(coin25)
-							visited[coin25] = true
-							collectedCoin = coin25
-						else
-							-- 3. Chờ 1.2s (tổng 2.0s), Quét 50 stud
-							debug_print("No coin in 25 stud. Waiting 1.2s (total 2.0s), then scanning 50 stud (Best)...")
-							task.wait(1)
-							local coin50 = FindBestCoin(50, 15) -- Đã thay đổi: Tìm coin TỐT NHẤT
-
-							if coin50 then
-								debug_print("Found *best* coin in 50 stud (Priority 3). Collecting.")
-								TeleportToCoin(coin50)
-								visited[coin50] = true
-								collectedCoin = coin50
-							else
-								debug_print("No neighbor coin found in 10, 25, or 50 studs. Chain broken.")
-								break -- Gãy chuỗi
-							end
-						end
-					end
-
-					if collectedCoin then
+						TeleportToCoin(nextCoin)
+						visited[nextCoin] = true
 						chainCount = chainCount + 1
 						debug_print("Collected chain coin #" .. chainCount .. "/5.")
 						-- Vòng lặp for sẽ tiếp tục (i = 3, 4, 5)
