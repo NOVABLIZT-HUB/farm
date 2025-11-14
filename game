@@ -1397,7 +1397,7 @@ local function Start_Farm()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
-				StatusText.Status: Respawned!"
+				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
@@ -1430,8 +1430,6 @@ local function Start_Farm()
 
 				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "SMART WATERFALL")
 				for i = 2, 5 do
-					-- Gọi hàm quét thông minh theo tầng
-					-- Quét 15 stud (đến 1.0s), Quét 25 stud (đến 2.0s), Quét 50 stud (sau 2.0s)
 					local nextCoin = SmartWaterfallWait(15, 1.0, 25, 2.0, 50)
 
 					if not nextCoin then
