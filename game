@@ -23,8 +23,8 @@ local Default_Config = {
 
 	["Other"] = {
 		["Auto Prestige"] = true,
-		["Auto Restart on Update"] = false,
-		["Auto Craft"] = false, -- not implemented yet
+		-- ["Auto Restart on Update"] = false,
+		-- ["Auto Craft"] = false,
 	},
 
 	
@@ -33,20 +33,14 @@ local Default_Config = {
 	},
 
 	["Misc"] = {
-		["FARM_MURDERER_SHERIF_WINS"] = true,
-		["STOP_MURDERER_AFTER_KILLS"] = 20,
-		["FPS"] = 3,
-
-		["AutoShutdown"] = {
-			["Mode"] = 1,  -- 1 = hop, 2 = close
-
-            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
-
-			["Every Minutes"] = 0 -- Every x minutes force
-        },
-
+		-- ["FARM_MURDERER_SHERIF_WINS"] = true,
+		-- ["STOP_MURDERER_AFTER_KILLS"] = 20,
+		-- ["FPS"] = 3,
+		["HopServer"] = false,
+		["MaxFails"] = 10
 	}
+
+	-- ["WaitTimes"] = { ... }
 }
 
 local function mergeConfig(default, user)
@@ -101,15 +95,13 @@ local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excl
 
 local headers = {
 	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA0387ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF"
 }
 
 local map = nil
 local AllCoins = {}
-local knife = nil
-local gun = nil
 local GoodPeople = {}
-local visited = {} -- Bảng để theo dõi các coin đã lượm
+local visited = {}
 
 repeat
 	task.wait()
@@ -121,22 +113,10 @@ until game:IsLoaded()
 if cfg["CPU Saver"] then
 	task.spawn(function()
 		while task.wait(5) do
-			-- setfpscap(cfg["Misc"]["FPS"]) -- This function might not exist on your executor
+			-- setfpscap(cfg["Misc"]["FPS"])
 		end
 	end)
 end
-
-task.spawn(function()
-	if cfg["Other"]["Auto Restart on Update"] then
-		NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
-		while task.wait(600) do
-			NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
-			if NewestVersion ~= Version then
-				
-			end
-		end
-	end
-end)
 
 
 -- Clean up unnecessary Workspace objects
@@ -234,6 +214,7 @@ local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
 
+-- Create LobbyPlatform for lobby positioning
 local LobbyPlatform = Instance.new("Part")
 LobbyPlatform.Parent = Workspace
 LobbyPlatform.Size = Vector3.new(100, 1, 100)
@@ -242,6 +223,7 @@ LobbyPlatform.Anchored = true
 LobbyPlatform.Name = "LobbyPlatform"
 LobbyPlatform.Transparency = 1
 
+-- Position the player at the safety platform
 HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
 
 --UI
@@ -421,14 +403,6 @@ local function debug_print(...)
 	last_print = ...
 	print("[" .. player.Name .. "] " .. ...)
 	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
-end
-
-local lastStatus = ""
-local function SetStatus(text)
-	if lastStatus ~= text then
-		lastStatus = text
-		StatusText.Text = "Status: " .. text
-	end
 end
 
 local function CPUSaversIGMA()
@@ -651,7 +625,6 @@ local tries = 0
 local ready = false
 local StartHumanoid = tick()
 local GetHumanoidConn = nil
-
 local function GetHumanoid()
 	character = player.Character
 	tries = 0
@@ -703,8 +676,7 @@ local function getCurrentCoins()
 	return Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0
 end
 
-local lastShutdownCheck = tick()
-local TotalSessionChecks = 1
+
 
 local function updatePlayerInfo()
 	Data = require(Modules.ProfileData)
@@ -749,7 +721,7 @@ local function updatePlayerInfo()
 	end
 
 	if cfg["Auto Open"]["Enabled"] and tonumber(Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0) >= 800 then
-		print("NIGGER")
+		print("Attempting to open crate...")
 		local Item = ReplicatedStorage.Remotes.Shop.OpenCrate:InvokeServer(cfg["Auto Open"]["Crate"], "MysteryBox", "Candies2025")
 
 		SessionCrates = SessionCrates + 1
@@ -762,7 +734,7 @@ local function updatePlayerInfo()
 			Data = require(Modules.ProfileData)
 			local OwnedWeapons = Data["Weapons"]["Owned"] or {}
 
-			TotalWeapons = #OwnedWeapons
+			TotalWeapons = 0
 			TotalGodlies, TotalChromas = 0, 0
 			for weapon, weaponamount in pairs(Data["Weapons"]["Owned"] or {}) do
 				if table.find(GodlyList, weapon) then
@@ -898,26 +870,32 @@ local function updatePlayerInfo()
 						value = tostring(TotalChromas),
 						inline = true,
 					})
-					SendMessageWithEmbedAndPing(embed)
+					SendMessageWithEmbedAndPing(cfg["Webhook"]["URL"], "<@" .. cfg["Webhook"]["UserID"] .. ">", embed)
 				end
 			end
 		end
 		ClaimRewards()
 	end
 
-	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
-	
-	if cfg["Misc"]["AutoShutdownCoins"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdownCoins"]["MinCoins"] ~= 0 then
-	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdownCoins"]["Minutes"] * 60 then
-	        lastShutdownCheck = tick()
-	        TotalSessionChecks = TotalSessionChecks + 1
-		
-	        local expectedCoins = cfg["Misc"]["AutoShutdownCoins"]["MinCoins"] * TotalSessionChecks
-		
-	        if totalCoins <= expectedCoins then
-	            -- do something (shutdown)
-	        end
-	    end
+	SessionCoinsLabel.Text = "Session Coins: " .. tonumber(totalCoins - StartedCoins + (SessionCrates * 800 + TotalStagesBought * 800))
+
+
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
+		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
+		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
+		LastRoundData = RoundData
+	elseif LastRoundData and LastRoundData[player.Name] then
+		if LastRoundData[player.Name]["Coins"] < 30 then
+			TotalRoundswithout30coinsplus = TotalRoundswithout30coinsplus + 1
+			LastRoundData = nil
+		end
+	else
+		RoleDisplay.Text = "Role: No Round"
+		RoundCoinsLabel.Text = "Round Coins: 0"
+	end
+
+	if TotalRoundswithout30coinsplus >= cfg["Misc"]["MaxFails"] and cfg["Misc"]["HopServer"] then
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 	end
 
 	Data = nil
@@ -955,6 +933,7 @@ local function ClearMap()
 		for _, child in ipairs(map:GetChildren()) do
 			if child:IsA("Model") and child.Name ~= "CoinContainer" then
 				child:Destroy()
+				print("Destroyed map object: " .. child.Name)
 			end
 		end
 	end
@@ -1042,18 +1021,18 @@ local function TeleportToCoin(coin)
 	-- Lượm coin (chặn, nhưng không trả về true/false)
 	local startTime = tick()
 	
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
+	repeat
+		firetouchinterest(coin, HumanoidRootPart, 0)
+		task.wait()
+		firetouchinterest(coin, HumanoidRootPart, 1)
+		task.wait()
 		
 		-- Kiểm tra 2: Coin đã biến mất (lượm thành công)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
 			break
 		end
 	until (tick() - startTime) > 1 -- Thử lượm trong 1 giây
-    
+
 	-- return true/false đã bị xóa
 end
 
@@ -1272,11 +1251,11 @@ local function RandomWaterfallWait(
 	end
 
 	debug_print("No neighbor coin found in 15, 25, 35, or 50 studs. Chain broken.")
-	return nil
+	return nil -- Gãy chuỗi
 end
 
 
-local function FindCoin(isFirst)
+local function FindCoin(isFirst) -- Hàm này CHỈ DÙNG CHO COIN 1/40
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
 	end
@@ -1306,6 +1285,7 @@ local function FindCoin(isFirst)
 		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		return bestCoin
 	else
+		-- Logic tìm coin đầu chuỗi (random 50/100)
 		local chainCoin = FindRandomUnvisitedCoin(50)
 		if not chainCoin then
 			chainCoin = FindRandomUnvisitedCoin(100)
@@ -1324,6 +1304,7 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
+--// Main Farm Loop (Logic Random Waterfall)
 local function Start_Farm()
 	local isFirstCoinOfRound = true
 
@@ -1558,6 +1539,7 @@ local function Start_Farm()
 			.. tostring((RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"]) or "N/A"))
 	end
 end
+
 
 
 function SendMessage(message)
