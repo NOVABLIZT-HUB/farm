@@ -1315,7 +1315,7 @@ local function FindCoin(isFirst)
 	else
 		local chainCoin = FindRandomUnvisitedCoin(50)
 		if not chainCoin then
-			chainCoin = FindRandomUnvisitedCoin(100)
+			chainCoin = FindRandomUnvisitedCoin(50)
 		end
 		
 		if chainCoin then
@@ -1554,7 +1554,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(1)
+					task.wait(0.5)
 				end
 			end
 		end
