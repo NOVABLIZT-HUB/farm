@@ -1520,7 +1520,7 @@ local function Start_Farm()
 			
 			if not chainCoin then
 				debug_print("No coin found in 50/100 stud range. Waiting 2 seconds.")
-				task.wait(1)
+				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
@@ -1534,9 +1534,9 @@ local function Start_Farm()
 					-- Gọi hàm quét thông minh theo tầng
 					local nextCoin = RandomWaterfallWait(
 						50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
-						50, 0.2, 0.4,  -- P2: 25 stud, 0.5-0.7s
+						50, 0.2, 0.5,  -- P2: 25 stud, 0.5-0.7s
 						50, 0.2, 0.4,  -- P3: 35 stud, 0.2-0.4s
-						50, 0.3, 0.5,        -- P4: 50 stud, 0.5s
+						50, 0.2, 0.4,        -- P4: 50 stud, 0.5s
 					)
 
 					if not nextCoin then
@@ -1554,7 +1554,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(1)
+					task.wait(2)
 				end
 			end
 		end
