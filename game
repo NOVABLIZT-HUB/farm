@@ -1534,9 +1534,9 @@ local function Start_Farm()
 					-- Gọi hàm quét thông minh theo tầng
 					local nextCoin = RandomWaterfallWait(
 						50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
-						50, 0.5, 0.5,  -- P2: 25 stud, 0.5-0.7s
+						50, 0.3, 0.5,  -- P2: 25 stud, 0.5-0.7s
 						50, 0.2, 0.4,  -- P3: 35 stud, 0.2-0.4s
-						50, 0.5        -- P4: 50 stud, 0.5s
+						50, 0.2, 0.4,        -- P4: 50 stud, 0.5s
 					)
 
 					if not nextCoin then
