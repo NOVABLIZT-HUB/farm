@@ -920,6 +920,13 @@ local function updatePlayerInfo()
 	    end
 	end
 
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
+		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
+		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
+	else
+		RoleDisplay.Text = "Role: No Round"
+		RoundCoinsLabel.Text = "Round Coins: 0"
+	end
 	Data = nil
 	PlayerLevel, NextLevelXP = nil, nil
 end
