@@ -46,6 +46,7 @@ local Default_Config = {
 			["Every Minutes"] = 0 -- Every x minutes force
         },
 
+		["Debug"] = true
 	}
 }
 
@@ -420,12 +421,14 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- FIX: Removed consolecreate("DEBUG")
+if cfg["Misc"]["Debug"] then
+	consolecreate("DEBUG")
+end
 local function debug_print(...)
-	-- FIX: Commented out body to remove debug spam, as requested
-	-- last_print = ...
-	-- print("[" .. player.Name .. "] " .. ...)
-	-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+	if not cfg["Misc"]["Debug"] then return end
+	last_print = ...
+	print("[" .. player.Name .. "] " .. ...)
+	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 end
 
 local lastStatus = ""
@@ -531,14 +534,12 @@ local function CPUSaversIGMA()
 		WorkspaceCleanerABitIDK(child)
 	end)
 
-	-- FIX: This loop created connection leaks. Added cleanup logic.
 	for _,plr in ipairs(Players:GetPlayers()) do
 		if plr ~= player then
 			if plr:FindFirstChild("Backpack") and plr.Backpack:FindFirstChild("AlienPlushie") then
 				GoodPeople[plr.Name] = true
 			end
 
-			-- FIX: Store connections to be disconnected when player leaves
 			local playerConnections = {}
 
 			table.insert(playerConnections, plr.ChildAdded:Connect(function(c)
@@ -570,20 +571,18 @@ local function CPUSaversIGMA()
 				end))
 			end
 
-			-- FIX: Add the disconnect event
 			table.insert(playerConnections, plr.Destroying:Connect(function()
 				for _, conn in ipairs(playerConnections) do
 					conn:Disconnect()
+					conn = nil
 				end
-				GoodPeople[plr.Name] = nil -- Clean up table entry
+				GoodPeople[plr.Name] = nil
 			end))
 		end
 	end
 
-	-- FIX: This event created connection leaks. Added cleanup logic.
 	Players.PlayerAdded:Connect(function(plr)
 		if plr ~= player then
-			-- FIX: Store connections to be disconnected when player leaves
 			local playerConnections = {}
 
 			table.insert(playerConnections, plr.ChildAdded:Connect(function(c)
@@ -606,7 +605,6 @@ local function CPUSaversIGMA()
 				table.insert(playerConnections, bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
-						debug_print("")
 					end
 				end))
 				table.insert(playerConnections, bp.ChildRemoved:Connect(function(i)
@@ -616,12 +614,12 @@ local function CPUSaversIGMA()
 				end))
 			end
 
-			-- FIX: Add the disconnect event
 			table.insert(playerConnections, plr.Destroying:Connect(function()
 				for _, conn in ipairs(playerConnections) do
 					conn:Disconnect()
+					conn = nil
 				end
-				GoodPeople[plr.Name] = nil -- Clean up table entry
+				GoodPeople[plr.Name] = nil
 			end))
 		end
 	end)
@@ -983,33 +981,11 @@ task.spawn(function()
 		updateTimer()
 		updatePlayerInfo()
 		task.wait(.5)
-		task.spawn(function()
-			RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-		end)
+
+		RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+		Data = require(Modules.ProfileData)
+
 		task.wait(.5)
-	end
-end)
-
--- FIX: Rewrote this entire loop to be efficient and not spam threads
-task.spawn(function()
-	while task.wait(0.1) do -- Run this loop 10 times per second
-		if not HumanoidRootPart then task.wait(1); continue; end
-
-		local coins = CoinsFolder:GetChildren()
-		if #coins == 0 then
-			task.wait(0.5) -- No coins, sleep longer
-			continue
-		end
-
-		for _, coin in ipairs(coins) do
-			if coin and coin:FindFirstChild("TouchInterest") then
-				-- Do it in *this* thread, not a new one
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				firetouchinterest(coin, HumanoidRootPart, 1)
-			end
-			-- Yield to prevent this loop from freezing the game
-			task.wait() 
-		end
 	end
 end)
 
@@ -1051,7 +1027,7 @@ local function ProccessMap(child)
 		task.wait()
 	end
 
-	if conn then conn:Disconnect() end
+	if conn then conn:Disconnect() conn = nil end
 end
 
 
