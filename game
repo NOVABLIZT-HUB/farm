@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -40,8 +40,8 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 12, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 100, -- Min Coins needed to have after x minutes
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -109,7 +109,8 @@ local AllCoins = {}
 local knife = nil
 local gun = nil
 local GoodPeople = {}
-local visited = {} -- Bảng để theo dõi các coin đã lượm
+local visited = {}
+
 
 repeat
 	task.wait()
@@ -184,7 +185,6 @@ local Modules = ReplicatedStorage:WaitForChild("Modules")
 local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
 
 local LevelModule = require(Modules.LevelModule)
-local ProfileData = require(Modules.ProfileData)
 local EventInfoService = require(SharedServices.EventInfoService)
 
 
@@ -212,11 +212,15 @@ local Data = require(Modules.ProfileData)
 local LastRoundData = nil
 
 local StartedCoins = 0
+local StartedStage = 0
 local Event = nil
 
 
 StartedCoins = Data.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
 Event = EventInfoService:GetCurrentEvent()
+StartedStage = Data[Event.Title].CurrentTier
+
+
 
 local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 local OwnedWeapons = Data["Weapons"]["Owned"]
@@ -416,11 +420,12 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 	end
 end)
 
-consolecreate("DEBUG")
+-- FIX: Removed consolecreate("DEBUG")
 local function debug_print(...)
-	last_print = ...
-	print("[" .. player.Name .. "] " .. ...)
-	consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+	-- FIX: Commented out body to remove debug spam, as requested
+	-- last_print = ...
+	-- print("[" .. player.Name .. "] " .. ...)
+	-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 end
 
 local lastStatus = ""
@@ -526,74 +531,98 @@ local function CPUSaversIGMA()
 		WorkspaceCleanerABitIDK(child)
 	end)
 
+	-- FIX: This loop created connection leaks. Added cleanup logic.
 	for _,plr in ipairs(Players:GetPlayers()) do
 		if plr ~= player then
 			if plr:FindFirstChild("Backpack") and plr.Backpack:FindFirstChild("AlienPlushie") then
 				GoodPeople[plr.Name] = true
 			end
 
-			plr.ChildAdded:Connect(function(c)
+			-- FIX: Store connections to be disconnected when player leaves
+			local playerConnections = {}
+
+			table.insert(playerConnections, plr.ChildAdded:Connect(function(c)
 				if c.Name == "Backpack" then
-					c.ChildAdded:Connect(function(i)
+					table.insert(playerConnections, c.ChildAdded:Connect(function(i)
 						if i.Name == "AlienPlushie" then
 							GoodPeople[plr.Name] = true
 						end
-					end)
-					c.ChildRemoved:Connect(function(i)
+					end))
+					table.insert(playerConnections, c.ChildRemoved:Connect(function(i)
 						if i.Name == "AlienPlushie" then
 							GoodPeople[plr.Name] = nil
 						end
-					end)
+					end))
 				end
-			end)
+			end))
 
 			local bp = plr:FindFirstChild("Backpack")
 			if bp then
-				bp.ChildAdded:Connect(function(i)
+				table.insert(playerConnections, bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
 					end
-				end)
-				bp.ChildRemoved:Connect(function(i)
+				end))
+				table.insert(playerConnections, bp.ChildRemoved:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = nil
 					end
-				end)
+				end))
 			end
+
+			-- FIX: Add the disconnect event
+			table.insert(playerConnections, plr.Destroying:Connect(function()
+				for _, conn in ipairs(playerConnections) do
+					conn:Disconnect()
+				end
+				GoodPeople[plr.Name] = nil -- Clean up table entry
+			end))
 		end
 	end
 
+	-- FIX: This event created connection leaks. Added cleanup logic.
 	Players.PlayerAdded:Connect(function(plr)
 		if plr ~= player then
-			plr.ChildAdded:Connect(function(c)
+			-- FIX: Store connections to be disconnected when player leaves
+			local playerConnections = {}
+
+			table.insert(playerConnections, plr.ChildAdded:Connect(function(c)
 				if c.Name == "Backpack" then
-					c.ChildAdded:Connect(function(i)
+					table.insert(playerConnections, c.ChildAdded:Connect(function(i)
 						if i.Name == "AlienPlushie" then
 							GoodPeople[plr.Name] = true
 						end
-					end)
-					c.ChildRemoved:Connect(function(i)
+					end))
+					table.insert(playerConnections, c.ChildRemoved:Connect(function(i)
 						if i.Name == "AlienPlushie" then
 							GoodPeople[plr.Name] = nil
 						end
-					end)
+					end))
 				end
-			end)
+			end))
 
 			local bp = plr:FindFirstChild("Backpack")
 			if bp then
-				bp.ChildAdded:Connect(function(i)
+				table.insert(playerConnections, bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
 						debug_print("")
 					end
-				end)
-				bp.ChildRemoved:Connect(function(i)
+				end))
+				table.insert(playerConnections, bp.ChildRemoved:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = nil
 					end
-				end)
+				end))
 			end
+
+			-- FIX: Add the disconnect event
+			table.insert(playerConnections, plr.Destroying:Connect(function()
+				for _, conn in ipairs(playerConnections) do
+					conn:Disconnect()
+				end
+				GoodPeople[plr.Name] = nil -- Clean up table entry
+			end))
 		end
 	end)
 
@@ -705,6 +734,24 @@ end
 
 local lastShutdownCheck = tick()
 local TotalSessionChecks = 1
+
+-- OPTIMIZATION: Moved ClaimRewards function outside of updatePlayerInfo
+-- to prevent it from being re-created every second.
+local function ClaimRewards()
+	if not Event or not Data[Event.Title] then return end -- Guard clause
+
+	for tierStr, rewardData in pairs(EventInfoService:GetBattlePass().Rewards) do
+		local tier = tonumber(tierStr)
+		local isClaimed = Data[Event.Title].ClaimedRewards[tierStr]
+		local isUnlocked = tier <= Data[Event.Title].CurrentTier
+		local hasItem = rewardData.ItemID ~= ""
+		
+		if isUnlocked and not isClaimed and hasItem then
+			task.wait()
+			EventInfoService:GetEventRemotes().ClaimBattlePassReward:FireServer(tonumber(tierStr))
+		end
+	end
+end
 
 local function updatePlayerInfo()
 	Data = require(Modules.ProfileData)
@@ -834,29 +881,21 @@ local function updatePlayerInfo()
 	end
 
 
-	local function ClaimRewards()
-		for tierStr, rewardData in pairs(EventInfoService:GetBattlePass().Rewards) do
-			local tier = tonumber(tierStr)
-			local isClaimed = ProfileData[Event.Title].ClaimedRewards[tierStr]
-			local isUnlocked = tier <= ProfileData[Event.Title].CurrentTier
-			local hasItem = rewardData.ItemID ~= ""
-			
-			if isUnlocked and not isClaimed and hasItem then
-				task.wait()
-				EventInfoService:GetEventRemotes().ClaimBattlePassReward:FireServer(tonumber(tierStr))
-			end
-		end
-	end
+	-- OPTIMIZATION: Call the function that is now defined globally
 	ClaimRewards()
+	
 	if cfg["Event"]["Auto Do Battle Pass"] then
 		if tonumber(totalCoins) >= tonumber(800) then
-			if ProfileData[Event.Title].CurrentTier ~= 24 then
-
-				Remotes.Events.Generic.BuyTiers:FireServer(math.floor(totalCoins / 800))
+			if Data[Event.Title].CurrentTier ~= 25 then
+				Remotes.Events.Generic.BuyTiers:FireServer(1)
 				task.wait()
-				TotalStagesBought = TotalStagesBought + 1
+				Data = require(Modules.ProfileData)
+				task.wait()
+				if StartedStage < Data[Event.Title].CurrentTier then
+					TotalStagesBought = Data[Event.Title].CurrentTier - StartedStage
+				end
 				ClaimRewards()
-			elseif ProfileData[Event.Title].CurrentTier == 24 and tonumber(totalCoins) >= tonumber(90000) then
+			elseif Data[Event.Title].CurrentTier == 25 and tonumber(totalCoins) >= tonumber(90000) then
 				Remotes.Events.Generic.BuyFinalReward:FireServer()
 				task.wait()
 				if type(cfg["Webhook"]["URL"]) == "string" and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks") then
@@ -911,14 +950,22 @@ local function updatePlayerInfo()
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
 	        TotalSessionChecks = TotalSessionChecks + 1
-		
-	        local expectedCoins = cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks
-		
-	        if totalCoins <= expectedCoins then
-	            -- do something (shutdown)
+	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
+	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
+					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+				else
+					game:Shutdown()
+				end
 	        end
 	    end
 	end
+
+	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
+	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
+	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+	    end
+	end
+
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
 		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
@@ -943,16 +990,25 @@ task.spawn(function()
 	end
 end)
 
+-- FIX: Rewrote this entire loop to be efficient and not spam threads
 task.spawn(function()
-	while task.wait() do
-		for _, coin in ipairs(CoinsFolder:GetChildren()) do
-			if coin:FindFirstChild("TouchInterest") then
-				task.spawn(function()
-					firetouchinterest(coin, HumanoidRootPart, 0)
-					task.wait()
-					firetouchinterest(coin, HumanoidRootPart, 1)
-				end)
+	while task.wait(0.1) do -- Run this loop 10 times per second
+		if not HumanoidRootPart then task.wait(1); continue; end
+
+		local coins = CoinsFolder:GetChildren()
+		if #coins == 0 then
+			task.wait(0.5) -- No coins, sleep longer
+			continue
+		end
+
+		for _, coin in ipairs(coins) do
+			if coin and coin:FindFirstChild("TouchInterest") then
+				-- Do it in *this* thread, not a new one
+				firetouchinterest(coin, HumanoidRootPart, 0)
+				firetouchinterest(coin, HumanoidRootPart, 1)
 			end
+			-- Yield to prevent this loop from freezing the game
+			task.wait() 
 		end
 	end
 end)
@@ -1059,10 +1115,8 @@ local function TeleportToCoin(coin)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
 			break
 		end
-	until (tick() - startTime) > 1 -- Thử lượm trong 1 giây
-    
-	-- return true/false đã bị xóa
-end
+	until (tick() - startTime) > 1 
+    end
 
 -- TÌM COIN TỐT NHẤT
 local function FindBestCoin(searchRadius, neighborRadius)
@@ -1112,7 +1166,6 @@ local function FindBestCoin(searchRadius, neighborRadius)
 	return bestCoin
 end
 
--- TÌM COIN GẦN NHẤT
 local function FindNearestUnvisitedCoin(radius)
 	if not HumanoidRootPart then return nil end
 
@@ -1139,7 +1192,6 @@ local function FindNearestUnvisitedCoin(radius)
 	return nearestCoin
 end
 
--- TÌM COIN NGẪU NHIÊN
 local function FindRandomUnvisitedCoin(radius)
 	if not HumanoidRootPart then return nil end
 
@@ -1167,7 +1219,6 @@ local function FindRandomUnvisitedCoin(radius)
 	return coinsInRadius[math.random(1, #coinsInRadius)]
 end
 
--- HÀM KIỂM TRA NGƯỜI CHƠI
 local function IsPlayerNearMe(checkRadius)
 	if not HumanoidRootPart then return false end
 	
@@ -1180,18 +1231,17 @@ local function IsPlayerNearMe(checkRadius)
 				if hrp and hum and hum.Health > 0 then
 					local dist = (HumanoidRootPart.Position - hrp.Position).Magnitude
 					if dist < checkRadius then
-						return true -- Tìm thấy người chơi
+						return true 
 					end
 				end
 			end
 		end
 	end
 	
-	return false -- Không có ai
+	return false
 end
 
 
--- HÀM CHỜ CỐ ĐỊNH RANDOM (RandomWaterfallWait)
 local function RandomWaterfallWait(
 	proximityRadius1, minWait1, maxWait1,
 	proximityRadius2, minWait2, maxWait2,
@@ -1338,7 +1388,7 @@ local function Start_Farm()
 		lastPing = tick()
 		if
 			RoundTimerPart:GetAttribute("Time") == -1
-			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
+			or (RoundData and RoundData[player.Name] and RoundData[V.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
 			print(
