@@ -1031,13 +1031,13 @@ local lastPing = tick()
 --// Teleport to Coin (Đã sửa lỗi CFRAME ỔN ĐỊNH)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
+		return false -- Thất bại nếu không có HRP
 	end
 
 	-- Kiểm tra 1: Coin có còn không?
 	if not coin:FindFirstChild("TouchInterest") then
 		debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return
+		return true -- Coi như thành công
 	end
 
 	local pos = coin.Position
@@ -1064,10 +1064,14 @@ local function TeleportToCoin(coin)
 		
 		-- Kiểm tra 2: Coin đã biến mất (lượm thành công)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
-			break
+			return true -- Thành công
 		end
 	until (tick() - startTime) > 1 
-    end
+
+	-- Nếu đến đây, nghĩa là lượm thất bại
+	debug_print("Failed to collect coin " .. (coin.Name or "unknown") .. " within 1 second.")
+	return false -- Thất bại
+end
 
 -- TÌM COIN TỐT NHẤT
 local function FindBestCoin(searchRadius, neighborRadius)
@@ -1437,6 +1441,7 @@ end)
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
+	local consecutiveFailCount = 0 -- ĐẾM SỐ LẦN THẤT BẠI LIÊN TIẾP
 
 	while task.wait() do
 		lastPing = tick()
@@ -1489,6 +1494,7 @@ local function Start_Farm()
 			
 			isFirstCoinOfRound = true
 			visited = {}
+			consecutiveFailCount = 0 -- Reset đếm thất bại
 		end
 
 		ClearMap()
@@ -1554,13 +1560,14 @@ local function Start_Farm()
 				continue
 			end
 
-			if not coinToTeleport or not coinToTeleport.Position then
-				debug_print("Searching for first coin...")
-				task.wait()
-				continue
-			end
+			local success = TeleportToCoin(coinToTeleport) -- Lấy trạng thái
+			if success then
+                consecutiveFailCount = 0 -- Reset
+            else
+                consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
+                debug_print("Failed to collect first coin. Fail count: " .. consecutiveFailCount)
+            end
 
-			TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
 			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
@@ -1624,9 +1631,23 @@ local function Start_Farm()
 			
 			if not chainCoin or type(chainCoin) == "string" then
 				debug_print("No coin found with new chain logic. Waiting 2 seconds.")
-				task.wait(1) -- Changed from 1 to 2
+				task.wait(2) -- ĐÃ SỬA: từ 1 thành 2
 			else
-				TeleportToCoin(chainCoin)
+				local success = TeleportToCoin(chainCoin) -- Lấy trạng thái
+                if success then
+                    consecutiveFailCount = 0 -- Reset
+                else
+                    consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
+                    debug_print("Failed to collect chain-start coin. Fail count: " .. consecutiveFailCount)
+                end
+
+                if consecutiveFailCount >= 2 then -- Kiểm tra thất bại
+                    debug_print("Failed to collect 2 coins in a row. Breaking chain.")
+                    consecutiveFailCount = 0
+                    task.wait(2) -- Chờ trước khi tìm chain mới
+                    continue -- Bắt đầu lại vòng lặp while
+                end
+
 				visited[chainCoin] = true
 				
 				chainCount = 1
@@ -1644,10 +1665,23 @@ local function Start_Farm()
 					)
 
 					if not nextCoin then
-						debug_print("RandomWaterfallWait returned nil. Chain broken.")
-						break -- Gãy chuỗi 5 coin
+						debug_print("RandomWaterfallWait returned nil. Trying again.")
+						-- ĐÃ XÓA 'break'. Vòng lặp sẽ tự 'continue'.
 					else
-						TeleportToCoin(nextCoin)
+						local success = TeleportToCoin(nextCoin) -- Lấy trạng thái
+                        if success then
+                            consecutiveFailCount = 0 -- Reset
+                        else
+                            consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
+                            debug_print("Failed to collect chain coin. Fail count: " .. consecutiveFailCount)
+                        end
+
+                        if consecutiveFailCount >= 2 then -- Kiểm tra thất bại
+                            debug_print("Failed to collect 2 coins in a row. Breaking chain.")
+                            consecutiveFailCount = 0
+                            break -- Phá vỡ vòng lặp 'for i = 2, 5'
+                        end
+
 						visited[nextCoin] = true
 						chainCount = chainCount + 1
 						debug_print("Collected chain coin #" .. chainCount .. "/5.")
@@ -1658,7 +1692,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(2) -- <<< MODIFICATION: Changed from 1 to 2
+					task.wait(2) -- Đã đúng
 				end
 			end
 		end
