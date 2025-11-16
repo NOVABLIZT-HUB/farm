@@ -1031,13 +1031,13 @@ local lastPing = tick()
 --// Teleport to Coin (Đã sửa lỗi CFRAME ỔN ĐỊNH)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return false -- Thất bại nếu không có HRP
+		return
 	end
 
 	-- Kiểm tra 1: Coin có còn không?
 	if not coin:FindFirstChild("TouchInterest") then
 		debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return true -- Coi như thành công
+		return
 	end
 
 	local pos = coin.Position
@@ -1064,119 +1064,17 @@ local function TeleportToCoin(coin)
 		
 		-- Kiểm tra 2: Coin đã biến mất (lượm thành công)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
-			return true -- Thành công
+			break
 		end
 	until (tick() - startTime) > 1 
+    end
 
-	-- Nếu đến đây, nghĩa là lượm thất bại
-	debug_print("Failed to collect coin " .. (coin.Name or "unknown") .. " within 1 second.")
-	return false -- Thất bại
-end
-
--- TÌM COIN TỐT NHẤT
-local function FindBestCoin(searchRadius, neighborRadius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local coinsInRadius = {}
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist <= searchRadius then
-			table.insert(coinsInRadius, coin)
-		end
-	end
-
-	if #coinsInRadius == 0 then
-		return nil
-	end
-
-	local bestCoin = nil
-	local maxNeighbors = -1
-
-	for _, coin in ipairs(coinsInRadius) do
-		local neighborCount = 0
-		for _, otherCoin in ipairs(allValidCoins) do
-			if coin ~= otherCoin then
-				local dist = (coin.Position - otherCoin.Position).Magnitude
-				if dist <= neighborRadius then
-					neighborCount = neighborCount + 1
-				end
-			end
-		end
-
-		if neighborCount > maxNeighbors then
-			maxNeighbors = neighborCount
-			bestCoin = coin
-		end
-	end
-
-	return bestCoin
-end
-
-local function FindNearestUnvisitedCoin(radius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local nearestCoin = nil
-	local minDistance = radius + 0.1
-
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist < minDistance then
-			minDistance = dist
-			nearestCoin = coin
-		end
-	end
-
-	return nearestCoin
-end
-
-local function FindRandomUnvisitedCoin(radius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local coinsInRadius = {}
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist <= radius then
-			table.insert(coinsInRadius, coin)
-		end
-	end
-
-	if #coinsInRadius == 0 then
-		return nil
-	end
-
-	return coinsInRadius[math.random(1, #coinsInRadius)]
-end
-
--- HÀM KIỂM TRA NGƯỜI CHƠI
-local function IsPlayerNearMe(checkRadius)
-	if not HumanoidRootPart then return false end
+-- HÀM KIỂM TRA NGƯỜI CHƠI (Helper cho FindSafestCoin)
+local function GetPlayerCountNearCoin(coin, checkRadius)
+	if not coin then return 0 end
+	
+	local count = 0
+	local coinPos = coin.Position
 	
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player then
@@ -1185,54 +1083,97 @@ local function IsPlayerNearMe(checkRadius)
 				local hrp = char:FindFirstChild("HumanoidRootPart")
 				local hum = char:FindFirstChild("Humanoid")
 				if hrp and hum and hum.Health > 0 then
-					local dist = (HumanoidRootPart.Position - hrp.Position).Magnitude
+					local dist = (coinPos - hrp.Position).Magnitude
 					if dist < checkRadius then
-						return true -- Tìm thấy người chơi
+						count = count + 1
 					end
 				end
 			end
 		end
 	end
-	
-	return false
+	return count
 end
 
--- HÀM MỚI: ĐẾM NGƯỜI CHƠI GẦN 1 VỊ TRÍ
-local function CountPlayersNearPosition(position, checkRadius)
-    local playerCount = 0
-    if not position then return 0 end
 
-    for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player then
-			local char = p.Character
-			if char then
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				local hum = char:FindFirstChild("Humanoid")
-				if hrp and hum and hum.Health > 0 then
-					local dist = (position - hrp.Position).Magnitude
-					if dist < checkRadius then
-						playerCount = playerCount + 1
-					end
-				end
-			end
-		end
-	end
-    return playerCount
-end
+-- TÌM COIN AN TOÀN NHẤT (Logic mới)
+-- 1. Tìm tất cả coin trong 'searchRadius'
+-- 2. Đếm người chơi gần mỗi coin (trong 'playerCheckRadius')
+-- 3. Chọn coin có ít người chơi nhất
+-- 4. Nếu hòa, chọn coin gần nhất trong số đó
+local function FindSafestCoin(searchRadius, playerCheckRadius)
+	if not HumanoidRootPart then return nil end
 
--- HÀM MỚI: TÌM TẤT CẢ COIN TRONG BÁN KÍNH
-local function FindAllUnvisitedCoinsInRadius(radius)
-    if not HumanoidRootPart then return {} end
-    local coinsInRadius = {}
-    for _, coin in ipairs(CoinsFolder:GetChildren()) do
+	-- Lấy tất cả coin hợp lệ
+	local allValidCoins = {}
+	for _, coin in ipairs(CoinsFolder:GetChildren()) do
 		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-            local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-            if dist <= radius then
-			    table.insert(coinsInRadius, coin)
-            end
+			table.insert(allValidCoins, coin)
 		end
 	end
-    return coinsInRadius
+
+	if #allValidCoins == 0 then return nil end
+
+	-- Lọc coin trong bán kính tìm kiếm
+	local playerPos = HumanoidRootPart.Position
+	local coinsInRadius = {}
+	if searchRadius == math.huge then
+		coinsInRadius = allValidCoins
+	else
+		for _, coin in ipairs(allValidCoins) do
+			local dist = (coin.Position - playerPos).Magnitude
+			if dist <= searchRadius then
+				table.insert(coinsInRadius, coin)
+			end
+		end
+	end
+
+	if #coinsInRadius == 0 then
+		return nil
+	end
+
+	-- Đếm người chơi và tìm số lượng tối thiểu
+	local coinSafetyData = {}
+	local minPlayerCount = math.huge
+
+	for _, coin in ipairs(coinsInRadius) do
+		local playerCount = GetPlayerCountNearCoin(coin, 20) -- PLAYER_CHECK_RADIUS = 20
+		table.insert(coinSafetyData, {
+			coin = coin,
+			players = playerCount,
+			dist = (coin.Position - playerPos).Magnitude
+		})
+		if playerCount < minPlayerCount then
+			minPlayerCount = playerCount
+		end
+	end
+
+	-- Lọc ra những coin "an toàn nhất" (có minPlayerCount)
+	local safestCoins = {}
+	for _, data in ipairs(coinSafetyData) do
+		if data.players == minPlayerCount then
+			table.insert(safestCoins, data)
+		end
+	end
+
+	-- Nếu chỉ có 1 coin an toàn nhất, trả về nó
+	if #safestCoins == 0 then
+		return nil -- Lỗi (không thể xảy ra)
+	elseif #safestCoins == 1 then
+		return safestCoins[1].coin
+	else
+		-- Nếu có nhiều coin hòa (cùng an toàn),
+		-- chọn coin GẦN NGƯỜI CHƠI NHẤT trong số đó
+		local closestSafestCoin = nil
+		local minSafeDist = math.huge
+		
+		for _, data in ipairs(safestCoins) do
+			if data.dist < minSafeDist then
+				minSafeDist = data.dist
+				closestSafestCoin = data.coin
+			end
+		end
+		return closestSafestCoin
+	end
 end
 
 
@@ -1243,86 +1184,55 @@ local function RandomWaterfallWait(
 	finalRadius, finalWait
 )
 	
-	-- 1. Chờ, Quét 15 stud
+    -- CHÚ Ý: Logic mới chỉ dùng FindSafestCoin. 
+    -- Bán kính (proximityRadius) là bán kính tìm coin.
+    -- Bán kính 20 stud để check player đã được hard-code BÊN TRONG FindSafestCoin.
+    local PLAYER_CHECK_RADIUS = 20 -- (Để tham khảo, nó được set bên trong FindSafestCoin)
+
+	-- 1. Chờ, Quét (Radius 1)
 	local wait1 = minWait1 + math.random() * (maxWait1 - minWait1)
-	debug_print("Waiting " .. string.format("%.2f", wait1) .. "s, then scanning " .. proximityRadius1 .. " stud...")
+	debug_print("Waiting " .. string.format("%.2f", wait1) .. "s, then finding SAFEST coin in " .. proximityRadius1 .. " stud...")
 	task.wait(wait1)
 	
-	local coin15
-	local isPlayerClose_P1 = IsPlayerNearMe(proximityRadius1) -- KIỂM TRA ĐỘNG (15 stud)
-	
-	if isPlayerClose_P1 then
-		debug_print("Player is close (15)! Finding RANDOM coin in " .. proximityRadius1 .. " stud.")
-		coin15 = FindRandomUnvisitedCoin(proximityRadius1)
-	else
-		debug_print("Player is not close (15). Finding NEAREST coin in " .. proximityRadius1 .. " stud.")
-		coin15 = FindNearestUnvisitedCoin(proximityRadius1)
+	local coin1 = FindSafestCoin(proximityRadius1, PLAYER_CHECK_RADIUS)
+	if coin1 then
+        debug_print("Found safest coin in " .. proximityRadius1 .. " stud.")
+		return coin1 -- P1
 	end
 
-	if coin15 then
-		return coin15 -- P1
-	end
-
-	-- 2. Chờ, Quét 25 stud
+	-- 2. Chờ, Quét (Radius 2)
 	local wait2 = minWait2 + math.random() * (maxWait2 - minWait2)
-	debug_print("No coin in " .. proximityRadius1 .. " stud. Waiting " .. string.format("%.2f", wait2) .. "s, then scanning " .. proximityRadius2 .. " stud...")
+	debug_print("No coin in " .. proximityRadius1 .. " stud. Waiting " .. string.format("%.2f", wait2) .. "s, then finding SAFEST coin in " .. proximityRadius2 .. " stud...")
 	task.wait(wait2)
 	
-	local coin25
-	local isPlayerClose_P2 = IsPlayerNearMe(proximityRadius2) -- KIỂM TRA ĐỘNG (25 stud)
-	
-	if isPlayerClose_P2 then
-		debug_print("Player is close (25)! Finding RANDOM coin in " .. proximityRadius2 .. " stud.")
-		coin25 = FindRandomUnvisitedCoin(proximityRadius2)
-	else
-		debug_print("Player is not close (25). Finding NEAREST coin in " .. proximityRadius2 .. " stud.")
-		coin25 = FindNearestUnvisitedCoin(proximityRadius2)
+	local coin2 = FindSafestCoin(proximityRadius2, PLAYER_CHECK_RADIUS)
+	if coin2 then
+        debug_print("Found safest coin in " .. proximityRadius2 .. " stud.")
+		return coin2 -- P2
 	end
 
-	if coin25 then
-		return coin25 -- P2
-	end
-
-	-- 3. Chờ, Quét 35 stud
+	-- 3. Chờ, Quét (Radius 3)
 	local wait3 = minWait3 + math.random() * (maxWait3 - minWait3)
-	debug_print("No coin in " .. proximityRadius2 .. " stud. Waiting " .. string.format("%.2f", wait3) .. "s, then scanning " .. proximityRadius3 .. " stud...")
+	debug_print("No coin in " .. proximityRadius2 .. " stud. Waiting " .. string.format("%.2f", wait3) .. "s, then finding SAFEST coin in " .. proximityRadius3 .. " stud...")
 	task.wait(wait3)
 	
-	local coin35
-	local isPlayerClose_P3 = IsPlayerNearMe(proximityRadius3) -- KIỂM TRA ĐỘNG (35 stud)
-	
-	if isPlayerClose_P3 then
-		debug_print("Player is close (35)! Finding RANDOM coin in " .. proximityRadius3 .. " stud.")
-		coin35 = FindRandomUnvisitedCoin(proximityRadius3)
-	else
-		debug_print("Player is not close (35). Finding NEAREST coin in " .. proximityRadius3 .. " stud.")
-		coin35 = FindNearestUnvisitedCoin(proximityRadius3)
+	local coin3 = FindSafestCoin(proximityRadius3, PLAYER_CHECK_RADIUS)
+	if coin3 then
+        debug_print("Found safest coin in " .. proximityRadius3 .. " stud.")
+		return coin3 -- P3
 	end
 
-	if coin35 then
-		return coin35 -- P3
-	end
-
-	-- 4. Chờ 0.5s, Quét 50 stud
-	debug_print("No coin in " .. proximityRadius3 .. " stud. Waiting " .. finalWait .. "s, then scanning " .. finalRadius .. " stud...")
+	-- 4. Chờ, Quét (Final Radius)
+	debug_print("No coin in " .. proximityRadius3 .. " stud. Waiting " .. finalWait .. "s, then finding SAFEST coin in " .. finalRadius .. " stud...")
 	task.wait(finalWait)
 	
-	local coin50
-	local isPlayerClose_P4 = IsPlayerNearMe(finalRadius) -- KIỂM TRA ĐỘNG (50 stud)
-	
-	if isPlayerClose_P4 then
-		debug_print("Player is close (50)! Finding RANDOM coin in " .. finalRadius .. " stud.")
-		coin50 = FindRandomUnvisitedCoin(finalRadius)
-	else
-		debug_print("Player is not close (50). Finding BEST coin in " .. finalRadius .. " stud.")
-		coin50 = FindBestCoin(finalRadius, 40)
-	end
+	local coinFinal = FindSafestCoin(finalRadius, PLAYER_CHECK_RADIUS)
+    if coinFinal then
+        debug_print("Found safest coin in " .. finalRadius .. " stud.")
+        return coinFinal -- P4
+    end
 
-	if coin50 then
-		return coin50 -- P4
-	end
-
-	debug_print("No neighbor coin found in 15, 25, 35, or 50 studs. Chain broken.")
+	debug_print("No neighbor coin found in any radius. Chain broken.")
 	return nil
 end
 
@@ -1340,6 +1250,9 @@ local function FindCoin(isFirst)
 		return nil
 	end
 
+    -- Đặt bán kính check player (20 stud)
+    local PLAYER_CHECK_RADIUS = 20
+
 	local allValidCoins = {}
 	for _, coin in ipairs(CoinsFolder:GetChildren()) do
 		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
@@ -1353,84 +1266,23 @@ local function FindCoin(isFirst)
 	end
 	
 	if isFirst then
-		debug_print("FindCoin (Global): Picking a random coin from " .. #allValidCoins .. " total.")
-		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
+		-- LOGIC MỚI: Tìm coin AN TOÀN NHẤT trên TOÀN BẢN ĐỒ
+        debug_print("FindCoin (Global): Finding safest coin on entire map (" .. #allValidCoins .. " total)...")
+        local bestCoin = FindSafestCoin(math.huge, PLAYER_CHECK_RADIUS)
 		return bestCoin
 	else
-		--[[ --- START OLD LOGIC ---
-		local chainCoin = FindRandomUnvisitedCoin(50)
-		if not chainCoin then
-			chainCoin = FindRandomUnvisitedCoin(100)
-		end
+        -- LOGIC MỚI: Tìm coin AN TOÀN NHẤT trong 50 STUD (theo yêu cầu)
+		-- Bỏ check 100 stud cũ.
+        debug_print("FindCoin (Chain Start): Finding safest coin within 50 studs...")
+		local chainCoin = FindSafestCoin(50, PLAYER_CHECK_RADIUS) 
 		
 		if chainCoin then
+            debug_print("FindCoin (Chain Start): Found safest coin in 50 stud.")
 			return chainCoin
 		else
+            debug_print("FindCoin (Chain Start): No coin found within 50 studs.")
 			return "NoCoins"
 		end
-		]] --- END OLD LOGIC ---
-
-		-- START NEW LOGIC (for first coin of a chain)
-		debug_print("FindCoin (Chain Start): Looking for coin to start chain...")
-        
-        local searchRadius = 100
-        -- local playerAvoidRadius = 30 -- Radius to check for other players (REMOVED)
-        local coinSafeRadius = 50 -- Radius around the *coin* to check for players
-
-        --[[ REMOVED PANIC JUMP LOGIC
-        if IsPlayerNearMe(playerAvoidRadius) then
-            -- Player is close! Jump to a random coin to get away.
-            debug_print("Player is near! Finding RANDOM coin within " .. searchRadius .. " studs to escape.")
-            local randomCoin = FindRandomUnvisitedCoin(searchRadius)
-            if randomCoin then
-                return randomCoin
-            end
-            -- If random fails, fall through to main logic
-			debug_print("Random (avoid) coin failed, falling through...")
-        end
-        ]]
-
-        -- Find the coin with the fewest players around it.
-        debug_print("Finding safest coin (fewest players within " .. coinSafeRadius .. " studs) in a " .. searchRadius .. " stud radius.")
-        
-        local coinsInRadius = FindAllUnvisitedCoinsInRadius(searchRadius)
-        if #coinsInRadius == 0 then
-            debug_print("No coins found within " .. searchRadius .. " studs.")
-            -- Fallback: try searching in a wider radius
-            -- coinsInRadius = FindAllUnvisitedCoinsInRadius(200) -- REMOVED
-            -- if #coinsInRadius == 0 then -- REMOVED
-            --      debug_print("No coins found within 200 studs either.") -- REMOVED
-                 return "NoCoins"
-            -- end -- REMOVED
-            -- debug_print("Found " .. #coinsInRadius .. " coins in 200 stud fallback.") -- REMOVED
-        end
-
-        local bestCoin = nil
-        local minPlayerCount = math.huge
-
-        for _, coin in ipairs(coinsInRadius) do
-            local playerCount = CountPlayersNearPosition(coin.Position, coinSafeRadius)
-            
-            if playerCount < minPlayerCount then
-                minPlayerCount = playerCount
-                bestCoin = coin
-                
-                -- Tối ưu: Nếu tìm thấy coin 0 người, dùng ngay
-                if minPlayerCount == 0 then
-                    break
-                end
-            end
-        end
-
-        if bestCoin then
-            debug_print("Found safest coin with " .. minPlayerCount .. " players nearby.")
-            return bestCoin
-        else
-            -- This shouldn't happen if coinsInRadius > 0, but as a failsafe
-            debug_print("Failed to select a safest coin, picking random from list.")
-            return coinsInRadius[math.random(1, #coinsInRadius)]
-        end
-        -- END NEW LOGIC
 	end
 end
 
@@ -1441,7 +1293,6 @@ end)
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
-	local consecutiveFailCount = 0 -- ĐẾM SỐ LẦN THẤT BẠI LIÊN TIẾP
 
 	while task.wait() do
 		lastPing = tick()
@@ -1494,7 +1345,6 @@ local function Start_Farm()
 			
 			isFirstCoinOfRound = true
 			visited = {}
-			consecutiveFailCount = 0 -- Reset đếm thất bại
 		end
 
 		ClearMap()
@@ -1560,14 +1410,13 @@ local function Start_Farm()
 				continue
 			end
 
-			local success = TeleportToCoin(coinToTeleport) -- Lấy trạng thái
-			if success then
-                consecutiveFailCount = 0 -- Reset
-            else
-                consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
-                debug_print("Failed to collect first coin. Fail count: " .. consecutiveFailCount)
-            end
+			if not coinToTeleport or not coinToTeleport.Position then
+				debug_print("Searching for first coin...")
+				task.wait()
+				continue
+			end
 
+			TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
 			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
@@ -1627,61 +1476,34 @@ local function Start_Farm()
 			end
 
 			-- LOGIC FARM MỚI (RANDOM WATERFALL)
-			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (Smart logic 100 studs)
+			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (Safest in 50)
 			
-			if not chainCoin or type(chainCoin) == "string" then
-				debug_print("No coin found with new chain logic. Waiting 2 seconds.")
-				task.wait(2) -- ĐÃ SỬA: từ 1 thành 2
+			if not chainCoin then
+				debug_print("No coin found in 50/100 stud range. Waiting 2 seconds.")
+				task.wait(1)
 			else
-				local success = TeleportToCoin(chainCoin) -- Lấy trạng thái
-                if success then
-                    consecutiveFailCount = 0 -- Reset
-                else
-                    consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
-                    debug_print("Failed to collect chain-start coin. Fail count: " .. consecutiveFailCount)
-                end
-
-                if consecutiveFailCount >= 2 then -- Kiểm tra thất bại
-                    debug_print("Failed to collect 2 coins in a row. Breaking chain.")
-                    consecutiveFailCount = 0
-                    task.wait(2) -- Chờ trước khi tìm chain mới
-                    continue -- Bắt đầu lại vòng lặp while
-                end
-
+				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				
 				chainCount = 1
-				debug_print("Collected chain coin #1/5 (smart logic in 100).")
+				debug_print("Collected chain coin #1/5 (safest in 50).")
 				-- KHÔNG CHỜ (đã gộp vào RandomWaterfallWait)
 				
-				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
+				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL" v2)
 				for i = 2, 5 do
 					-- Gọi hàm quét thông minh theo tầng
 					local nextCoin = RandomWaterfallWait(
-						50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
-						50, 0.2, 0.5,  -- P2: 25 stud, 0.5-0.7s
-						50, 0.3, 0.6,  -- P3: 35 stud, 0.2-0.4s
+						50, 0.5, 0.5,  -- P1: 50 stud, 0.5s
+						50, 0.2, 0.5,  -- P2: 50 stud, 0.2-0.5s
+						50, 0.3, 0.6,  -- P3: 50 stud, 0.3-0.6s
 						50, 0.5        -- P4: 50 stud, 0.5s
 					)
 
 					if not nextCoin then
-						debug_print("RandomWaterfallWait returned nil. Trying again.")
-						-- ĐÃ XÓA 'break'. Vòng lặp sẽ tự 'continue'.
+						debug_print("RandomWaterfallWait returned nil. Chain broken.")
+						break -- Gãy chuỗi 5 coin
 					else
-						local success = TeleportToCoin(nextCoin) -- Lấy trạng thái
-                        if success then
-                            consecutiveFailCount = 0 -- Reset
-                        else
-                            consecutiveFailCount = consecutiveFailCount + 1 -- Thêm
-                            debug_print("Failed to collect chain coin. Fail count: " .. consecutiveFailCount)
-                        end
-
-                        if consecutiveFailCount >= 2 then -- Kiểm tra thất bại
-                            debug_print("Failed to collect 2 coins in a row. Breaking chain.")
-                            consecutiveFailCount = 0
-                            break -- Phá vỡ vòng lặp 'for i = 2, 5'
-                        end
-
+						TeleportToCoin(nextCoin)
 						visited[nextCoin] = true
 						chainCount = chainCount + 1
 						debug_print("Collected chain coin #" .. chainCount .. "/5.")
@@ -1692,7 +1514,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(2) -- Đã đúng
+					task.wait(0.5)
 				end
 			end
 		end
