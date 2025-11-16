@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1136,7 +1136,8 @@ local function FindSafestCoin(searchRadius, playerCheckRadius)
 	local minPlayerCount = math.huge
 
 	for _, coin in ipairs(coinsInRadius) do
-		local playerCount = GetPlayerCountNearCoin(coin, 20) -- PLAYER_CHECK_RADIUS = 20
+		-- THAY ĐỔI: checkRadius (100) được truyền vào từ bên ngoài
+		local playerCount = GetPlayerCountNearCoin(coin, playerCheckRadius)
 		table.insert(coinSafetyData, {
 			coin = coin,
 			players = playerCount,
@@ -1186,8 +1187,8 @@ local function RandomWaterfallWait(
 	
     -- CHÚ Ý: Logic mới chỉ dùng FindSafestCoin. 
     -- Bán kính (proximityRadius) là bán kính tìm coin.
-    -- Bán kính 20 stud để check player đã được hard-code BÊN TRONG FindSafestCoin.
-    local PLAYER_CHECK_RADIUS = 20 -- (Để tham khảo, nó được set bên trong FindSafestCoin)
+    -- THAY ĐỔI: Bán kính 100 stud để check player
+    local PLAYER_CHECK_RADIUS = 100
 
 	-- 1. Chờ, Quét (Radius 1)
 	local wait1 = minWait1 + math.random() * (maxWait1 - minWait1)
@@ -1250,8 +1251,8 @@ local function FindCoin(isFirst)
 		return nil
 	end
 
-    -- Đặt bán kính check player (20 stud)
-    local PLAYER_CHECK_RADIUS = 20
+    -- THAY ĐỔI: Đặt bán kính check player (100 stud)
+    local PLAYER_CHECK_RADIUS = 100
 
 	local allValidCoins = {}
 	for _, coin in ipairs(CoinsFolder:GetChildren()) do
@@ -1514,7 +1515,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(0.5)
+					task.wait(1)
 				end
 			end
 		end
