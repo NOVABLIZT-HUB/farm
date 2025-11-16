@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1028,16 +1028,16 @@ end)
 
 local lastPing = tick()
 
---// Teleport to Coin (Đã sửa lỗi CFRAME ỔN ĐỊNH VÀ THÊM TRẠNG THÁI TRẢ VỀ)
+--// Teleport to Coin (Đã sửa lỗi CFRAME ỔN ĐỊNH)
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return false -- Trả về false nếu đầu vào không hợp lệ
+		return
 	end
 
 	-- Kiểm tra 1: Coin có còn không?
 	if not coin:FindFirstChild("TouchInterest") then
 		debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return true -- Coi như là thành công vì nó đã biến mất
+		return
 	end
 
 	local pos = coin.Position
@@ -1055,27 +1055,19 @@ local function TeleportToCoin(coin)
 
 	-- Lượm coin (chặn, nhưng không trả về true/false)
 	local startTime = tick()
-	local collected = false
 	
-	repeat
-		firetouchinterest(coin, HumanoidRootPart, 0)
-		task.wait()
-		firetouchinterest(coin, HumanoidRootPart, 1)
-		task.wait()
+			repeat
+				firetouchinterest(coin, HumanoidRootPart, 0)
+				task.wait()
+				firetouchinterest(coin, HumanoidRootPart, 1)
+				task.wait()
 		
 		-- Kiểm tra 2: Coin đã biến mất (lượm thành công)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
-			collected = true
 			break
 		end
 	until (tick() - startTime) > 1 
-	
-	if not collected then
-		debug_print("THẤT BẠI: Không thể lượm coin " .. (coin.Name or "unknown") .. " sau 1 giây.")
-	end
-	
-	return collected -- Trả về trạng thái lượm coin
-end
+    end
 
 -- TÌM COIN TỐT NHẤT
 local function FindBestCoin(searchRadius, neighborRadius)
@@ -1177,36 +1169,6 @@ local function FindRandomUnvisitedCoin(radius)
 
 	return coinsInRadius[math.random(1, #coinsInRadius)]
 end
-
--- HÀM MỚI: TÌM COIN XA NHẤT
-local function FindFarthestUnvisitedCoin(radius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local farthestCoin = nil
-	local maxDistance = 0 -- Bắt đầu từ 0 để tìm khoảng cách lớn nhất
-
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		
-		-- Coin phải ở trong bán kính VÀ xa hơn coin xa nhất hiện tại
-		if dist <= radius and dist > maxDistance then
-			maxDistance = dist
-			farthestCoin = coin
-		end
-	end
-
-	return farthestCoin -- Sẽ trả về nil nếu không có coin nào trong bán kính
-end
-
 
 -- HÀM KIỂM TRA NGƯỜI CHƠI
 local function IsPlayerNearMe(checkRadius)
@@ -1496,32 +1458,12 @@ local function Start_Farm()
 				continue
 			end
 
-			local success = TeleportToCoin(coinToTeleport)
+			TeleportToCoin(coinToTeleport)
 			visited[coinToTeleport] = true
-			isFirstCoinOfRound = false -- Đặt thành false ngay lập tức
-
-			if not success then
-				-- LOGIC MỚI KHI THẤT BẠI
-				debug_print("Không lượm được coin ĐẦU TIÊN. Chờ 2s và tìm coin xa nhất.")
-				task.wait(2)
-				
-				local farCoin = FindFarthestUnvisitedCoin(100)
-				if farCoin then
-					debug_print("Đã tìm thấy coin xa nhất. Dịch chuyển...")
-					local farSuccess = TeleportToCoin(farCoin) -- Cố gắng lượm coin xa
-					visited[farCoin] = true
-					if not farSuccess then
-						debug_print("Vẫn không lượm được coin xa. Bỏ qua và tiếp tục.")
-					end
-				else
-					debug_print("Không tìm thấy coin xa nhất trong 100 stud.")
-				end
-			else
-				-- Lượm coin đầu tiên THÀNH CÔNG
-				local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-				debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-				task.wait(3)
-			end
+			isFirstCoinOfRound = false
+			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
+			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
+			task.wait(3)
 
 		else
 			
@@ -1582,79 +1524,39 @@ local function Start_Farm()
 				debug_print("No coin found in 50/100 stud range. Waiting 2 seconds.")
 				task.wait(1)
 			else
-				local success = TeleportToCoin(chainCoin)
+				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				
-				if not success then
-					-- LOGIC MỚI KHI THẤT BẠI
-					debug_print("Không lượm được coin BẮT ĐẦU CHUỖI. Chờ 2s và tìm coin xa nhất.")
-					task.wait(1)
-					
-					local farCoin = FindFarthestUnvisitedCoin(100)
-					if farCoin then
-						debug_print("Đã tìm thấy coin xa nhất. Dịch chuyển...")
-						local farSuccess = TeleportToCoin(farCoin) -- Cố gắng lượm coin xa
-						visited[farCoin] = true
-						if not farSuccess then
-							debug_print("Vẫn không lượm được coin xa. Bỏ qua và tiếp tục.")
-						end
+				chainCount = 1
+				debug_print("Collected chain coin #1/5 (random in 50/100).")
+				-- KHÔNG CHỜ (đã gộp vào RandomWaterfallWait)
+				
+				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
+				for i = 2, 5 do
+					-- Gọi hàm quét thông minh theo tầng
+					local nextCoin = RandomWaterfallWait(
+						50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
+						50, 0.2, 0.5,  -- P2: 25 stud, 0.5-0.7s
+						50, 0.3, 0.6,  -- P3: 35 stud, 0.2-0.4s
+						50, 0.5        -- P4: 50 stud, 0.5s
+					)
+
+					if not nextCoin then
+						debug_print("RandomWaterfallWait returned nil. Chain broken.")
+						break -- Gãy chuỗi 5 coin
 					else
-						debug_print("Không tìm thấy coin xa nhất trong 100 stud.")
+						TeleportToCoin(nextCoin)
+						visited[nextCoin] = true
+						chainCount = chainCount + 1
+						debug_print("Collected chain coin #" .. chainCount .. "/5.")
+						-- Vòng lặp for sẽ tiếp tục (i = 3, 4, 5)
 					end
-					-- Bỏ qua phần còn lại của vòng lặp for (chuỗi 5 coin)
-					
-				else
-					-- Lượm coin đầu chuỗi THÀNH CÔNG
-					chainCount = 1
-					debug_print("Collected chain coin #1/5 (random in 50/100).")
-					
-					-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
-					for i = 2, 5 do
-						-- Gọi hàm quét thông minh theo tầng
-						local nextCoin = RandomWaterfallWait(
-							50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
-							50, 0.2, 0.5,  -- P2: 25 stud, 0.5-0.7s
-							50, 0.3, 0.6,  -- P3: 35 stud, 0.2-0.4s
-							50, 0.5        -- P4: 50 stud, 0.5s
-						)
+				end
 
-						if not nextCoin then
-							debug_print("RandomWaterfallWait returned nil. Chain broken.")
-							break -- Gãy chuỗi 5 coin
-						else
-							local chainSuccess = TeleportToCoin(nextCoin)
-							visited[nextCoin] = true
-							
-							if not chainSuccess then
-								-- LOGIC MỚI KHI THẤT BẠI
-								debug_print("Không lượm được coin #" .. i .. " trong chuỗi. TIẾP TỤC CHUỖI.")
-								task.wait(2)
-								
-								local farCoin = FindFarthestUnvisitedCoin(100)
-								if farCoin then
-									debug_print("Đã tìm thấy coin xa nhất. Dịch chuyển...")
-									local farSuccess = TeleportToCoin(farCoin) -- Cố gắng lượm coin xa
-									visited[farCoin] = true
-									if not farSuccess then
-										debug_print("Vẫn không lượm được coin xa. Bỏ qua và tiếp tục.")
-									end
-								else
-									debug_print("Không tìm thấy coin xa nhất trong 100 stud.")
-								end
-								-- ĐÃ XÓA 'break'. Vòng lặp 'for' sẽ tiếp tục với i + 1
-							else
-								-- Lượm THÀNH CÔNG coin trong chuỗi
-								chainCount = chainCount + 1
-								debug_print("Collected chain coin #" .. chainCount .. "/5.")
-							end
-						end
-					end
-
-					-- LOGIC CUỐI CHUỖI
-					if chainCount > 0 then
-						debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-						task.wait(1)
-					end
+				-- LOGIC CUỐI CHUỖI
+				if chainCount > 0 then
+					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
+					task.wait(1)
 				end
 			end
 		end
