@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1315,6 +1315,51 @@ local function RandomWaterfallWait(
 end
 
 
+local function FindNextChainCoin()
+	debug_print("Finding next chain coin...")
+
+	-- 1. Search 50 studs
+	debug_print("Scanning 50 studs...")
+	local coin50
+	local isPlayerClose_50 = IsPlayerNearMe(50)
+	
+	if isPlayerClose_50 then
+		debug_print("Player is close (50)! Finding RANDOM coin in 50 stud.")
+		coin50 = FindRandomUnvisitedCoin(50)
+	else
+		debug_print("Player is not close (50). Finding NEAREST coin in 50 stud.")
+		coin50 = FindNearestUnvisitedCoin(50)
+	end
+
+	if coin50 then
+		return coin50 -- Found coin in 50 studs
+	end
+
+	-- 2. Wait 0.5s, then search 100 studs
+	debug_print("No coin in 50 studs. Waiting 0.5s, then scanning 100 studs...")
+	task.wait(0.5)
+	
+	local coin100
+	local isPlayerClose_100 = IsPlayerNearMe(100)
+	
+	if isPlayerClose_100 then
+		debug_print("Player is close (100)! Finding RANDOM coin in 100 stud.")
+		coin100 = FindRandomUnvisitedCoin(100)
+	else
+		-- If no player is close in the larger radius, finding the "best" (most neighbors) coin is a good strategy to start a new cluster.
+		debug_print("Player is not close (100). Finding BEST coin in 100 stud.")
+		coin100 = FindBestCoin(100, 40) -- Using 40 as neighbor radius, same as before
+	end
+
+	if coin100 then
+		return coin100 -- Found coin in 100 studs
+	end
+
+	debug_print("No neighbor coin found in 50 or 100 studs. Chain broken.")
+	return nil
+end
+
+
 local function FindCoin(isFirst)
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
 		return "Dead"
@@ -1357,19 +1402,19 @@ local function FindCoin(isFirst)
 			end
 		]]
 		
-		-- LOGIC MỚI (User Request): Tìm coin trong 100 stud có ít người chơi nhất trong 50 stud của nó.
-		debug_print("FindCoin (Chain Start): Finding safest coin within 100 studs...")
+		-- LOGIC MỚI (User Request): Tìm coin trong 50 stud có ít người chơi nhất trong 50 stud của nó.
+		debug_print("FindCoin (Chain Start): Finding safest coin within 50 studs...")
 
-		-- 1. Lấy tất cả coin trong 100 stud
+		-- 1. Lấy tất cả coin trong 50 stud
 		local coinsInRadius = {}
 		for _, coin in ipairs(allValidCoins) do
-			if (coin.Position - HumanoidRootPart.Position).Magnitude <= 100 then
+			if (coin.Position - HumanoidRootPart.Position).Magnitude <= 50 then
 				table.insert(coinsInRadius, coin)
 			end
 		end
 
 		if #coinsInRadius == 0 then
-			debug_print("FindCoin (Chain Start): No coins found within 100 studs.")
+			debug_print("FindCoin (Chain Start): No coins found within 50 studs.")
 			return "NoCoins"
 		end
 
@@ -1469,7 +1514,7 @@ local function Start_Farm()
 			debug_print("Doing Find Coin (First)...")
 			local coinToTeleport = FindCoin(true)
 			
-			if type(coinToTeleport) == "string" then
+			if type(coinToTeletoCoin) == "string" then
 				debug_print("FindCoin Response: " .. coinToTeleport)
 				if coinToTeleport == "Dead" then
 					StatusText.Text = "Status: You are dead!"
@@ -1592,27 +1637,27 @@ local function Start_Farm()
 			end
 
 			-- LOGIC FARM MỚI (RANDOM WATERFALL)
-			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (LOGIC MỚI: AN TOÀN NHẤT)
+			local chainCoin = FindNextChainCoin() -- Coin đầu chuỗi (LOGIC MỚI: 50 -> wait -> 100)
 			
 			if not chainCoin then
-				debug_print("No coin found (safest in 100 studs). Waiting 2 seconds.")
+				debug_print("No coin found (50->100 logic). Waiting 2 seconds.")
 				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				
 				chainCount = 1
-				debug_print("Collected chain coin #1/5 (safest in 100).")
+				debug_print("Collected chain coin #1/5 (50->100 logic).")
 				-- KHÔNG CHỜ (đã gộp vào RandomWaterfallWait)
 				
-				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
+				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC CŨ "RANDOM WATERFALL")
 				for i = 2, 5 do
-					-- Gọi hàm quét thông minh theo tầng
+					-- Gọi hàm quét thông minh theo tầng (LOGIC GỐC)
 					local nextCoin = RandomWaterfallWait(
 						50, 0.5, 0.5,  -- P1: 15 stud, 0.5-0.7s
 						50, 0.2, 0.4,  -- P2: 25 stud, 0.5-0.7s
 						50, 0.3, 0.6,  -- P3: 35 stud, 0.2-0.4s
-						50, 0.5        -- P4: 50 stud, 0.5s
+						50, 0.2, 0.4       -- P4: 50 stud, 0.5s
 					)
 
 					if not nextCoin then
@@ -1630,7 +1675,7 @@ local function Start_Farm()
 				-- LOGIC CUỐI CHUỖI
 				if chainCount > 0 then
 					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(1)
+					task.wait(0.5)
 				end
 			end
 		end
