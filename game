@@ -1200,6 +1200,27 @@ local function IsPlayerNearMe(checkRadius)
 	return false
 end
 
+-- ĐẾM NGƯỜI CHƠI GẦN VỊ TRÍ (LOGIC MỚI)
+local function CountPlayersNearPosition(position, checkRadius)
+	local playerCount = 0
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player then
+			local char = p.Character
+			if char then
+				local hrp = char:FindFirstChild("HumanoidRootPart")
+				local hum = char:FindFirstChild("Humanoid") -- Sửa lỗi: Dùng FindFirstChild
+				if hrp and hum and hum.Health > 0 then
+					local dist = (position - hrp.Position).Magnitude
+					if dist < checkRadius then
+						playerCount = playerCount + 1
+					end
+				end
+			end
+		end
+	end
+	return playerCount
+end
+
 
 local function RandomWaterfallWait(
 	proximityRadius1, minWait1, maxWait1,
@@ -1323,21 +1344,57 @@ local function FindCoin(isFirst)
 		return bestCoin
 	else
 		--[[ 
-			OLD LOGIC:
-			local chainCoin = FindRandomUnvisitedCoin(50)
-			if not chainCoin then
-				chainCoin = FindRandomUnvisitedCoin(100)
+			OLD LOGIC (User Request): Find a random coin within 100 studs for the first coin of the chain.
+			debug_print("FindCoin (Chain Start): Picking a random coin within 100 studs...")
+			local chainCoin = FindRandomUnvisitedCoin(100)
+			
+			if chainCoin then
+				return chainCoin
+			else
+				return "NoCoins"
 			end
 		]]
 		
-		-- NEW LOGIC (User Request): Find a random coin within 100 studs for the first coin of the chain.
-		debug_print("FindCoin (Chain Start): Picking a random coin within 100 studs...")
-		local chainCoin = FindRandomUnvisitedCoin(100)
-		
-		if chainCoin then
-			return chainCoin
-		else
+		-- LOGIC MỚI (User Request): Tìm coin trong 100 stud có ít người chơi nhất trong 50 stud của nó.
+		debug_print("FindCoin (Chain Start): Finding safest coin within 100 studs...")
+
+		-- 1. Lấy tất cả coin trong 100 stud
+		local coinsInRadius = {}
+		for _, coin in ipairs(allValidCoins) do
+			if (coin.Position - HumanoidRootPart.Position).Magnitude <= 100 then
+				table.insert(coinsInRadius, coin)
+			end
+		end
+
+		if #coinsInRadius == 0 then
+			debug_print("FindCoin (Chain Start): No coins found within 100 studs.")
 			return "NoCoins"
+		end
+
+		-- 2. Tìm coin có ít người chơi nhất
+		local bestCoin = nil
+		local minPlayerCount = math.huge
+
+		for _, coin in ipairs(coinsInRadius) do
+			local playerCount = CountPlayersNearPosition(coin.Position, 50)
+			
+			if playerCount < minPlayerCount then
+				minPlayerCount = playerCount
+				bestCoin = coin
+			end
+
+			-- Nếu có coin 0 người chơi, ưu tiên lấy luôn
+			if minPlayerCount == 0 then
+				break
+			end
+		end
+
+		if bestCoin then
+			debug_print("FindCoin (Chain Start): Found safest coin with " .. minPlayerCount .. " players nearby.")
+			return bestCoin
+		else
+			debug_print("FindCoin (Chain Start): Logic failed, returning NoCoins.")
+			return "NoCoins" -- Về lý thuyết không nên xảy ra nếu coinsInRadius > 0
 		end
 	end
 end
