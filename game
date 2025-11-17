@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -958,6 +958,7 @@ task.spawn(function()
 	end
 end)
 
+--[[ ĐÃ XÓA BỎ KHỐI GÂY TRÀN RAM (THREAD BOMB)
 task.spawn(function()
 	while task.wait() do
 		for _, coin in ipairs(CoinsFolder:GetChildren()) do
@@ -971,6 +972,7 @@ task.spawn(function()
 		end
 	end
 end)
+]]
 
 local function ClearMap()
 	if map then
@@ -1458,6 +1460,7 @@ local function Start_Farm()
 			
 			isFirstCoinOfRound = true
 			visited = {}
+			CoinsFolder:ClearAllChildren() -- THÊM SỬA LỖI: Dọn dẹp coin cũ để tránh lag/tràn RAM
 		end
 
 		ClearMap()
@@ -1589,17 +1592,17 @@ local function Start_Farm()
 			end
 
 			-- LOGIC FARM MỚI (RANDOM WATERFALL)
-			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (Random 50/100)
+			local chainCoin = FindCoin(false) -- Coin đầu chuỗi (LOGIC MỚI: AN TOÀN NHẤT)
 			
 			if not chainCoin then
-				debug_print("No coin found in 50/100 stud range. Waiting 2 seconds.")
+				debug_print("No coin found (safest in 100 studs). Waiting 2 seconds.")
 				task.wait(2)
 			else
 				TeleportToCoin(chainCoin)
 				visited[chainCoin] = true
 				
 				chainCount = 1
-				debug_print("Collected chain coin #1/5 (random in 50/100).")
+				debug_print("Collected chain coin #1/5 (safest in 100).")
 				-- KHÔNG CHỜ (đã gộp vào RandomWaterfallWait)
 				
 				-- Bắt đầu lượm 4 coin tiếp theo (LOGIC MỚI "RANDOM WATERFALL")
