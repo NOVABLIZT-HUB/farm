@@ -67,7 +67,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Halloween Faster Optimized" .. "\n"
+local Version = "v2.4.8 Optimized Original Logic" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -105,11 +105,12 @@ local headers = {
 }
 
 local map = nil
-local AllCoins = {}
 local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
+local zeroVector2 = Vector2.new()
+local verticalOffset = Vector3.new(0, 3, 0)
 
 
 repeat
@@ -141,12 +142,14 @@ end)
 
 
 -- Clean up unnecessary Workspace objects
-Workspace:WaitForChild("Lobby"):Destroy()
-Workspace:WaitForChild("WeaponDisplays"):Destroy()
-Workspace:WaitForChild("PetContainer"):Destroy()
-Workspace:WaitForChild("EffectLoader"):Destroy()
-Workspace:WaitForChild("ServerStatus"):Destroy()
-Workspace:WaitForChild("GameSettings"):Destroy()
+-- GIỮ NGUYÊN LOGIC CŨ: Chỉ xóa Lobby và các object phụ, KHÔNG XÓA MAP
+if Workspace:FindFirstChild("Lobby") then Workspace.Lobby:Destroy() end
+if Workspace:FindFirstChild("WeaponDisplays") then Workspace.WeaponDisplays:Destroy() end
+if Workspace:FindFirstChild("PetContainer") then Workspace.PetContainer:Destroy() end
+if Workspace:FindFirstChild("EffectLoader") then Workspace.EffectLoader:Destroy() end
+if Workspace:FindFirstChild("ServerStatus") then Workspace.ServerStatus:Destroy() end
+if Workspace:FindFirstChild("GameSettings") then Workspace.GameSettings:Destroy() end
+
 
 -- Set up player and round references
 local player = Players.LocalPlayer
@@ -174,7 +177,7 @@ task.spawn(function()
 
 	player.Idled:Connect(function()
 		VirtualUser:CaptureController()
-		VirtualUser:ClickButton2(Vector2.new())
+		VirtualUser:ClickButton2(zeroVector2)
 	end)
 
 end)
@@ -246,7 +249,7 @@ LobbyPlatform.Anchored = true
 LobbyPlatform.Name = "LobbyPlatform"
 LobbyPlatform.Transparency = 1
 
-HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 
 --UI
 local ScreenGui = Instance.new("ScreenGui")
@@ -423,11 +426,7 @@ end)
 consolecreate("DEBUG")
 local function debug_print(...)
 	last_print = ...
-	-- Optimization: Disabled spammy prints
-	-- print("[" .. player.Name .. "] " .. ...)
-	-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
-	
-	-- Only print important messages or throttle them
+	-- Spam filter
 	if string.find(..., "Status:") or string.find(..., "Collected") then
 		consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 	end
@@ -510,22 +509,26 @@ local function CPUSaversIGMA()
 	end
 
 
+	-- OPTIMIZATION FIX: Reverted to Original Logic (Does not delete map), just optimized
 	local function WorkspaceCleanerABitIDK(child)
-		task.wait(0.5)
-		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
+		local name = child.Name
+		-- Only delete the specific things the old script did
+		if name == "ThrowingKnife" or name == "Firefly" or name == "Footsteps" then
+			task.wait() -- Tiny wait to ensure existence
 			child:Destroy()
 			return
 		end
-		if child:FindFirstChild("HumanoidRootPart") then
-			character = player.Character or player.CharacterAdded:Wait()
-		end
-		if
-			child:IsA("Model")
-			and child:FindFirstChild("HumanoidRootPart")
-			and child.Name ~= player.Name
-			and child ~= character
-		then
-			child:Destroy()
+		
+		if child:IsA("Model") then
+			-- Optimized check: Don't wait 0.5s for everything
+			if child:FindFirstChild("HumanoidRootPart") then
+				character = player.Character or player.CharacterAdded:Wait()
+				if child.Name ~= player.Name and child ~= character then
+					-- Delete other players/dummies to save FPS (Original Logic)
+					task.wait(0.1) 
+					child:Destroy()
+				end
+			end
 		end
 	end
 
@@ -607,7 +610,7 @@ local function CPUSaversIGMA()
 		end
 	end)
 	
-	-- OPTIMIZATION: Fix Memory Leak in GoodPeople table
+	-- FIX MEMORY LEAK: Remove players from table when they leave
 	Players.PlayerRemoving:Connect(function(plr)
 		if GoodPeople[plr.Name] then
 			GoodPeople[plr.Name] = nil
@@ -990,11 +993,11 @@ local function ProccessMap(child)
 	print("Map found: " .. child.Name)
 
 	local conn = nil
-	AllCoins = {}
+	-- Removed AllCoins insert here
 	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
 		if not coin or coin:GetAttribute("Collected") then return end
 
-		table.insert(AllCoins, coin)
+		-- table.insert(AllCoins, coin) -- REMOVED
 
 		task.wait(0.5)
 		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
@@ -1362,7 +1365,7 @@ local function FindCoin(isFirst)
 		return "Full"
 	end
 
-	if not HumanoidRootPart or not AllCoins then
+	if not HumanoidRootPart then
 		return nil
 	end
 
@@ -1453,7 +1456,7 @@ local function Start_Farm()
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
@@ -1476,9 +1479,10 @@ local function Start_Farm()
 			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
-            -- OPTIMIZATION: Clear Memory Tables
+            -- OPTIMIZATION: Clear Memory Tables AND Force Garbage Collection
 			visited = {} 
             CoinsFolder:ClearAllChildren()
+            collectgarbage("collect") -- OPTIMIZATION 3: Force GC
 		end
 
 		ClearMap()
@@ -1503,7 +1507,7 @@ local function Start_Farm()
 					debug_print("Player respawned!")
 					SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+						HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 						task.wait(0.1)
 					end
 					continue
@@ -1534,7 +1538,7 @@ local function Start_Farm()
 					debug_print("Player respawned after 'Full' reset!")
 					SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+						HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 						task.wait(0.1)
 					end
 					continue
@@ -1574,7 +1578,7 @@ local function Start_Farm()
 				debug_print("Player respawned!")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 					task.wait(0.1)
 				end
 				continue
@@ -1603,7 +1607,7 @@ local function Start_Farm()
 				debug_print("Player respawned after 'Full' reset!")
 				SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					HumanoidRootPart.CFrame = SafetyPart.CFrame + verticalOffset
 					task.wait(0.1)
 				end
 				continue
