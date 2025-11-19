@@ -67,7 +67,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Halloween Faster Optimized" .. "\n"
+local Version = "v2.4.5 Original + RAM Fix" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -105,7 +105,7 @@ local headers = {
 }
 
 local map = nil
-local AllCoins = {}
+-- REMOVED: local AllCoins = {} (Fix 1: Xóa bảng thừa thãi)
 local knife = nil
 local gun = nil
 local GoodPeople = {}
