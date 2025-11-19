@@ -226,27 +226,38 @@ local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 local OwnedWeapons = Data["Weapons"]["Owned"]
 local totalCoins = StartedCoins
 
-local SafetyPart = Instance.new("Part")
-SafetyPart.Parent = Workspace
-SafetyPart.Size = Vector3.new(100, 1, 100)
-SafetyPart.Position = Vector3.new(0, 0, 0)
-SafetyPart.Anchored = true
-SafetyPart.Name = "SafetyPart"
-SafetyPart.Transparency = 1
-
 local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
 
-local LobbyPlatform = Instance.new("Part")
-LobbyPlatform.Parent = Workspace
-LobbyPlatform.Size = Vector3.new(100, 1, 100)
-LobbyPlatform.Position = Vector3.new(-100, 136, 30)
-LobbyPlatform.Anchored = true
-LobbyPlatform.Name = "LobbyPlatform"
-LobbyPlatform.Transparency = 1
+-- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
+local WalkingPlatform = Instance.new("Part")
+WalkingPlatform.Name = "WalkingPlatform"
+WalkingPlatform.Size = Vector3.new(5, 1, 5) -- 5x5 Size
+WalkingPlatform.Anchored = true
+WalkingPlatform.Transparency = 1 -- Invisible
+WalkingPlatform.CanCollide = true
+WalkingPlatform.Parent = Workspace
 
-HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+-- Initialize Platform Height variable (Default Safe Height - 8)
+local currentPlatformY = 142 
+
+-- Loop to move platform horizontally (X/Z) but keep Y Fixed
+RunService.Heartbeat:Connect(function()
+	if HumanoidRootPart then
+		local rootPos = HumanoidRootPart.Position
+		
+		-- LOGIC: 
+		-- 1. Platform X/Z always tracks Player.
+		-- 2. Platform Y stays at `currentPlatformY` (which is set only on TP).
+		--    This forces the player to fall to the platform level if they are higher.
+		
+		WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
+	end
+end)
+
+-- Initial Teleport to safety height
+HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
 --UI
 local ScreenGui = Instance.new("ScreenGui")
@@ -509,7 +520,7 @@ local function CPUSaversIGMA()
 		end
 	end
 
-
+    -- [[ DELETE ALL MAP LOGIC ]]
 	local function WorkspaceCleanerABitIDK(child)
 		task.wait(0.5)
 		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
@@ -519,13 +530,18 @@ local function CPUSaversIGMA()
 		if child:FindFirstChild("HumanoidRootPart") then
 			character = player.Character or player.CharacterAdded:Wait()
 		end
-		if
-			child:IsA("Model")
-			and child:FindFirstChild("HumanoidRootPart")
-			and child.Name ~= player.Name
-			and child ~= character
-		then
-			child:Destroy()
+		
+        -- Protect Important Things
+        if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name then
+            return
+        end
+
+        -- Destroy Map Parts
+		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+             -- Keep CoinContainers if found inside map (handled by ProcessMap usually, but if we delete map, container goes too)
+             -- Assuming coins are extracted to CoinsFolder by ProccessMap which runs on ChildAdded
+             -- We delay destroy slightly to let scripts grab coins if needed, or just nuke it
+             pcall(function() child:Destroy() end)
 		end
 	end
 
@@ -1053,10 +1069,16 @@ local function TeleportToCoin(coin)
 
 	if directionVector.Magnitude < 0.1 then
 		HumanoidRootPart.CFrame = CFrame.new(pos)
+        -- [[ PLATFORM SNAP UPDATE ]] --
+        currentPlatformY = pos.Y - 8
+        WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 	else
 		local directionUnit = directionVector.Unit
 		local lookAtPos = pos + (directionUnit * 5)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
+        -- [[ PLATFORM SNAP UPDATE ]] --
+        currentPlatformY = pos.Y - 8
+        WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 	end
 
 	local startTime = tick()
@@ -1448,12 +1470,17 @@ local function Start_Farm()
 			end
 			task.wait(0.5)
 			HumanoidRootPart, Humanoid = GetHumanoid()
-			SafetyPart.Position = Vector3.new(0, 100, 0)
+			-- SafetyPart.Position = Vector3.new(0, 100, 0) -- REMOVED
 			repeat
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+                    -- UPDATED: Keep player in safe sky position, platform will follow
+                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ PLATFORM SNAP UPDATE ]]
+                    currentPlatformY = 142 -- 150 - 8
+                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
@@ -1466,7 +1493,8 @@ local function Start_Farm()
 				HumanoidRootPart.Anchored = false
 				-- debug_print("Unanchored HumanoidRootPart.")
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
+                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					-- debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
 					task.wait(0.1)
 				end
@@ -1501,9 +1529,9 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
-					SafetyPart.Position = Vector3.new(0, 100, 0)
+					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) -- SafetyPart.CFrame + Vector3.new(0, 3, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1532,9 +1560,9 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned after 'Full' reset!")
-					SafetyPart.Position = Vector3.new(0, 100, 0)
+					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1572,9 +1600,9 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
-				SafetyPart.Position = Vector3.new(0, 100, 0)
+				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
@@ -1601,9 +1629,9 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
-				SafetyPart.Position = Vector3.new(0, 100, 0)
+				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
