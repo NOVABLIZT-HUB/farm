@@ -1458,8 +1458,12 @@ end
 local function TeleportWithConfirmation(teleportFunc, description)
 	local originalJobId = game.JobId
 	
-	-- Gọi teleport function
-	local teleportSuccess, teleportErr = pcall(teleportFunc)
+	-- Gọi teleport function với error handling tốt hơn
+	local teleportSuccess, teleportErr = pcall(function()
+		teleportFunc()
+		-- Đảm bảo teleport được gửi đi
+		task.wait(0.1)
+	end)
 	
 	if not teleportSuccess then
 		debug_print(description .. " - Lỗi khi gọi teleport: " .. tostring(teleportErr))
@@ -1470,10 +1474,10 @@ local function TeleportWithConfirmation(teleportFunc, description)
 	task.wait(0.5)
 	
 	-- Kiểm tra JobId thay đổi với nhiều lần check
-	for checkAttempt = 1, 40 do -- Check trong 8 giây (40 × 0.2s)
+	for checkAttempt = 1, 50 do -- Check trong 10 giây (50 × 0.2s)
 		task.wait(0.2)
 		
-		-- Check JobId thay đổi
+		-- Check JobId thay đổi (kiểm tra đầu tiên)
 		if game.JobId ~= originalJobId then
 			debug_print("✓ " .. description .. " - Teleport thành công! JobId: " .. originalJobId .. " → " .. game.JobId)
 			return true
@@ -1485,7 +1489,7 @@ local function TeleportWithConfirmation(teleportFunc, description)
 			if loadingGui then
 				debug_print(description .. " - Phát hiện LoadingGui, đang teleport...")
 				-- Đợi thêm để teleport hoàn tất
-				for i = 1, 30 do
+				for i = 1, 40 do
 					task.wait(0.2)
 					if game.JobId ~= originalJobId then
 						debug_print("✓ " .. description .. " - Teleport thành công sau khi phát hiện LoadingGui!")
@@ -1499,7 +1503,7 @@ local function TeleportWithConfirmation(teleportFunc, description)
 		-- Check if player character is gone (might be teleporting)
 		if player and not player.Character then
 			debug_print(description .. " - Character disappeared, might be teleporting...")
-			for i = 1, 30 do
+			for i = 1, 40 do
 				task.wait(0.2)
 				if game.JobId ~= originalJobId then
 					debug_print("✓ " .. description .. " - Teleport thành công sau khi character disappeared!")
@@ -1510,7 +1514,50 @@ local function TeleportWithConfirmation(teleportFunc, description)
 		end
 	end
 	
-	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 8 giây")
+	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 10 giây")
+	return false
+end
+
+-- Hàm teleport đơn giản và chắc chắn hơn
+local function SimpleTeleport(jobId, description)
+	if not jobId then
+		return false
+	end
+	
+	local originalJobId = game.JobId
+	
+	-- Thử nhiều cách teleport
+	local methods = {
+		function()
+			TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+		end,
+		function()
+			TeleportService:TeleportAsync(PlaceId, {player}, nil, jobId)
+		end,
+		function()
+			-- Fallback: teleport trực tiếp
+			TeleportService:Teleport(PlaceId, player)
+		end
+	}
+	
+	for methodIndex, method in ipairs(methods) do
+		local success, err = pcall(method)
+		if success then
+			debug_print(description .. " - Đã gọi teleport method " .. methodIndex)
+			
+			-- Đợi và kiểm tra
+			for i = 1, 50 do
+				task.wait(0.2)
+				if game.JobId ~= originalJobId then
+					debug_print("✓ " .. description .. " - Teleport thành công với method " .. methodIndex .. "! JobId: " .. originalJobId .. " → " .. game.JobId)
+					return true
+				end
+			end
+		else
+			debug_print(description .. " - Method " .. methodIndex .. " failed: " .. tostring(err))
+		end
+	end
+	
 	return false
 end
 
@@ -1564,9 +1611,16 @@ local function OptimizedServerHop(reason)
 			debug_print("Method 1: Tìm thấy " .. #sameRegionServers .. " server cùng region (" .. DetectPlayerRegion() .. "), thử từ ít player nhất...")
 			for i = 1, math.min(20, #sameRegionServers) do
 				local targetServer = sameRegionServers[i]
-				local success = TeleportWithAutoRetry(function()
-					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Method 1 (Same Region " .. i .. "/20): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 3)
+				
+				-- Thử với SimpleTeleport trước (đơn giản và chắc chắn hơn)
+				local success = SimpleTeleport(targetServer.jobId, "Method 1 (Same Region " .. i .. "/20): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
+				
+				if not success then
+					-- Fallback: thử với TeleportWithAutoRetry
+					success = TeleportWithAutoRetry(function()
+						TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
+					end, "Method 1 Retry (Same Region " .. i .. "/20)", 2)
+				end
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server cùng region (" .. targetServer.playing .. " players)")
@@ -1696,9 +1750,16 @@ local function OptimizedServerHop(reason)
 			debug_print("Retry Method 1: Tìm thấy " .. #sameRegionServers .. " server cùng region (" .. DetectPlayerRegion() .. ")")
 			for i = 1, math.min(25, #sameRegionServers) do
 				local targetServer = sameRegionServers[i]
-				local success = TeleportWithAutoRetry(function()
-					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Retry Method 1 (Same Region " .. i .. "/25): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 5)
+				
+				-- Thử với SimpleTeleport trước
+				local success = SimpleTeleport(targetServer.jobId, "Retry Method 1 (Same Region " .. i .. "/25): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
+				
+				if not success then
+					-- Fallback: thử với TeleportWithAutoRetry
+					success = TeleportWithAutoRetry(function()
+						TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
+					end, "Retry Method 1 Retry (Same Region " .. i .. "/25)", 5)
+				end
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server cùng region (" .. targetServer.playing .. " players)")
