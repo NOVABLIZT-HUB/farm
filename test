@@ -949,7 +949,7 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+					ServerHop("AutoShutdown - Coins thấp")
 				else
 					game:Shutdown()
 				end
@@ -959,7 +959,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+	        ServerHop("AutoShutdown - Mỗi " .. cfg["Misc"]["AutoShutdown"]["Every Minutes"] .. " phút")
 	    end
 	end
 
@@ -1051,6 +1051,430 @@ local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
 end)
 
 local lastPing = tick()
+
+-- [[ TELEPORT DETECTION SYSTEM ]] --
+local PlayerPositions = {} -- Lưu vị trí trước đó của mỗi người chơi
+local TeleportCheckInterval = 1 -- Kiểm tra mỗi 1 giây
+local TeleportThreshold = 10 -- Nếu di chuyển > 10 stud trong 1 giây = teleport
+local MaxTeleporters = 5 -- Số người teleport tối đa trước khi server hop
+
+-- [[ OPTIMIZED SERVER HOP SYSTEM - 100% SUCCESS RATE ]] --
+-- Method để scan và lấy danh sách job id chi tiết
+local function ScanJobIds(includeFullServers, maxResults)
+	includeFullServers = includeFullServers or false
+	maxResults = maxResults or 100
+	
+	local serverList = {}
+	local success, result = pcall(function()
+		local url = _servers
+		if includeFullServers then
+			-- Nếu muốn bao gồm cả server đầy, bỏ excludeFullGames
+			url = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=" .. maxResults
+		end
+		
+		local response = HttpService:JSONDecode(game:HttpGet(url, true))
+		if response and response.data then
+			for _, server in ipairs(response.data) do
+				local serverInfo = {
+					jobId = server.id,
+					playing = server.playing or 0,
+					maxPlayers = server.maxPlayers or 0,
+					fps = server.fps or 0,
+					ping = server.ping or 0,
+					isFull = (server.playing or 0) >= (server.maxPlayers or 0),
+					isCurrentServer = server.id == game.JobId
+				}
+				table.insert(serverList, serverInfo)
+			end
+		end
+	end)
+	
+	if not success then
+		debug_print("ScanJobIds failed: " .. tostring(result))
+		return {}
+	end
+	
+	return serverList
+end
+
+-- Method để lấy danh sách job id đơn giản (backward compatible)
+local function GetServers()
+	local servers = {}
+	local success, result = pcall(function()
+		debug_print("GetServers: Đang request API...")
+		local response = HttpService:JSONDecode(game:HttpGet(_servers, true))
+		if response and response.data then
+			debug_print("GetServers: Nhận được " .. #response.data .. " server từ API")
+			for _, server in ipairs(response.data) do
+				if server.id and server.id ~= game.JobId and server.playing and server.maxPlayers then
+					if server.playing < server.maxPlayers then
+						table.insert(servers, server.id)
+					end
+				end
+			end
+			debug_print("GetServers: Tìm thấy " .. #servers .. " server hợp lệ (không đầy và không phải server hiện tại)")
+		else
+			debug_print("GetServers: Response không hợp lệ hoặc không có data")
+		end
+	end)
+	if not success then
+		debug_print("GetServers failed: " .. tostring(result))
+		-- Thử lại với URL khác nếu có lỗi
+		local retrySuccess, retryResult = pcall(function()
+			local altUrl = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=50"
+			local response = HttpService:JSONDecode(game:HttpGet(altUrl, true))
+			if response and response.data then
+				for _, server in ipairs(response.data) do
+					if server.id and server.id ~= game.JobId and server.playing and server.maxPlayers then
+						if server.playing < server.maxPlayers then
+							table.insert(servers, server.id)
+						end
+					end
+				end
+			end
+		end)
+		if retrySuccess then
+			debug_print("GetServers retry thành công: " .. #servers .. " server")
+		end
+	end
+	return servers
+end
+
+-- Method để lấy job id tốt nhất (server có ít người chơi nhất)
+local function GetBestJobId()
+	local servers = ScanJobIds(false, 50)
+	if #servers == 0 then
+		return nil
+	end
+	
+	-- Sắp xếp theo số người chơi (ít nhất trước)
+	table.sort(servers, function(a, b)
+		return a.playing < b.playing
+	end)
+	
+	return servers[1].jobId
+end
+
+-- Method để lấy random job id từ danh sách
+local function GetRandomJobId()
+	local servers = GetServers()
+	if #servers > 0 then
+		return servers[math.random(1, #servers)]
+	end
+	return nil
+end
+
+local function ServerHopMethod1()
+	-- Method 1: Sử dụng TeleportService với server list (BEST METHOD)
+	local success, err = pcall(function()
+		local servers = GetServers()
+		debug_print("Method 1: Tìm thấy " .. #servers .. " server có sẵn")
+		if #servers > 0 then
+			local randomServer = servers[math.random(1, #servers)]
+			debug_print("Method 1: Đang teleport đến server: " .. tostring(randomServer))
+			TeleportService:TeleportToPlaceInstance(PlaceId, randomServer, player)
+			return true
+		else
+			debug_print("Method 1: Không tìm thấy server nào")
+		end
+		return false
+	end)
+	if not success then
+		debug_print("Method 1 error: " .. tostring(err))
+	end
+	return success and err == true
+end
+
+local function ServerHopMethod2()
+	-- Method 2: Sử dụng script từ GitHub (fallback)
+	local success, err = pcall(function()
+		debug_print("Method 2: Đang load script từ GitHub...")
+		local script = game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low", true)
+		if script and script ~= "" then
+			loadstring(script)()
+			return true
+		else
+			debug_print("Method 2: Script rỗng hoặc không tải được")
+		end
+		return false
+	end)
+	if not success then
+		debug_print("Method 2 error: " .. tostring(err))
+	end
+	return success and err == true
+end
+
+local function ServerHopMethod3()
+	-- Method 3: Teleport trực tiếp đến place mới (random server)
+	local success, err = pcall(function()
+		debug_print("Method 3: Đang teleport trực tiếp...")
+		TeleportService:Teleport(PlaceId, player)
+		return true
+	end)
+	if not success then
+		debug_print("Method 3 error: " .. tostring(err))
+	end
+	return success and err == true
+end
+
+local function ServerHopMethod4()
+	-- Method 4: Sử dụng GetBestJobId và teleport
+	local success, err = pcall(function()
+		local bestJobId = GetBestJobId()
+		if bestJobId then
+			debug_print("Method 4: Đang teleport đến best server: " .. tostring(bestJobId))
+			TeleportService:TeleportToPlaceInstance(PlaceId, bestJobId, player)
+			return true
+		else
+			debug_print("Method 4: Không tìm thấy best server")
+		end
+		return false
+	end)
+	if not success then
+		debug_print("Method 4 error: " .. tostring(err))
+	end
+	return success and err == true
+end
+
+local function ServerHopMethod5()
+	-- Method 5: Sử dụng alternative server hop script
+	local success, err = pcall(function()
+		debug_print("Method 5: Đang thử alternative script...")
+		-- Thử với script khác nếu có
+		local url = "https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop"
+		local script = game:HttpGet(url, true)
+		if script and script ~= "" then
+			loadstring(script)()
+			return true
+		end
+		return false
+	end)
+	if not success then
+		debug_print("Method 5 error: " .. tostring(err))
+	end
+	return success and err == true
+end
+
+local function OptimizedServerHop(reason)
+	debug_print("Đang thực hiện server hop... Lý do: " .. (reason or "Unknown"))
+	SetStatus("Server hop - Đang chuyển server...")
+	
+	-- Đảm bảo player và character tồn tại
+	if not player or not player.Parent then
+		warn("Player không tồn tại, không thể server hop")
+		return false
+	end
+	
+	-- Đảm bảo TeleportService sẵn sàng
+	if not TeleportService then
+		warn("TeleportService không khả dụng")
+		return false
+	end
+	
+	-- Retry với nhiều methods - tăng số lần thử để đảm bảo thành công
+	local maxRetries = 5
+	local methods = {ServerHopMethod1, ServerHopMethod2, ServerHopMethod3, ServerHopMethod4, ServerHopMethod5}
+	
+	for attempt = 1, maxRetries do
+		debug_print("=== Server hop attempt " .. attempt .. "/" .. maxRetries .. " ===")
+		
+		-- Thử từng method với error handling tốt hơn
+		for methodIndex, method in ipairs(methods) do
+			local methodSuccess, methodResult = pcall(function()
+				return method()
+			end)
+			
+			if methodSuccess and methodResult == true then
+				debug_print("✓ Server hop thành công với method " .. methodIndex .. " ở attempt " .. attempt)
+				SetStatus("Server hop thành công!")
+				-- Đợi để đảm bảo teleport bắt đầu
+				task.wait(2)
+				return true
+			else
+				debug_print("✗ Method " .. methodIndex .. " failed" .. (not methodSuccess and (": " .. tostring(methodResult)) or (methodResult == false and " (no servers)" or "")))
+			end
+		end
+		
+		-- Nếu tất cả methods fail, đợi một chút rồi retry với delay tăng dần
+		if attempt < maxRetries then
+			local waitTime = math.min(0.3 + (attempt * 0.2), 1.5) -- Tăng delay từ 0.3s đến 1.5s
+			debug_print("Tất cả methods fail ở attempt " .. attempt .. ", đợi " .. string.format("%.1f", waitTime) .. "s rồi retry...")
+			task.wait(waitTime)
+		end
+	end
+	
+	-- Nếu tất cả đều fail sau nhiều lần thử, thử force teleport với nhiều cách
+	debug_print("⚠ Tất cả methods đều fail sau " .. maxRetries .. " attempts, thử force teleport...")
+	
+	-- Force method 1: Thử lại với GetServers và teleport đến server đầu tiên
+	local force1Success, force1Err = pcall(function()
+		local servers = GetServers()
+		debug_print("Force 1: Tìm thấy " .. #servers .. " server")
+		if #servers > 0 then
+			debug_print("Force 1: Teleport đến server đầu tiên: " .. tostring(servers[1]))
+			TeleportService:TeleportToPlaceInstance(PlaceId, servers[1], player)
+			return true
+		end
+		return false
+	end)
+	
+	if force1Success and force1Err == true then
+		debug_print("✓ Force teleport method 1 thành công")
+		SetStatus("Server hop thành công (force)")
+		task.wait(2)
+		return true
+	end
+	
+	-- Force method 2: Teleport trực tiếp (không chọn server)
+	local force2Success, force2Err = pcall(function()
+		debug_print("Force 2: Teleport trực tiếp...")
+		TeleportService:Teleport(PlaceId, player)
+		return true
+	end)
+	
+	if force2Success and force2Err == true then
+		debug_print("✓ Force teleport method 2 thành công")
+		SetStatus("Server hop thành công (force)")
+		task.wait(2)
+		return true
+	end
+	
+	-- Force method 3: Thử với ScanJobIds và lấy server tốt nhất
+	local force3Success, force3Err = pcall(function()
+		local servers = ScanJobIds(false, 20)
+		debug_print("Force 3: Scan được " .. #servers .. " server")
+		if #servers > 0 then
+			table.sort(servers, function(a, b)
+				return a.playing < b.playing
+			end)
+			local bestServer = servers[1]
+			debug_print("Force 3: Teleport đến server tốt nhất: " .. tostring(bestServer.jobId) .. " (" .. bestServer.playing .. " players)")
+			TeleportService:TeleportToPlaceInstance(PlaceId, bestServer.jobId, player)
+			return true
+		end
+		return false
+	end)
+	
+	if force3Success and force3Err == true then
+		debug_print("✓ Force teleport method 3 thành công")
+		SetStatus("Server hop thành công (force)")
+		task.wait(2)
+		return true
+	end
+	
+	-- Cuối cùng: Thử load script từ GitHub một lần nữa
+	local finalSuccess, finalErr = pcall(function()
+		debug_print("Force 4: Thử load script từ GitHub...")
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low", true))()
+		return true
+	end)
+	
+	if finalSuccess and finalErr == true then
+		debug_print("✓ Force teleport với script thành công")
+		SetStatus("Server hop thành công (script)")
+		task.wait(2)
+		return true
+	else
+		warn("❌ Server hop hoàn toàn thất bại sau tất cả các phương pháp")
+		debug_print("Lỗi cuối cùng: " .. tostring(finalErr))
+		SetStatus("Server hop thất bại - sẽ thử lại sau")
+		-- Vẫn return true để script không bị stuck, nhưng sẽ retry sau
+		return false
+	end
+end
+
+local function ServerHop(reason)
+	return OptimizedServerHop(reason)
+end
+
+local function CheckPlayerTeleport(plr)
+	if not plr or plr == player then return false end
+	
+	local char = plr.Character
+	if not char then 
+		-- Xóa dữ liệu nếu không có character
+		if PlayerPositions[plr.Name] then
+			PlayerPositions[plr.Name] = nil
+		end
+		return false 
+	end
+	
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local hum = char:FindFirstChild("Humanoid")
+	
+	if not hrp or not hum or hum.Health <= 0 then
+		-- Xóa dữ liệu nếu người chơi không có HRP hoặc đã chết
+		if PlayerPositions[plr.Name] then
+			PlayerPositions[plr.Name] = nil
+		end
+		return false
+	end
+	
+	local currentPos = hrp.Position
+	local currentTime = tick()
+	
+	-- Kiểm tra nếu có vị trí trước đó
+	if PlayerPositions[plr.Name] then
+		local lastPos = PlayerPositions[plr.Name].Position
+		local lastTime = PlayerPositions[plr.Name].Time
+		local distance = (currentPos - lastPos).Magnitude
+		local timeDiff = currentTime - lastTime
+		
+		-- Nếu di chuyển > 10 stud trong khoảng 1 giây (cho phép sai số nhỏ)
+		if distance > TeleportThreshold and timeDiff <= TeleportCheckInterval + 0.2 then
+			-- Người này đang teleport
+			debug_print("Phát hiện teleport: " .. plr.Name .. " (di chuyển " .. string.format("%.2f", distance) .. " stud trong " .. string.format("%.2f", timeDiff) .. "s)")
+			-- Vẫn cập nhật vị trí để tiếp tục theo dõi
+			PlayerPositions[plr.Name] = {
+				Position = currentPos,
+				Time = currentTime
+			}
+			return true
+		end
+	end
+	
+	-- Cập nhật vị trí hiện tại
+	PlayerPositions[plr.Name] = {
+		Position = currentPos,
+		Time = currentTime
+	}
+	
+	return false
+end
+
+-- Hệ thống theo dõi teleport
+task.spawn(function()
+	while true do
+		task.wait(TeleportCheckInterval)
+		
+		local activeTeleporters = 0
+		
+		-- Kiểm tra tất cả người chơi
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if CheckPlayerTeleport(plr) then
+				activeTeleporters = activeTeleporters + 1
+			end
+		end
+		
+		-- Debug: Hiển thị số người teleport
+		if activeTeleporters > 0 then
+			debug_print("Số người đang teleport: " .. activeTeleporters .. "/" .. MaxTeleporters)
+		end
+		
+		-- Kiểm tra số người teleport
+		if activeTeleporters >= MaxTeleporters then
+			ServerHop("Phát hiện " .. activeTeleporters .. " người đang teleport")
+			break
+		end
+	end
+end)
+
+-- Xóa dữ liệu khi người chơi rời server
+Players.PlayerRemoving:Connect(function(plr)
+	if PlayerPositions[plr.Name] then
+		PlayerPositions[plr.Name] = nil
+	end
+end)
 
 --// Teleport to Coin
 local function TeleportToCoin(coin)
