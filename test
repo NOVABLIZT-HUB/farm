@@ -1528,29 +1528,89 @@ local function CheckPlayerTeleport(plr)
 	return false
 end
 
--- Hệ thống theo dõi teleport
+-- Hệ thống theo dõi teleport - Chạy xuyên suốt
 task.spawn(function()
+	-- Khởi tạo vị trí cho tất cả player hiện tại
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
+			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				PlayerPositions[plr.Name] = {
+					Position = hrp.Position,
+					Time = tick()
+				}
+			end
+		end
+	end
+	
+	-- Tự động thêm player mới vào danh sách theo dõi
+	Players.PlayerAdded:Connect(function(plr)
+		if plr ~= player then
+			-- Đợi character load
+			plr.CharacterAdded:Connect(function(char)
+				task.wait(1) -- Đợi character hoàn toàn load
+				local hrp = char:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					PlayerPositions[plr.Name] = {
+						Position = hrp.Position,
+						Time = tick()
+					}
+					debug_print("Đã thêm player mới vào danh sách theo dõi: " .. plr.Name)
+				end
+			end)
+			
+			-- Nếu character đã có sẵn
+			if plr.Character then
+				local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					PlayerPositions[plr.Name] = {
+						Position = hrp.Position,
+						Time = tick()
+					}
+					debug_print("Đã thêm player vào danh sách theo dõi: " .. plr.Name)
+				end
+			end
+		end
+	end)
+	
+	-- Vòng lặp check xuyên suốt
 	while true do
 		task.wait(TeleportCheckInterval)
 		
 		local activeTeleporters = 0
 		
-		-- Kiểm tra tất cả người chơi
+		-- Kiểm tra tất cả người chơi (bao gồm cả player mới join)
 		for _, plr in ipairs(Players:GetPlayers()) do
-			if CheckPlayerTeleport(plr) then
-				activeTeleporters = activeTeleporters + 1
+			if plr ~= player then
+				-- Đảm bảo player mới được thêm vào danh sách nếu chưa có
+				if not PlayerPositions[plr.Name] and plr.Character then
+					local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then
+						PlayerPositions[plr.Name] = {
+							Position = hrp.Position,
+							Time = tick()
+						}
+					end
+				end
+				
+				-- Check teleport
+				if CheckPlayerTeleport(plr) then
+					activeTeleporters = activeTeleporters + 1
+				end
 			end
 		end
 		
 		-- Debug: Hiển thị số người teleport
 		if activeTeleporters > 0 then
-			debug_print("Số người đang teleport: " .. activeTeleporters .. "/" .. MaxTeleporters)
+			debug_print("Số người đang teleport: " .. activeTeleporters .. "/" .. MaxTeleporters .. " (Tổng player: " .. #Players:GetPlayers() .. ")")
 		end
 		
-		-- Kiểm tra số người teleport
+		-- Kiểm tra số người teleport (KHÔNG break, tiếp tục check)
 		if activeTeleporters >= MaxTeleporters then
+			debug_print("⚠ Phát hiện " .. activeTeleporters .. " người đang teleport! Đang server hop...")
 			ServerHop("Phát hiện " .. activeTeleporters .. " người đang teleport")
-			break
+			-- KHÔNG break - tiếp tục check sau khi hop
+			task.wait(5) -- Đợi một chút sau khi hop để tránh spam
 		end
 	end
 end)
@@ -1559,6 +1619,7 @@ end)
 Players.PlayerRemoving:Connect(function(plr)
 	if PlayerPositions[plr.Name] then
 		PlayerPositions[plr.Name] = nil
+		debug_print("Đã xóa player khỏi danh sách theo dõi: " .. plr.Name)
 	end
 end)
 
