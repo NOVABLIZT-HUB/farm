@@ -1140,26 +1140,51 @@ local function GetServers()
 	return servers
 end
 
+-- Method để lấy danh sách server ít player nhất (ưu tiên low player)
+local function GetLowPlayerServers(maxResults)
+	maxResults = maxResults or 50
+	local servers = ScanJobIds(false, 100) -- Scan nhiều server để có nhiều lựa chọn
+	
+	if #servers == 0 then
+		return {}
+	end
+	
+	-- Sắp xếp theo số người chơi (ít nhất trước), sau đó theo ping
+	table.sort(servers, function(a, b)
+		if a.playing ~= b.playing then
+			return a.playing < b.playing -- Ưu tiên ít player hơn
+		end
+		return (a.ping or 999) < (b.ping or 999) -- Nếu cùng số player, chọn ping thấp hơn
+	end)
+	
+	-- Lấy top N server ít player nhất
+	local result = {}
+	for i = 1, math.min(maxResults, #servers) do
+		table.insert(result, servers[i])
+	end
+	
+	return result
+end
+
 -- Method để lấy job id tốt nhất (server có ít người chơi nhất)
 local function GetBestJobId()
-	local servers = ScanJobIds(false, 50)
+	local servers = GetLowPlayerServers(1)
 	if #servers == 0 then
 		return nil
 	end
-	
-	-- Sắp xếp theo số người chơi (ít nhất trước)
-	table.sort(servers, function(a, b)
-		return a.playing < b.playing
-	end)
-	
 	return servers[1].jobId
 end
 
--- Method để lấy random job id từ danh sách
+-- Method để lấy random job id từ danh sách (ưu tiên low player)
 local function GetRandomJobId()
-	local servers = GetServers()
+	local servers = GetLowPlayerServers(20) -- Lấy top 20 server ít player nhất
 	if #servers > 0 then
-		return servers[math.random(1, #servers)]
+		-- Ưu tiên chọn từ top 5 server ít player nhất
+		local topServers = {}
+		for i = 1, math.min(5, #servers) do
+			table.insert(topServers, servers[i].jobId)
+		end
+		return topServers[math.random(1, #topServers)]
 	end
 	return nil
 end
@@ -1335,43 +1360,34 @@ local function OptimizedServerHop(reason)
 	end
 	
 	local originalJobId = game.JobId
-	local maxTotalAttempts = 20 -- Tổng số lần thử tối đa
+	local maxTotalAttempts = 30 -- Tăng số lần thử để đảm bảo 100%
 	
 	for totalAttempt = 1, maxTotalAttempts do
-		debug_print("=== Server hop attempt " .. totalAttempt .. "/" .. maxTotalAttempts .. " ===")
+		debug_print("=== Server hop attempt " .. totalAttempt .. "/" .. maxTotalAttempts .. " (Ưu tiên low player) ===")
 		
-		-- Method 1: Teleport với server list
-		local servers = GetServers()
-		if #servers > 0 then
-			for i = 1, math.min(5, #servers) do -- Thử 5 server đầu tiên
-				local targetServer = servers[math.random(1, #servers)]
+		-- Method 1: ƯU TIÊN - Teleport với low player servers (sắp xếp từ ít player nhất)
+		local lowPlayerServers = GetLowPlayerServers(20)
+		if #lowPlayerServers > 0 then
+			debug_print("Method 1: Tìm thấy " .. #lowPlayerServers .. " server ít player, thử từ ít nhất...")
+			for i = 1, math.min(10, #lowPlayerServers) do -- Thử top 10 server ít player nhất
+				local targetServer = lowPlayerServers[i]
 				local success = TeleportWithConfirmation(function()
-					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer, player)
-				end, "Method 1 (Server " .. i .. "/5): " .. tostring(targetServer))
+					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
+				end, "Method 1 (Low Player " .. i .. "/10): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players)")
 				
 				if success then
-					SetStatus("Server hop thành công! Đã vào server mới")
+					SetStatus("Server hop thành công! Đã vào server mới (" .. targetServer.playing .. " players)")
 					return true
 				end
 			end
 		end
 		
-		-- Method 2: Teleport trực tiếp (random server)
-		local success = TeleportWithConfirmation(function()
-			TeleportService:Teleport(PlaceId, player)
-		end, "Method 2: Teleport trực tiếp")
-		
-		if success then
-			SetStatus("Server hop thành công! Đã vào server mới")
-			return true
-		end
-		
-		-- Method 3: Sử dụng GetBestJobId
+		-- Method 2: Sử dụng GetBestJobId (server ít player nhất)
 		local bestJobId = GetBestJobId()
 		if bestJobId then
 			local success = TeleportWithConfirmation(function()
 				TeleportService:TeleportToPlaceInstance(PlaceId, bestJobId, player)
-			end, "Method 3: Best server " .. tostring(bestJobId))
+			end, "Method 2: Best low player server " .. tostring(bestJobId))
 			
 			if success then
 				SetStatus("Server hop thành công! Đã vào server mới")
@@ -1379,24 +1395,31 @@ local function OptimizedServerHop(reason)
 			end
 		end
 		
-		-- Method 4: Scan và chọn server tốt nhất
-		local scannedServers = ScanJobIds(false, 30)
-		if #scannedServers > 0 then
-			table.sort(scannedServers, function(a, b)
-				return a.playing < b.playing
-			end)
-			
-			for i = 1, math.min(3, #scannedServers) do
-				local targetServer = scannedServers[i]
+		-- Method 3: Teleport với GetServers (fallback, nhưng vẫn ưu tiên low player nếu có thể)
+		local servers = GetServers()
+		if #servers > 0 then
+			-- Thử với server list thông thường
+			for i = 1, math.min(5, #servers) do
+				local targetServer = servers[math.random(1, #servers)]
 				local success = TeleportWithConfirmation(function()
-					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Method 4 (Best " .. i .. "/3): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players)")
+					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer, player)
+				end, "Method 3 (Fallback " .. i .. "/5): " .. tostring(targetServer))
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server mới")
 					return true
 				end
 			end
+		end
+		
+		-- Method 4: Teleport trực tiếp (random server - last resort)
+		local success = TeleportWithConfirmation(function()
+			TeleportService:Teleport(PlaceId, player)
+		end, "Method 4: Teleport trực tiếp (random)")
+		
+		if success then
+			SetStatus("Server hop thành công! Đã vào server mới")
+			return true
 		end
 		
 		-- Method 5: Load script từ GitHub
@@ -1432,20 +1455,49 @@ local function OptimizedServerHop(reason)
 	warn("⚠ Chưa hop được sau " .. maxTotalAttempts .. " attempts, tiếp tục retry...")
 	SetStatus("Server hop - Đang retry...")
 	
-	-- Retry vô hạn cho đến khi thành công
+	-- Retry vô hạn cho đến khi thành công - ƯU TIÊN LOW PLAYER
 	local retryCount = 0
 	while true do
 		retryCount = retryCount + 1
-		debug_print("=== Retry attempt " .. retryCount .. " ===")
+		debug_print("=== Retry attempt " .. retryCount .. " (Ưu tiên low player) ===")
 		
-		-- Thử tất cả các methods lại
+		-- Retry Method 1: ƯU TIÊN - Low player servers
+		local lowPlayerServers = GetLowPlayerServers(30)
+		if #lowPlayerServers > 0 then
+			for i = 1, math.min(15, #lowPlayerServers) do
+				local targetServer = lowPlayerServers[i]
+				local success = TeleportWithConfirmation(function()
+					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
+				end, "Retry Method 1 (Low Player " .. i .. "/15): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players)")
+				
+				if success then
+					SetStatus("Server hop thành công! Đã vào server mới (" .. targetServer.playing .. " players)")
+					return true
+				end
+			end
+		end
+		
+		-- Retry Method 2: Best job ID
+		local bestJobId = GetBestJobId()
+		if bestJobId then
+			local success = TeleportWithConfirmation(function()
+				TeleportService:TeleportToPlaceInstance(PlaceId, bestJobId, player)
+			end, "Retry Method 2: Best low player server")
+			
+			if success then
+				SetStatus("Server hop thành công! Đã vào server mới")
+				return true
+			end
+		end
+		
+		-- Retry Method 3: GetServers fallback
 		local servers = GetServers()
 		if #servers > 0 then
 			for i = 1, math.min(10, #servers) do
 				local targetServer = servers[math.random(1, #servers)]
 				local success = TeleportWithConfirmation(function()
 					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer, player)
-				end, "Retry Method 1: " .. tostring(targetServer))
+				end, "Retry Method 3 (Fallback " .. i .. "/10): " .. tostring(targetServer))
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server mới")
@@ -1454,18 +1506,38 @@ local function OptimizedServerHop(reason)
 			end
 		end
 		
-		-- Thử teleport trực tiếp
+		-- Retry Method 4: Teleport trực tiếp (last resort)
 		local success = TeleportWithConfirmation(function()
 			TeleportService:Teleport(PlaceId, player)
-		end, "Retry Method 2: Teleport trực tiếp")
+		end, "Retry Method 4: Teleport trực tiếp")
 		
 		if success then
 			SetStatus("Server hop thành công! Đã vào server mới")
 			return true
 		end
 		
+		-- Retry Method 5: Load script từ GitHub
+		local scriptSuccess, scriptErr = pcall(function()
+			local script = game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low", true)
+			if script and script ~= "" then
+				loadstring(script)()
+				for i = 1, 20 do
+					task.wait(0.2)
+					if game.JobId ~= originalJobId then
+						return true
+					end
+				end
+			end
+			return false
+		end)
+		
+		if scriptSuccess and scriptErr == true then
+			SetStatus("Server hop thành công! Đã vào server mới")
+			return true
+		end
+		
 		-- Đợi trước khi retry tiếp
-		task.wait(1)
+		task.wait(0.5)
 	end
 end
 
