@@ -1058,6 +1058,84 @@ local TeleportCheckInterval = 1 -- Kiểm tra mỗi 1 giây
 local TeleportThreshold = 10 -- Nếu di chuyển > 10 stud trong 1 giây = teleport
 local MaxTeleporters = 5 -- Số người teleport tối đa trước khi server hop
 
+-- [[ REGION DETECTION ]] --
+local PlayerRegion = nil -- Region của account (detected via ping)
+
+-- Detect player's region based on current server ping
+local function DetectPlayerRegion()
+	if PlayerRegion then
+		return PlayerRegion
+	end
+	
+	-- Try to detect from current server
+	local currentServers = ScanJobIds(false, 50)
+	if #currentServers > 0 then
+		-- Find server with lowest ping (likely same region)
+		table.sort(currentServers, function(a, b)
+			return (a.ping or 999) < (b.ping or 999)
+		end)
+		
+		local bestServer = currentServers[1]
+		local ping = bestServer.ping or 999
+		
+		-- Determine region based on ping ranges
+		if ping < 50 then
+			PlayerRegion = "local" -- Very low ping = same country/region
+		elseif ping < 100 then
+			PlayerRegion = "nearby" -- Low ping = nearby region (SEA, etc)
+		elseif ping < 200 then
+			PlayerRegion = "asia" -- Medium ping = Asia region
+		elseif ping < 300 then
+			PlayerRegion = "europe" -- Higher ping = Europe
+		else
+			PlayerRegion = "americas" -- High ping = Americas
+		end
+		
+		debug_print("Detected player region: " .. PlayerRegion .. " (based on ping: " .. ping .. "ms)")
+		return PlayerRegion
+	end
+	
+	-- Default to nearby if can't detect
+	PlayerRegion = "nearby"
+	return PlayerRegion
+end
+
+-- Check if server is in same region as player
+local function IsSameRegion(serverPing, serverRegion)
+	local playerRegion = DetectPlayerRegion()
+	
+	-- If API provides region code, use it
+	if serverRegion then
+		local regionLower = tostring(serverRegion):lower()
+		if playerRegion == "local" or playerRegion == "nearby" then
+			return string.find(regionLower, "asia") or 
+			       string.find(regionLower, "vn") or 
+			       string.find(regionLower, "vietnam") or
+			       string.find(regionLower, "sea")
+		elseif playerRegion == "asia" then
+			return string.find(regionLower, "asia") or 
+			       string.find(regionLower, "sea")
+		elseif playerRegion == "europe" then
+			return string.find(regionLower, "europe") or 
+			       string.find(regionLower, "eu")
+		elseif playerRegion == "americas" then
+			return string.find(regionLower, "us") or 
+			       string.find(regionLower, "america")
+		end
+	end
+	
+	-- Fallback: use ping to determine
+	if playerRegion == "local" or playerRegion == "nearby" then
+		return serverPing < 100 -- Low ping = same/nearby region
+	elseif playerRegion == "asia" then
+		return serverPing < 200 -- Medium ping = Asia
+	elseif playerRegion == "europe" then
+		return serverPing < 300 -- Higher ping = Europe
+	else
+		return serverPing < 400 -- High ping = Americas
+	end
+end
+
 -- [[ OPTIMIZED SERVER HOP SYSTEM - 100% SUCCESS RATE ]] --
 -- Method để scan và lấy danh sách job id chi tiết
 local function ScanJobIds(includeFullServers, maxResults)
@@ -1076,18 +1154,10 @@ local function ScanJobIds(includeFullServers, maxResults)
 		if response and response.data then
 			for _, server in ipairs(response.data) do
 				local ping = server.ping or 999
-				-- Detect VN server: ping thấp (< 100ms thường là VN/SEA region)
-				-- Hoặc có thể check region code nếu API có
-				local isVN = false
-				if server.region then
-					-- Nếu API có region code
-					isVN = string.find(tostring(server.region):lower(), "vn") or 
-					       string.find(tostring(server.region):lower(), "vietnam") or
-					       string.find(tostring(server.region):lower(), "asia")
-				else
-					-- Detect qua ping: VN server thường có ping < 100ms
-					isVN = ping > 0 and ping < 100
-				end
+				local region = server.region or nil
+				
+				-- Detect if server is in same region as player
+				local isSameRegion = IsSameRegion(ping, region)
 				
 				local serverInfo = {
 					jobId = server.id,
@@ -1095,7 +1165,8 @@ local function ScanJobIds(includeFullServers, maxResults)
 					maxPlayers = server.maxPlayers or 0,
 					fps = server.fps or 0,
 					ping = ping,
-					isVN = isVN,
+					region = region,
+					isSameRegion = isSameRegion,
 					isFull = (server.playing or 0) >= (server.maxPlayers or 0),
 					isCurrentServer = server.id == game.JobId
 				}
@@ -1155,7 +1226,7 @@ local function GetServers()
 	return servers
 end
 
--- Method để lấy danh sách server ít player nhất (ưu tiên VN + low player)
+-- Method để lấy danh sách server ít player nhất (ưu tiên same region + low player)
 local function GetLowPlayerServers(maxResults)
 	maxResults = maxResults or 50
 	local servers = ScanJobIds(false, 100) -- Scan nhiều server để có nhiều lựa chọn
@@ -1164,11 +1235,14 @@ local function GetLowPlayerServers(maxResults)
 		return {}
 	end
 	
-	-- Sắp xếp: ƯU TIÊN VN SERVER, sau đó theo số player, cuối cùng theo ping
+	-- Detect player region first
+	DetectPlayerRegion()
+	
+	-- Sắp xếp: ƯU TIÊN SAME REGION, sau đó theo số player, cuối cùng theo ping
 	table.sort(servers, function(a, b)
-		-- Ưu tiên 1: VN server trước
-		if a.isVN ~= b.isVN then
-			return a.isVN == true -- VN server được ưu tiên
+		-- Ưu tiên 1: Same region server trước
+		if a.isSameRegion ~= b.isSameRegion then
+			return a.isSameRegion == true -- Same region được ưu tiên
 		end
 		
 		-- Ưu tiên 2: Số player ít hơn
@@ -1180,7 +1254,7 @@ local function GetLowPlayerServers(maxResults)
 		return (a.ping or 999) < (b.ping or 999)
 	end)
 	
-	-- Lấy top N server (ưu tiên VN + low player)
+	-- Lấy top N server (ưu tiên same region + low player)
 	local result = {}
 	for i = 1, math.min(maxResults, #servers) do
 		table.insert(result, servers[i])
@@ -1189,8 +1263,8 @@ local function GetLowPlayerServers(maxResults)
 	return result
 end
 
--- Method để lấy danh sách server VN ít player nhất
-local function GetVNServers(maxResults)
+-- Method để lấy danh sách server cùng region ít player nhất
+local function GetSameRegionServers(maxResults)
 	maxResults = maxResults or 30
 	local servers = ScanJobIds(false, 100)
 	
@@ -1198,26 +1272,29 @@ local function GetVNServers(maxResults)
 		return {}
 	end
 	
-	-- Lọc chỉ VN server
-	local vnServers = {}
+	-- Detect player region
+	DetectPlayerRegion()
+	
+	-- Lọc chỉ same region server
+	local sameRegionServers = {}
 	for _, server in ipairs(servers) do
-		if server.isVN then
-			table.insert(vnServers, server)
+		if server.isSameRegion then
+			table.insert(sameRegionServers, server)
 		end
 	end
 	
 	-- Sắp xếp theo số player (ít nhất trước), sau đó theo ping
-	table.sort(vnServers, function(a, b)
+	table.sort(sameRegionServers, function(a, b)
 		if a.playing ~= b.playing then
 			return a.playing < b.playing
 		end
 		return (a.ping or 999) < (b.ping or 999)
 	end)
 	
-	-- Lấy top N VN server
+	-- Lấy top N same region server
 	local result = {}
-	for i = 1, math.min(maxResults, #vnServers) do
-		table.insert(result, vnServers[i])
+	for i = 1, math.min(maxResults, #sameRegionServers) do
+		table.insert(result, sameRegionServers[i])
 	end
 	
 	return result
@@ -1380,6 +1457,8 @@ end
 -- Hàm teleport với xác nhận chắc chắn - chỉ return true khi JobId thực sự thay đổi
 local function TeleportWithConfirmation(teleportFunc, description)
 	local originalJobId = game.JobId
+	
+	-- Gọi teleport function
 	local teleportSuccess, teleportErr = pcall(teleportFunc)
 	
 	if not teleportSuccess then
@@ -1388,11 +1467,13 @@ local function TeleportWithConfirmation(teleportFunc, description)
 	end
 	
 	-- Đợi một chút để teleport bắt đầu
-	task.wait(0.3)
+	task.wait(0.5)
 	
-	-- Kiểm tra JobId thay đổi với nhiều lần check (tăng thời gian check)
-	for checkAttempt = 1, 30 do -- Check trong 6 giây (30 × 0.2s)
+	-- Kiểm tra JobId thay đổi với nhiều lần check
+	for checkAttempt = 1, 40 do -- Check trong 8 giây (40 × 0.2s)
 		task.wait(0.2)
+		
+		-- Check JobId thay đổi
 		if game.JobId ~= originalJobId then
 			debug_print("✓ " .. description .. " - Teleport thành công! JobId: " .. originalJobId .. " → " .. game.JobId)
 			return true
@@ -1404,18 +1485,32 @@ local function TeleportWithConfirmation(teleportFunc, description)
 			if loadingGui then
 				debug_print(description .. " - Phát hiện LoadingGui, đang teleport...")
 				-- Đợi thêm để teleport hoàn tất
-				for i = 1, 20 do
+				for i = 1, 30 do
 					task.wait(0.2)
 					if game.JobId ~= originalJobId then
 						debug_print("✓ " .. description .. " - Teleport thành công sau khi phát hiện LoadingGui!")
 						return true
 					end
 				end
+				break -- Exit outer loop if LoadingGui detected
 			end
+		end
+		
+		-- Check if player character is gone (might be teleporting)
+		if player and not player.Character then
+			debug_print(description .. " - Character disappeared, might be teleporting...")
+			for i = 1, 30 do
+				task.wait(0.2)
+				if game.JobId ~= originalJobId then
+					debug_print("✓ " .. description .. " - Teleport thành công sau khi character disappeared!")
+					return true
+				end
+			end
+			break
 		end
 	end
 	
-	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 6 giây")
+	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 8 giây")
 	return false
 end
 
@@ -1461,20 +1556,20 @@ local function OptimizedServerHop(reason)
 	local maxTotalAttempts = 50 -- Tăng số lần thử để đảm bảo 100%
 	
 	for totalAttempt = 1, maxTotalAttempts do
-		debug_print("=== Server hop attempt " .. totalAttempt .. "/" .. maxTotalAttempts .. " (Ưu tiên VN + low player) ===")
+		debug_print("=== Server hop attempt " .. totalAttempt .. "/" .. maxTotalAttempts .. " (Ưu tiên same region + low player) ===")
 		
-		-- Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất (với auto retry)
-		local vnServers = GetVNServers(20)
-		if #vnServers > 0 then
-			debug_print("Method 1: Tìm thấy " .. #vnServers .. " server VN, thử từ ít player nhất...")
-			for i = 1, math.min(15, #vnServers) do
-				local targetServer = vnServers[i]
+		-- Method 1: ƯU TIÊN NHẤT - Same region servers ít player nhất (với auto retry)
+		local sameRegionServers = GetSameRegionServers(25)
+		if #sameRegionServers > 0 then
+			debug_print("Method 1: Tìm thấy " .. #sameRegionServers .. " server cùng region (" .. DetectPlayerRegion() .. "), thử từ ít player nhất...")
+			for i = 1, math.min(20, #sameRegionServers) do
+				local targetServer = sameRegionServers[i]
 				local success = TeleportWithAutoRetry(function()
 					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Method 1 (VN Server " .. i .. "/15): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 2)
+				end, "Method 1 (Same Region " .. i .. "/20): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 3)
 				
 				if success then
-					SetStatus("Server hop thành công! Đã vào server VN (" .. targetServer.playing .. " players)")
+					SetStatus("Server hop thành công! Đã vào server cùng region (" .. targetServer.playing .. " players)")
 					return true
 				end
 			end
@@ -1595,18 +1690,18 @@ local function OptimizedServerHop(reason)
 		retryCount = retryCount + 1
 		debug_print("=== Retry attempt " .. retryCount .. " (Ưu tiên low player) ===")
 		
-		-- Retry Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất (với auto retry)
-		local vnServers = GetVNServers(25)
-		if #vnServers > 0 then
-			debug_print("Retry Method 1: Tìm thấy " .. #vnServers .. " server VN")
-			for i = 1, math.min(20, #vnServers) do
-				local targetServer = vnServers[i]
+		-- Retry Method 1: ƯU TIÊN NHẤT - Same region servers ít player nhất (với auto retry)
+		local sameRegionServers = GetSameRegionServers(30)
+		if #sameRegionServers > 0 then
+			debug_print("Retry Method 1: Tìm thấy " .. #sameRegionServers .. " server cùng region (" .. DetectPlayerRegion() .. ")")
+			for i = 1, math.min(25, #sameRegionServers) do
+				local targetServer = sameRegionServers[i]
 				local success = TeleportWithAutoRetry(function()
 					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Retry Method 1 (VN Server " .. i .. "/20): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 3)
+				end, "Retry Method 1 (Same Region " .. i .. "/25): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 5)
 				
 				if success then
-					SetStatus("Server hop thành công! Đã vào server VN (" .. targetServer.playing .. " players)")
+					SetStatus("Server hop thành công! Đã vào server cùng region (" .. targetServer.playing .. " players)")
 					return true
 				end
 			end
