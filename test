@@ -1387,16 +1387,57 @@ local function TeleportWithConfirmation(teleportFunc, description)
 		return false
 	end
 	
-	-- Kiểm tra JobId thay đổi với nhiều lần check
-	for checkAttempt = 1, 20 do -- Check trong 4 giây (20 × 0.2s)
+	-- Đợi một chút để teleport bắt đầu
+	task.wait(0.3)
+	
+	-- Kiểm tra JobId thay đổi với nhiều lần check (tăng thời gian check)
+	for checkAttempt = 1, 30 do -- Check trong 6 giây (30 × 0.2s)
 		task.wait(0.2)
 		if game.JobId ~= originalJobId then
 			debug_print("✓ " .. description .. " - Teleport thành công! JobId: " .. originalJobId .. " → " .. game.JobId)
 			return true
 		end
+		
+		-- Kiểm tra thêm: nếu player đang loading (có thể đang teleport)
+		if player and player.PlayerGui then
+			local loadingGui = player.PlayerGui:FindFirstChild("LoadingGui")
+			if loadingGui then
+				debug_print(description .. " - Phát hiện LoadingGui, đang teleport...")
+				-- Đợi thêm để teleport hoàn tất
+				for i = 1, 20 do
+					task.wait(0.2)
+					if game.JobId ~= originalJobId then
+						debug_print("✓ " .. description .. " - Teleport thành công sau khi phát hiện LoadingGui!")
+						return true
+					end
+				end
+			end
+		end
 	end
 	
-	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 4 giây")
+	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 6 giây")
+	return false
+end
+
+-- Hàm teleport với retry tự động - đảm bảo 100% thành công
+local function TeleportWithAutoRetry(teleportFunc, description, maxRetries)
+	maxRetries = maxRetries or 3
+	local originalJobId = game.JobId
+	
+	for retry = 1, maxRetries do
+		local success = TeleportWithConfirmation(teleportFunc, description .. " (Retry " .. retry .. "/" .. maxRetries .. ")")
+		
+		if success then
+			return true
+		end
+		
+		-- Nếu chưa thành công, đợi một chút rồi thử lại
+		if retry < maxRetries then
+			debug_print(description .. " - Chưa thành công, đợi 0.5s rồi retry...")
+			task.wait(0.5)
+		end
+	end
+	
 	return false
 end
 
@@ -1417,20 +1458,20 @@ local function OptimizedServerHop(reason)
 	end
 	
 	local originalJobId = game.JobId
-	local maxTotalAttempts = 30 -- Tăng số lần thử để đảm bảo 100%
+	local maxTotalAttempts = 50 -- Tăng số lần thử để đảm bảo 100%
 	
 	for totalAttempt = 1, maxTotalAttempts do
 		debug_print("=== Server hop attempt " .. totalAttempt .. "/" .. maxTotalAttempts .. " (Ưu tiên VN + low player) ===")
 		
-		-- Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất
-		local vnServers = GetVNServers(15)
+		-- Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất (với auto retry)
+		local vnServers = GetVNServers(20)
 		if #vnServers > 0 then
 			debug_print("Method 1: Tìm thấy " .. #vnServers .. " server VN, thử từ ít player nhất...")
-			for i = 1, math.min(10, #vnServers) do
+			for i = 1, math.min(15, #vnServers) do
 				local targetServer = vnServers[i]
-				local success = TeleportWithConfirmation(function()
+				local success = TeleportWithAutoRetry(function()
 					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Method 1 (VN Server " .. i .. "/10): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
+				end, "Method 1 (VN Server " .. i .. "/15): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 2)
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server VN (" .. targetServer.playing .. " players)")
@@ -1529,9 +1570,16 @@ local function OptimizedServerHop(reason)
 			return true
 		end
 		
+		-- Kiểm tra xem có đang teleport không (có thể đang trong quá trình)
+		if game.JobId ~= originalJobId then
+			debug_print("✓ Phát hiện JobId đã thay đổi sau các attempts!")
+			SetStatus("Server hop thành công! Đã vào server mới")
+			return true
+		end
+		
 		-- Nếu chưa thành công, đợi một chút rồi thử lại
 		if totalAttempt < maxTotalAttempts then
-			local waitTime = math.min(0.5 + (totalAttempt * 0.1), 2)
+			local waitTime = math.min(0.3 + (totalAttempt * 0.05), 1)
 			debug_print("Chưa hop được, đợi " .. string.format("%.1f", waitTime) .. "s rồi thử lại...")
 			task.wait(waitTime)
 		end
@@ -1547,15 +1595,15 @@ local function OptimizedServerHop(reason)
 		retryCount = retryCount + 1
 		debug_print("=== Retry attempt " .. retryCount .. " (Ưu tiên low player) ===")
 		
-		-- Retry Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất
-		local vnServers = GetVNServers(20)
+		-- Retry Method 1: ƯU TIÊN NHẤT - VN servers ít player nhất (với auto retry)
+		local vnServers = GetVNServers(25)
 		if #vnServers > 0 then
 			debug_print("Retry Method 1: Tìm thấy " .. #vnServers .. " server VN")
-			for i = 1, math.min(15, #vnServers) do
+			for i = 1, math.min(20, #vnServers) do
 				local targetServer = vnServers[i]
-				local success = TeleportWithConfirmation(function()
+				local success = TeleportWithAutoRetry(function()
 					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Retry Method 1 (VN Server " .. i .. "/15): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
+				end, "Retry Method 1 (VN Server " .. i .. "/20): " .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)", 3)
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server VN (" .. targetServer.playing .. " players)")
@@ -1652,8 +1700,8 @@ local function OptimizedServerHop(reason)
 			return true
 		end
 		
-		-- Đợi trước khi retry tiếp
-		task.wait(0.5)
+		-- Đợi trước khi retry tiếp (giảm delay để retry nhanh hơn)
+		task.wait(0.3)
 	end
 end
 
