@@ -1707,56 +1707,76 @@ local function OptimizedServerHop(reason)
 		debug_print("Không tìm thấy server nào có 1-5 players")
 	end
 	
-	-- Nếu không tìm thấy server 1-5 players hoặc đã thử hết, retry vô hạn
-	warn("⚠ Chưa hop được, tiếp tục retry...")
-	SetStatus("Server hop - Đang retry scan...")
+	-- Nếu không tìm thấy server 1-5 players hoặc đã thử hết, retry vô hạn với scan lại
+	warn("⚠ Chưa hop được, tiếp tục retry và scan lại...")
+	SetStatus("Server hop - Đang retry scan và thử join lại...")
 	
 	local retryCount = 0
+	local consecutiveNoServerCount = 0 -- Đếm số lần liên tiếp không tìm thấy server
+	
 	while true do
 		retryCount = retryCount + 1
 		debug_print("=== Retry attempt " .. retryCount .. " - Scan lại job id có 1-5 players ===")
 		
-		-- Scan lại job id có 1-5 players
+		-- Scan lại job id có 1-5 players (mỗi lần retry đều scan lại để có danh sách mới nhất)
 		local servers1To5 = GetServersWith1To5Players(100)
 		
 		if #servers1To5 > 0 then
-			debug_print("Retry: Tìm thấy " .. #servers1To5 .. " server có 1-5 players")
+			consecutiveNoServerCount = 0 -- Reset counter khi tìm thấy server
+			debug_print("Retry " .. retryCount .. ": Tìm thấy " .. #servers1To5 .. " server có 1-5 players, đang thử join từng server...")
+			SetStatus("Server hop - Retry " .. retryCount .. ": Tìm thấy " .. #servers1To5 .. " server, đang thử join...")
 			
-			-- Thử join từng job id
+			-- Thử join từng job id theo thứ tự ưu tiên (4 > 5 > 3 > 2 > 1)
 			for i = 1, #servers1To5 do
 				local targetServer = servers1To5[i]
-				debug_print("Retry: Thử join server " .. i .. "/" .. #servers1To5 .. ": JobId=" .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players)")
+				debug_print("Retry " .. retryCount .. ": Thử join server " .. i .. "/" .. #servers1To5 .. ": JobId=" .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
 				
-				local success = SimpleTeleport(targetServer.jobId, "Retry Server " .. i .. "/" .. #servers1To5 .. " (" .. targetServer.playing .. " players)")
+				-- Thử với SimpleTeleport
+				local success = SimpleTeleport(targetServer.jobId, "Retry " .. retryCount .. " Server " .. i .. "/" .. #servers1To5 .. " (" .. targetServer.playing .. " players)")
 				
 				if not success then
+					-- Fallback: thử với TeleportWithAutoRetry
 					success = TeleportWithAutoRetry(function()
 						TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-					end, "Retry Server " .. i .. "/" .. #servers1To5 .. " Retry", 3)
+					end, "Retry " .. retryCount .. " Server " .. i .. "/" .. #servers1To5 .. " Retry", 3)
 				end
 				
 				if success then
 					SetStatus("Server hop thành công! Đã vào server (" .. targetServer.playing .. " players)")
-					debug_print("✓ Thành công join server " .. targetServer.jobId .. " với " .. targetServer.playing .. " players")
+					debug_print("✓ Thành công join server " .. targetServer.jobId .. " với " .. targetServer.playing .. " players sau " .. retryCount .. " lần retry")
 					return true
 				else
 					debug_print("✗ Không thể join server " .. targetServer.jobId .. ", thử server tiếp theo...")
-					task.wait(0.3)
+					task.wait(0.3) -- Đợi một chút trước khi thử server tiếp theo
 				end
 			end
+			
+			debug_print("Retry " .. retryCount .. ": Đã thử hết " .. #servers1To5 .. " server nhưng chưa join được, sẽ scan lại...")
 		else
-			debug_print("Retry: Không tìm thấy server nào có 1-5 players")
+			consecutiveNoServerCount = consecutiveNoServerCount + 1
+			debug_print("Retry " .. retryCount .. ": Không tìm thấy server nào có 1-5 players (lần liên tiếp: " .. consecutiveNoServerCount .. ")")
+			SetStatus("Server hop - Retry " .. retryCount .. ": Không tìm thấy server, đang scan lại...")
+			
+			-- Nếu nhiều lần liên tiếp không tìm thấy server, tăng delay
+			if consecutiveNoServerCount >= 5 then
+				debug_print("Đã " .. consecutiveNoServerCount .. " lần liên tiếp không tìm thấy server, tăng delay scan...")
+				task.wait(2) -- Đợi lâu hơn trước khi scan lại
+			end
 		end
 		
-		-- Kiểm tra xem có đang teleport không
+		-- Kiểm tra xem có đang teleport không (có thể đã thành công nhưng chưa phát hiện)
 		if game.JobId ~= originalJobId then
-			debug_print("✓ Phát hiện JobId đã thay đổi!")
+			debug_print("✓ Phát hiện JobId đã thay đổi từ " .. originalJobId .. " sang " .. game.JobId .. "!")
 			SetStatus("Server hop thành công! Đã vào server mới")
 			return true
 		end
 		
-		-- Đợi trước khi retry tiếp
-		task.wait(0.5)
+		-- Đợi trước khi retry và scan lại (delay ngắn nếu đã tìm thấy server trước đó)
+		if consecutiveNoServerCount == 0 then
+			task.wait(0.5) -- Delay ngắn nếu vừa tìm thấy server
+		else
+			task.wait(1) -- Delay dài hơn nếu không tìm thấy server
+		end
 	end
 end
 
