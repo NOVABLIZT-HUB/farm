@@ -46,13 +46,6 @@ local Default_Config = {
 			["Every Minutes"] = 0 -- Every x minutes force
         },
 
-		["AutoHopOnFarmers"] = {
-			["Enabled"] = true,
-			["MinFarmers"] = 4, -- Số lượng farmer tối thiểu để hop
-			["TeleportThreshold"] = 10, -- Khoảng cách tối thiểu để coi là teleport (studs)
-			["CheckInterval"] = 60 -- Thời gian giữa các lần check (giây) - 1 phút
-		},
-
 	}
 }
 
@@ -118,9 +111,18 @@ local gun = nil
 local GoodPeople = {}
 local visited = {}
 
--- Farmer Detection System
+-- Server Hop System với 4 players
+local ServerHopData = {
+	JobIds = {}, -- Lưu 3 job IDs có 4 players
+	LastFetchTime = 0, -- Thời gian lần cuối lấy job IDs
+	HopCount = 0, -- Số lần đã hop
+	MaxHops = 3, -- Tối đa 3 lần hop trước khi chờ
+	WaitTime = 300 -- 5 phút = 300 giây
+}
+
+-- Player Teleport Detection System
 local PlayerPositions = {} -- Lưu vị trí trước đó của players
-local FarmerCount = 0
+local TeleportThreshold = 50 -- Khoảng cách tối thiểu để coi là teleport (studs)
 
 
 repeat
@@ -288,7 +290,6 @@ local CurrentCoinsLabel = Instance.new("TextLabel")
 local RoundCoinsLabel = Instance.new("TextLabel")
 local SessionCoinsLabel = Instance.new("TextLabel")
 local VersionLabel = Instance.new("TextLabel")
-local FarmerCountLabel = Instance.new("TextLabel")
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
@@ -432,15 +433,6 @@ VersionLabel.Font = Enum.Font.SourceSansBold
 VersionLabel.Text = Version
 VersionLabel.TextColor3 = Color3.new(1, 1, 1)
 VersionLabel.TextScaled = true
-
-FarmerCountLabel.Parent = MainFrame
-FarmerCountLabel.BackgroundTransparency = 1.000
-FarmerCountLabel.Position = UDim2.new(0.0240000002, 100, 0.475, 0)
-FarmerCountLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
-FarmerCountLabel.Font = Enum.Font.FredokaOne
-FarmerCountLabel.Text = "Farmers: 0"
-FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-FarmerCountLabel.TextScaled = true
 
 RevealUsernameButton.MouseButton1Click:Connect(function()
 	if not usernameRevealed then
@@ -648,6 +640,10 @@ local function CPUSaversIGMA()
 	Players.PlayerRemoving:Connect(function(plr)
 		if GoodPeople[plr.Name] then
 			GoodPeople[plr.Name] = nil
+		end
+		-- Clean up player position khi player rời
+		if PlayerPositions[plr.Name] then
+			PlayerPositions[plr.Name] = nil
 		end
 	end)
 
@@ -970,7 +966,7 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					HopServerNoAPI()
+					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 				else
 					game:Shutdown()
 				end
@@ -980,7 +976,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        HopServerNoAPI()
+	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 	    end
 	end
 
@@ -1471,42 +1467,142 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- Hàm hop server không dùng Roblox API (dùng TeleportService trực tiếp)
-local function HopServerNoAPI()
-	local success, result = pcall(function()
-		-- Teleport đến PlaceId mới, Roblox sẽ tự động chọn server khác
-		debug_print("Đang hop server (không dùng API)...")
-		StatusText.Text = "Status: Đang hop server..."
+-- Hàm lấy danh sách servers có 4 players
+local function Get4PlayerServers()
+	local currentJobId = game.JobId
+	local targetPlayerCount = 4
+	
+	debug_print("Đang lấy danh sách servers có " .. targetPlayerCount .. " players...")
+	
+	local success, servers = pcall(function()
+		-- Lấy danh sách servers từ Roblox API
+		local response
 		
-		-- Teleport đến cùng PlaceId, Roblox sẽ tự động tìm server mới
-		TeleportService:Teleport(PlaceId, player)
-		return true
+		-- Thử dùng game:HttpGet
+		if game.HttpGet then
+			response = game:HttpGet(_servers)
+		elseif HttpService.GetAsync then
+			response = HttpService:GetAsync(_servers, true)
+		else
+			-- Fallback: dùng syn.request hoặc request
+			local requestFunc = syn and syn.request or request
+			if requestFunc then
+				local result = requestFunc({
+					Url = _servers,
+					Method = "GET"
+				})
+				response = result.Body
+			end
+		end
+		
+		if response then
+			local data = HttpService:JSONDecode(response)
+			if data and data.data then
+				return data.data
+			end
+		end
+		return nil
 	end)
 	
-	if not success then
-		warn("Lỗi khi hop server: " .. tostring(result))
-		-- Fallback: thử lại sau 1 giây
-		task.wait(1)
-		pcall(function()
-			TeleportService:Teleport(PlaceId, player)
-		end)
+	if not success or not servers or #servers == 0 then
+		warn("Không thể lấy danh sách servers")
+		return {}
+	end
+	
+	-- Tìm tất cả servers có đúng 4 players (không phải server hiện tại)
+	local fourPlayerServers = {}
+	for _, server in ipairs(servers) do
+		if server.id ~= currentJobId and server.playing == targetPlayerCount then
+			table.insert(fourPlayerServers, server.id)
+		end
+	end
+	
+	debug_print("Tìm thấy " .. #fourPlayerServers .. " server(s) có 4 players")
+	return fourPlayerServers
+end
+
+-- Hàm lấy 3 job IDs có 4 players
+local function Fetch4PlayerJobIds()
+	local currentTime = tick()
+	
+	-- Kiểm tra xem có cần chờ không
+	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
+		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
+		if timeSinceLastFetch < ServerHopData.WaitTime then
+			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
+			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
+			return false
+		end
+	end
+	
+	-- Lấy danh sách servers có 4 players
+	local servers = Get4PlayerServers()
+	
+	if #servers == 0 then
+		warn("Không tìm thấy server nào có 4 players")
+		return false
+	end
+	
+	-- Lấy tối đa 3 job IDs
+	ServerHopData.JobIds = {}
+	local count = 0
+	for _, jobId in ipairs(servers) do
+		if count >= ServerHopData.MaxHops then
+			break
+		end
+		table.insert(ServerHopData.JobIds, jobId)
+		count = count + 1
+	end
+	
+	ServerHopData.LastFetchTime = currentTime
+	ServerHopData.HopCount = 0
+	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
+	return true
+end
+
+-- Hàm hop đến server có 4 players
+local function HopTo4PlayerServer()
+	-- Kiểm tra xem có job IDs không
+	if #ServerHopData.JobIds == 0 then
+		-- Thử lấy job IDs mới
+		if not Fetch4PlayerJobIds() then
+			return false
+		end
+	end
+	
+	-- Lấy job ID đầu tiên
+	local jobId = ServerHopData.JobIds[1]
+	if not jobId then
+		return false
+	end
+	
+	debug_print("Đang hop đến server: " .. jobId .. " (4 players)")
+	if StatusText then
+		StatusText.Text = "Status: Đang hop đến server có 4 players..."
+	end
+	
+	local hopSuccess, hopError = pcall(function()
+		TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+	end)
+	
+	if hopSuccess then
+		-- Xóa job ID đã dùng
+		table.remove(ServerHopData.JobIds, 1)
+		ServerHopData.HopCount = ServerHopData.HopCount + 1
+		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
+		return true
+	else
+		warn("Lỗi khi hop server: " .. tostring(hopError))
+		-- Xóa job ID lỗi và thử job ID tiếp theo
+		table.remove(ServerHopData.JobIds, 1)
+		return false
 	end
 end
 
--- Farmer Detection System
-local function DetectFarmers()
-	-- Kiểm tra config an toàn
-	if not cfg or not cfg["Misc"] or not cfg["Misc"]["AutoHopOnFarmers"] or not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
-		return
-	end
-
-	local detectedFarmers = 0
+-- Hàm detect players khác teleport
+local function DetectOtherPlayersTeleport()
+	local detectedTeleports = 0
 	local currentTime = tick()
-	
-	-- Kiểm tra Players service
-	if not Players then
-		return
-	end
 	
 	-- Clean up old player positions
 	for plrName, data in pairs(PlayerPositions) do
@@ -1514,15 +1610,10 @@ local function DetectFarmers()
 			PlayerPositions[plrName] = nil
 		end
 	end
-
-	-- Check all players
-	local allPlayers = Players:GetPlayers()
-	if not allPlayers then
-		return
-	end
 	
-	for _, plr in ipairs(allPlayers) do
-		if plr and plr ~= player and plr.Character then
+	-- Check all players
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
 			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
 			local hum = plr.Character:FindFirstChild("Humanoid")
 			
@@ -1533,28 +1624,27 @@ local function DetectFarmers()
 				
 				if success and currentPos then
 					local plrName = plr.Name
-					if plrName then
-				
-				-- Kiểm tra nếu player có vị trí trước đó
-				if PlayerPositions[plrName] and PlayerPositions[plrName].Position and PlayerPositions[plrName].Time then
-					local lastPos = PlayerPositions[plrName].Position
-					local lastTime = PlayerPositions[plrName].Time
-					local distance = (currentPos - lastPos).Magnitude
-					local timeDiff = currentTime - lastTime
 					
-					-- Phát hiện teleport: di chuyển > threshold trong thời gian ngắn
-					if timeDiff > 0 and distance > cfg["Misc"]["AutoHopOnFarmers"]["TeleportThreshold"] and timeDiff < 2 then
-						-- Tính tốc độ di chuyển
-						local speed = distance / timeDiff
+					-- Kiểm tra nếu player có vị trí trước đó
+					if PlayerPositions[plrName] and PlayerPositions[plrName].Position and PlayerPositions[plrName].Time then
+						local lastPos = PlayerPositions[plrName].Position
+						local lastTime = PlayerPositions[plrName].Time
+						local distance = (currentPos - lastPos).Magnitude
+						local timeDiff = currentTime - lastTime
 						
-						-- Nếu tốc độ > 25 studs/s (bình thường max ~16 studs/s), coi là teleport
-						if speed > 25 then
-							detectedFarmers = detectedFarmers + 1
-							debug_print("Phát hiện farmer: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s)")
+						-- Phát hiện teleport: di chuyển > threshold trong thời gian ngắn
+						if timeDiff > 0 and distance > TeleportThreshold and timeDiff < 2 then
+							-- Tính tốc độ di chuyển
+							local speed = distance / timeDiff
+							
+							-- Nếu tốc độ > 25 studs/s (bình thường max ~16 studs/s), coi là teleport
+							if speed > 25 then
+								detectedTeleports = detectedTeleports + 1
+								debug_print("Phát hiện player teleport: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s, khoảng cách: " .. string.format("%.2f", distance) .. " studs)")
+							end
 						end
 					end
-				end
-				
+					
 					-- Cập nhật vị trí hiện tại
 					PlayerPositions[plrName] = {
 						Position = currentPos,
@@ -1564,70 +1654,56 @@ local function DetectFarmers()
 			end
 		end
 	end
-
-	FarmerCount = detectedFarmers
 	
-	-- Cập nhật UI (nếu có label)
-	if FarmerCountLabel then
-		FarmerCountLabel.Text = "Farmers: " .. detectedFarmers
-		if detectedFarmers >= cfg["Misc"]["AutoHopOnFarmers"]["MinFarmers"] then
-			FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- Đỏ khi >= threshold
-		else
-			FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Trắng bình thường
-		end
-	end
-	
-	-- Nếu phát hiện >= số lượng farmer tối thiểu, hop server
-	if detectedFarmers >= cfg["Misc"]["AutoHopOnFarmers"]["MinFarmers"] then
-		debug_print("Phát hiện " .. detectedFarmers .. " farmer(s)! Đang hop server...")
-		StatusText.Text = "Status: Phát hiện " .. detectedFarmers .. " farmer! Đang hop server..."
-		
-		-- Hop server không dùng API (chạy trong task riêng để không block)
-		task.spawn(function()
-			task.wait(0.5)
-			HopServerNoAPI()
-		end)
-	end
+	return detectedTeleports
 end
 
--- Chạy hệ thống phát hiện farmer mỗi 1 phút
+-- Hệ thống tự động hop khi detect players
 task.spawn(function()
-	-- Chờ một chút để đảm bảo mọi thứ đã load xong
-	task.wait(5)
+	-- Chờ game load hoàn toàn
+	repeat
+		task.wait(0.5)
+	until StatusText and StatusText.Parent
 	
-	while true do
-		local success, err = pcall(function()
-			if cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
-				-- Debug: Log khi bắt đầu check
-				debug_print("Đang kiểm tra farmer...")
-				DetectFarmers()
+	task.wait(2)
+	
+	-- Lấy job IDs ban đầu
+	Fetch4PlayerJobIds()
+	
+		-- Kiểm tra định kỳ
+		while true do
+			local success, err = pcall(function()
+				-- Detect players teleport
+				local teleportCount = DetectOtherPlayersTeleport()
+				
+				-- Nếu phát hiện player teleport, hop server
+				if teleportCount > 0 then
+					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+					if StatusText then
+						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+					end
+					
+					-- Thử lấy job IDs mới nếu cần
+					if #ServerHopData.JobIds == 0 then
+						Fetch4PlayerJobIds()
+					end
+					
+					-- Hop đến server có 4 players
+					if #ServerHopData.JobIds > 0 then
+						HopTo4PlayerServer()
+						-- Chờ một chút sau khi hop
+						task.wait(5)
+					end
+				end
+			end)
+			
+			if not success then
+				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 			end
-		end)
-		
-		if not success then
-			warn("Lỗi trong DetectFarmers: " .. tostring(err))
-			debug_print("Lỗi trong DetectFarmers: " .. tostring(err))
-		end
-		
-		-- Đợi interval trước khi check lại
-		local waitTime = cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 60
-		debug_print("Đã kiểm tra xong. Sẽ kiểm tra lại sau " .. waitTime .. " giây.")
-		
-		for i = 1, waitTime do
+			
+			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
 			task.wait(1)
-			-- Kiểm tra lại config mỗi giây để có thể dừng nếu cần
-			if not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
-				break
-			end
 		end
-	end
-end)
-
--- Clean up khi player rời khỏi server
-Players.PlayerRemoving:Connect(function(plr)
-	if PlayerPositions[plr.Name] then
-		PlayerPositions[plr.Name] = nil
-	end
 end)
 
 local function Start_Farm()
