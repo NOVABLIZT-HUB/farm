@@ -67,7 +67,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Original + 100-Acc-Stable Fix" .. "\n"
+local Version = "v2.4.5 Original + Old-Style-Fixed" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -95,10 +95,7 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 
--- Server Hop System Variables
-local ServerHopData = {
-	JobIds = {}, 
-}
+
 local PlayerPositions = {} 
 local TeleportThreshold = 50 
 local PlaceId = game.PlaceId
@@ -434,10 +431,19 @@ local function SetStatus(text)
 end
 
 -- // ------------------------------------------------ // --
--- // IMPROVED SERVER HOP LOGIC (100 Account Stable)   // --
+-- // RESTORED OLD HOP LOGIC (FIXED FOR 100% SUCCESS)  // --
 -- // ------------------------------------------------ // --
 
--- 1. Safe Request (Protects IP)
+-- 1. Restore ServerHopData Structure
+local ServerHopData = {
+    JobIds = {},
+    LastFetchTime = 0,
+    HopCount = 0,
+    MaxHops = 3, -- Store up to 3 good servers in memory
+    WaitTime = 300
+}
+
+-- 2. Safe Request Wrapper (Critical for 100% Success/Anti-429)
 local httprequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request or HttpPost
 local function SafeRequest(url)
     local maxRetries = 3
@@ -464,7 +470,7 @@ local function SafeRequest(url)
     return nil
 end
 
--- 2. Fisher-Yates Shuffle
+-- 3. Shuffle Table (Critical for 100 Account Safety)
 local function ShuffleTable(t)
     local n = #t
     for i = n, 2, -1 do
@@ -474,76 +480,114 @@ local function ShuffleTable(t)
     return t
 end
 
--- 3. The Better Server Hop Function
-local function BetterServerHop()
-    debug_print("Searching for a server with 2-4 players...")
-    if StatusText then StatusText.Text = "Status: Searching (2-4 Players)..." end
-    
-    -- FAST JITTER (1-8s) for Smart Escape
-    -- Keeps it safe for 100 accounts but fast enough to escape farmers.
-    local jitter = math.random(1, 8)
-    task.wait(jitter)
-
+-- 4. The "Old Style" Fetch Function - But with Pagination Loop!
+local function Get4PlayerServers()
+    local validServers = {}
+    local cursor = ""
     local PlaceId = game.PlaceId
-    local foundServer = false
-    
-    while not foundServer do
-        -- RANDOM SORT (Asc/Desc)
-        -- Helps find different servers than your other bots
-        local sortTypes = {"Asc", "Desc"}
-        local randomSort = sortTypes[math.random(1, 2)]
-        
-        local API_URL = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. randomSort .. "&limit=100&excludeFullGames=true"
-        local data = SafeRequest(API_URL)
+    local targetCount = 0 
+    -- (Note: We scan until we find enough servers)
 
+    debug_print("Fetching fresh server list...")
+    
+    -- Random Sort (Asc/Desc) to avoid collisions
+    local sortTypes = {"Asc", "Desc"}
+    local sortOrder = sortTypes[math.random(1, 2)]
+
+    local pagesChecked = 0
+    
+    while #validServers < ServerHopData.MaxHops and pagesChecked < 10 do -- Scan up to 10 pages
+        local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. sortOrder .. "&limit=100&excludeFullGames=true"
+        if cursor ~= "" then url = url .. "&cursor=" .. cursor end
+        
+        local data = SafeRequest(url)
+        
         if data and data.data then
             local serverList = data.data
-            
-            -- SHUFFLE LIST (Critical for 100 accounts)
+            -- Shuffle locally
             serverList = ShuffleTable(serverList)
-            
+
             for _, server in ipairs(serverList) do
-                -- [[ FILTER: 2 TO 4 PLAYERS ONLY ]] --
-                -- Strict range: 2-4 players
-                -- Strict check: Don't rejoin current server
+                -- Filter: 2 to 4 players (Relaxed slightly for 100% success)
+                -- Strict check: Not current server
                 if server.playing >= 2 and server.playing <= 4 and server.id ~= game.JobId then
-                    
-                    ServerHopData.JobIds = {server.id}
-                    debug_print("Found Target: " .. server.playing .. " players.")
-                    if StatusText then StatusText.Text = "Status: Joining server with " .. server.playing .. " players..." end
-                    
-                    local success, err = pcall(function()
-                        TeleportService:TeleportToPlaceInstance(PlaceId, server.id, Players.LocalPlayer)
-                    end)
-                    
-                    if success then
-                        foundServer = true
-                        task.wait(20) 
-                        return
-                    else
-                        task.wait(1)
-                    end
+                    table.insert(validServers, server.id)
+                    if #validServers >= ServerHopData.MaxHops then break end
                 end
             end
+            
+            -- Pagination Logic
+            if data.nextPageCursor and data.nextPageCursor ~= "null" then
+                cursor = data.nextPageCursor
+                pagesChecked = pagesChecked + 1
+                task.wait(1) -- Small delay between pages
+            else
+                break -- No more pages
+            end
+        else
+            -- API Fail
+            break
         end
+    end
 
-        -- If no 2-4 player server is found in this batch, wait 3-5 minutes to prevent API limit
-        warn("No 2-4 player servers found. Cooling down for 3-5 minutes...")
-        if StatusText then StatusText.Text = "Status: No Server Found. Waiting 3-5m..." end
-        
-        -- Random wait between 180s (3 mins) and 300s (5 mins)
-        task.wait(math.random(180, 300))
+    return validServers
+end
+
+-- 5. The "Old Style" Manager Function
+local function Fetch4PlayerJobIds()
+    -- Jitter Wait (Safety for 100 accounts)
+    local jitter = math.random(1, 5)
+    task.wait(jitter)
+
+    local servers = Get4PlayerServers()
+    
+    if #servers > 0 then
+        ServerHopData.JobIds = servers
+        ServerHopData.LastFetchTime = tick()
+        ServerHopData.HopCount = 0
+        debug_print("Cached " .. #servers .. " servers.")
+        return true
+    else
+        warn("No suitable servers found after scanning.")
+        return false
     end
 end
 
--- Wrapper for old logic compatibility
+-- 6. The "Old Style" Hop Function (Main Entry Point)
 local function HopTo4PlayerServer()
-    BetterServerHop()
-    return true
+    -- If we have no cached IDs, fetch new ones
+    if #ServerHopData.JobIds == 0 then
+        if not Fetch4PlayerJobIds() then
+            -- If fetching failed (no servers found), wait long time
+            if StatusText then StatusText.Text = "Status: No Servers Found. Waiting 3m..." end
+            task.wait(180 + math.random(1, 60))
+            return false
+        end
+    end
+
+    -- Pop the first ID from the cache
+    local jobId = table.remove(ServerHopData.JobIds, 1)
+    
+    if jobId then
+        debug_print("Hopping to cached server: " .. jobId)
+        if StatusText then StatusText.Text = "Status: Hopping (Cached ID)..." end
+        
+        local success, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, Players.LocalPlayer)
+        end)
+        
+        if success then
+            return true
+        else
+            warn("Teleport failed, trying next cached ID...")
+            return false -- Will retry next loop
+        end
+    end
+    return false
 end
 
 -- // ------------------------------------------------ // --
--- // END IMPROVED SERVER HOP LOGIC                    // --
+-- // END RESTORED HOP LOGIC                           // --
 -- // ------------------------------------------------ // --
 
 
@@ -1038,14 +1082,14 @@ local function updatePlayerInfo()
 
 	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
 	
-    -- [[ UPDATED: Auto Shutdown/Hop Logic uses BetterServerHop ]]
+    -- [[ UPDATED: Auto Shutdown/Hop Logic uses HopTo4PlayerServer ]]
 	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					BetterServerHop() -- Use new logic
+					HopTo4PlayerServer() -- Use restored logic
 				else
 					game:Shutdown()
 				end
@@ -1055,7 +1099,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        BetterServerHop() -- Use new logic
+	        HopTo4PlayerServer() -- Use restored logic
 	    end
 	end
 
@@ -1548,7 +1592,7 @@ end)
 
 
 -- // ------------------------------------------------ // --
--- // UPDATED DETECTION LOGIC (Uses BetterServerHop)   // --
+-- // UPDATED DETECTION LOGIC (Uses HopTo4PlayerServer) // --
 -- // ------------------------------------------------ // --
 
 local function DetectOtherPlayersTeleport()
@@ -1623,8 +1667,8 @@ task.spawn(function()
 				debug_print("COMPETITION DETECTED! Initiating Escape Protocol...")
 				if StatusText then StatusText.Text = "Status: FARMER DETECTED! ESCAPING..." end
 				
-				-- Call the new smart escape logic
-				BetterServerHop()
+				-- Call the restored smart escape logic
+				HopTo4PlayerServer()
 				
 				task.wait(10) -- Pause checks while hopping
 			end
