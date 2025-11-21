@@ -1462,10 +1462,31 @@ local function HopTo4PlayerServer()
 	
 	local success, servers = pcall(function()
 		-- Lấy danh sách servers từ Roblox API (không cần cookie vì là public API)
-		local response = game:HttpGet(_servers)
+		local response
+		
+		-- Thử dùng game:HttpGet
+		if game.HttpGet then
+			response = game:HttpGet(_servers)
+		elseif HttpService.GetAsync then
+			-- Fallback: dùng HttpService:GetAsync nếu có
+			response = HttpService:GetAsync(_servers, true)
+		else
+			-- Fallback cuối cùng: dùng syn.request hoặc request
+			local requestFunc = syn and syn.request or request
+			if requestFunc then
+				local result = requestFunc({
+					Url = _servers,
+					Method = "GET"
+				})
+				response = result.Body
+			end
+		end
+		
 		if response then
 			local data = HttpService:JSONDecode(response)
-			return data.data
+			if data and data.data then
+				return data.data
+			end
 		end
 		return nil
 	end)
@@ -1552,8 +1573,13 @@ end
 
 -- Chạy hop server ngay sau khi game load xong
 task.spawn(function()
-	-- Chờ game load hoàn toàn
-	task.wait(2)
+	-- Chờ game load hoàn toàn và UI được tạo
+	repeat
+		task.wait(0.5)
+	until StatusText and StatusText.Parent
+	
+	-- Chờ thêm một chút để đảm bảo mọi thứ đã sẵn sàng
+	task.wait(1)
 	
 	-- Kiểm tra số players hiện tại
 	local currentPlayers = #Players:GetPlayers()
@@ -1564,7 +1590,9 @@ task.spawn(function()
 		HopTo4PlayerServer()
 	else
 		debug_print("Đã ở server có 4 players. Không cần hop.")
-		StatusText.Text = "Status: Đã ở server có 4 players!"
+		if StatusText then
+			StatusText.Text = "Status: Đã ở server có 4 players!"
+		end
 	end
 end)
 
