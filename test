@@ -1495,12 +1495,18 @@ end
 
 -- Farmer Detection System
 local function DetectFarmers()
-	if not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
+	-- Kiểm tra config an toàn
+	if not cfg or not cfg["Misc"] or not cfg["Misc"]["AutoHopOnFarmers"] or not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
 		return
 	end
 
 	local detectedFarmers = 0
 	local currentTime = tick()
+	
+	-- Kiểm tra Players service
+	if not Players then
+		return
+	end
 	
 	-- Clean up old player positions
 	for plrName, data in pairs(PlayerPositions) do
@@ -1510,24 +1516,34 @@ local function DetectFarmers()
 	end
 
 	-- Check all players
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= player and plr.Character then
+	local allPlayers = Players:GetPlayers()
+	if not allPlayers then
+		return
+	end
+	
+	for _, plr in ipairs(allPlayers) do
+		if plr and plr ~= player and plr.Character then
 			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
 			local hum = plr.Character:FindFirstChild("Humanoid")
 			
 			if hrp and hum and hum.Health > 0 then
-				local currentPos = hrp.Position
-				local plrName = plr.Name
+				local success, currentPos = pcall(function()
+					return hrp.Position
+				end)
+				
+				if success and currentPos then
+					local plrName = plr.Name
+					if plrName then
 				
 				-- Kiểm tra nếu player có vị trí trước đó
-				if PlayerPositions[plrName] then
+				if PlayerPositions[plrName] and PlayerPositions[plrName].Position and PlayerPositions[plrName].Time then
 					local lastPos = PlayerPositions[plrName].Position
 					local lastTime = PlayerPositions[plrName].Time
 					local distance = (currentPos - lastPos).Magnitude
 					local timeDiff = currentTime - lastTime
 					
 					-- Phát hiện teleport: di chuyển > threshold trong thời gian ngắn
-					if distance > cfg["Misc"]["AutoHopOnFarmers"]["TeleportThreshold"] and timeDiff < 2 then
+					if timeDiff > 0 and distance > cfg["Misc"]["AutoHopOnFarmers"]["TeleportThreshold"] and timeDiff < 2 then
 						-- Tính tốc độ di chuyển
 						local speed = distance / timeDiff
 						
@@ -1539,11 +1555,12 @@ local function DetectFarmers()
 					end
 				end
 				
-				-- Cập nhật vị trí hiện tại
-				PlayerPositions[plrName] = {
-					Position = currentPos,
-					Time = currentTime
-				}
+					-- Cập nhật vị trí hiện tại
+					PlayerPositions[plrName] = {
+						Position = currentPos,
+						Time = currentTime
+					}
+				end
 			end
 		end
 	end
@@ -1565,19 +1582,44 @@ local function DetectFarmers()
 		debug_print("Phát hiện " .. detectedFarmers .. " farmer(s)! Đang hop server...")
 		StatusText.Text = "Status: Phát hiện " .. detectedFarmers .. " farmer! Đang hop server..."
 		
-		-- Hop server không dùng API
-		task.wait(0.5)
-		HopServerNoAPI()
+		-- Hop server không dùng API (chạy trong task riêng để không block)
+		task.spawn(function()
+			task.wait(0.5)
+			HopServerNoAPI()
+		end)
 	end
 end
 
 -- Chạy hệ thống phát hiện farmer mỗi 1 phút
 task.spawn(function()
+	-- Chờ một chút để đảm bảo mọi thứ đã load xong
+	task.wait(5)
+	
 	while true do
-		if cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
-			DetectFarmers()
+		local success, err = pcall(function()
+			if cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
+				-- Debug: Log khi bắt đầu check
+				debug_print("Đang kiểm tra farmer...")
+				DetectFarmers()
+			end
+		end)
+		
+		if not success then
+			warn("Lỗi trong DetectFarmers: " .. tostring(err))
+			debug_print("Lỗi trong DetectFarmers: " .. tostring(err))
 		end
-		task.wait(cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 60)
+		
+		-- Đợi interval trước khi check lại
+		local waitTime = cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 60
+		debug_print("Đã kiểm tra xong. Sẽ kiểm tra lại sau " .. waitTime .. " giây.")
+		
+		for i = 1, waitTime do
+			task.wait(1)
+			-- Kiểm tra lại config mỗi giây để có thể dừng nếu cần
+			if not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
+				break
+			end
+		end
 	end
 end)
 
