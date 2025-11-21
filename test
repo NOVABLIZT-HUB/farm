@@ -67,7 +67,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Original + Old-Style-Fixed" .. "\n"
+local Version = "v2.4.5 Original + RAM Fix" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -95,10 +95,35 @@ local TweenService = game:GetService("TweenService")
 local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 
-
-local PlayerPositions = {} 
-local TeleportThreshold = 50 
+local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
+local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
+
+local headers = {
+	["Content-Type"] = "application/json",
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
+}
+
+local map = nil
+-- REMOVED: local AllCoins = {} (Fix 1: Xóa bảng thừa thãi)
+local knife = nil
+local gun = nil
+local GoodPeople = {}
+local visited = {}
+
+-- Server Hop System với 4 players
+local ServerHopData = {
+	JobIds = {}, -- Lưu 3 job IDs có 4 players
+	LastFetchTime = 0, -- Thời gian lần cuối lấy job IDs
+	HopCount = 0, -- Số lần đã hop
+	MaxHops = 3, -- Tối đa 3 lần hop trước khi chờ
+	WaitTime = 300 -- 5 phút = 300 giây
+}
+
+-- Player Teleport Detection System
+local PlayerPositions = {} -- Lưu vị trí trước đó của players
+local TeleportThreshold = 50 -- Khoảng cách tối thiểu để coi là teleport (studs)
+
 
 repeat
 	task.wait()
@@ -234,6 +259,12 @@ local currentPlatformY = 142
 RunService.Heartbeat:Connect(function()
 	if HumanoidRootPart then
 		local rootPos = HumanoidRootPart.Position
+		
+		-- LOGIC: 
+		-- 1. Platform X/Z always tracks Player.
+		-- 2. Platform Y stays at `currentPlatformY` (which is set only on TP).
+		--    This forces the player to fall to the platform level if they are higher.
+		
 		WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
 	end
 end)
@@ -416,8 +447,12 @@ end)
 consolecreate("DEBUG")
 local function debug_print(...)
 	last_print = ...
+	-- Optimization: Disabled spammy prints
+	-- print("[" .. player.Name .. "] " .. ...)
+	-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+	
 	-- Only print important messages or throttle them
-	if string.find(..., "Status:") or string.find(..., "Collected") or string.find(..., "Found") then
+	if string.find(..., "Status:") or string.find(..., "Collected") then
 		consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 	end
 end
@@ -429,172 +464,6 @@ local function SetStatus(text)
 		StatusText.Text = "Status: " .. text
 	end
 end
-
--- // ------------------------------------------------ // --
--- // RESTORED OLD HOP LOGIC (FIXED FOR 100% SUCCESS)  // --
--- // ------------------------------------------------ // --
-
--- 1. Restore ServerHopData Structure
-local ServerHopData = {
-    JobIds = {},
-    LastFetchTime = 0,
-    HopCount = 0,
-    MaxHops = 3, -- Store up to 3 good servers in memory
-    WaitTime = 300
-}
-
--- 2. Safe Request Wrapper (Critical for 100% Success/Anti-429)
-local httprequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request or HttpPost
-local function SafeRequest(url)
-    local maxRetries = 3
-    local count = 0
-    while count < maxRetries do
-        local success, response = pcall(function()
-            if httprequest then
-                return httprequest({Url = url, Method = "GET"})
-            else
-                return {Body = game:HttpGet(url), StatusCode = 200}
-            end
-        end)
-        if success and response then
-            if response.StatusCode == 200 then
-                return HttpService:JSONDecode(response.Body)
-            elseif response.StatusCode == 429 then
-                warn("IP Limit (429). Waiting 10s...")
-                task.wait(10)
-            end
-        end
-        count = count + 1
-        task.wait(2)
-    end
-    return nil
-end
-
--- 3. Shuffle Table (Critical for 100 Account Safety)
-local function ShuffleTable(t)
-    local n = #t
-    for i = n, 2, -1 do
-        local j = math.random(i)
-        t[i], t[j] = t[j], t[i]
-    end
-    return t
-end
-
--- 4. The "Old Style" Fetch Function - But with Pagination Loop!
-local function Get4PlayerServers()
-    local validServers = {}
-    local cursor = ""
-    local PlaceId = game.PlaceId
-    local targetCount = 0 
-    -- (Note: We scan until we find enough servers)
-
-    debug_print("Fetching fresh server list...")
-    
-    -- Random Sort (Asc/Desc) to avoid collisions
-    local sortTypes = {"Asc", "Desc"}
-    local sortOrder = sortTypes[math.random(1, 2)]
-
-    local pagesChecked = 0
-    
-    while #validServers < ServerHopData.MaxHops and pagesChecked < 10 do -- Scan up to 10 pages
-        local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=" .. sortOrder .. "&limit=100&excludeFullGames=true"
-        if cursor ~= "" then url = url .. "&cursor=" .. cursor end
-        
-        local data = SafeRequest(url)
-        
-        if data and data.data then
-            local serverList = data.data
-            -- Shuffle locally
-            serverList = ShuffleTable(serverList)
-
-            for _, server in ipairs(serverList) do
-                -- Filter: 2 to 4 players (Relaxed slightly for 100% success)
-                -- Strict check: Not current server
-                if server.playing >= 2 and server.playing <= 4 and server.id ~= game.JobId then
-                    table.insert(validServers, server.id)
-                    if #validServers >= ServerHopData.MaxHops then break end
-                end
-            end
-            
-            -- Pagination Logic
-            if data.nextPageCursor and data.nextPageCursor ~= "null" then
-                cursor = data.nextPageCursor
-                pagesChecked = pagesChecked + 1
-                task.wait(1) -- Small delay between pages
-            else
-                break -- No more pages
-            end
-        else
-            -- API Fail
-            break
-        end
-    end
-
-    return validServers
-end
-
--- 5. The "Old Style" Manager Function
-local function Fetch4PlayerJobIds()
-    -- Jitter Wait (Safety for 100 accounts)
-    local jitter = math.random(1, 5)
-    task.wait(jitter)
-
-    local servers = Get4PlayerServers()
-    
-    if #servers > 0 then
-        ServerHopData.JobIds = servers
-        ServerHopData.LastFetchTime = tick()
-        ServerHopData.HopCount = 0
-        debug_print("Cached " .. #servers .. " servers.")
-        return true
-    else
-        warn("No suitable servers found after scanning.")
-        return false
-    end
-end
-
--- 6. The "Old Style" Hop Function with Retry Loop
-local function HopTo4PlayerServer()
-    -- If we have no cached IDs, fetch new ones
-    if #ServerHopData.JobIds == 0 then
-        if not Fetch4PlayerJobIds() then
-            -- If fetching failed (no servers found), wait long time
-            if StatusText then StatusText.Text = "Status: No Servers Found. Waiting 3m..." end
-            task.wait(180 + math.random(1, 60))
-            return false
-        end
-    end
-
-    -- Loop until we find a server we can join or run out of IDs
-    while #ServerHopData.JobIds > 0 do
-        -- Pop the first ID from the cache
-        local jobId = table.remove(ServerHopData.JobIds, 1)
-        
-        if jobId then
-            debug_print("Hopping to cached server: " .. jobId)
-            if StatusText then StatusText.Text = "Status: Hopping (Cached ID)..." end
-            
-            local success, err = pcall(function()
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, Players.LocalPlayer)
-            end)
-            
-            if success then
-                return true -- Success! Teleport started.
-            else
-                warn("Teleport failed (" .. tostring(err) .. "). Trying next cached ID...")
-                task.wait(1) -- Small wait before retrying next ID
-            end
-        end
-    end
-
-    warn("Exhausted all cached IDs in this batch.")
-    return false
-end
-
--- // ------------------------------------------------ // --
--- // END RESTORED HOP LOGIC                           // --
--- // ------------------------------------------------ // --
-
 
 local function CPUSaversIGMA()
 	if not cfg["CPU Saver"] then
@@ -682,6 +551,9 @@ local function CPUSaversIGMA()
 
         -- Destroy Map Parts
 		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+             -- Keep CoinContainers if found inside map (handled by ProcessMap usually, but if we delete map, container goes too)
+             -- Assuming coins are extracted to CoinsFolder by ProccessMap which runs on ChildAdded
+             -- We delay destroy slightly to let scripts grab coins if needed, or just nuke it
              pcall(function() child:Destroy() end)
 		end
 	end
@@ -752,6 +624,7 @@ local function CPUSaversIGMA()
 				bp.ChildAdded:Connect(function(i)
 					if i.Name == "AlienPlushie" then
 						GoodPeople[plr.Name] = true
+						-- debug_print("")
 					end
 				end)
 				bp.ChildRemoved:Connect(function(i)
@@ -1087,14 +960,13 @@ local function updatePlayerInfo()
 
 	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
 	
-    -- [[ UPDATED: Auto Shutdown/Hop Logic uses HopTo4PlayerServer ]]
 	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					HopTo4PlayerServer() -- Use restored logic
+					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 				else
 					game:Shutdown()
 				end
@@ -1104,7 +976,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        HopTo4PlayerServer() -- Use restored logic
+	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
 	    end
 	end
 
@@ -1595,11 +1467,139 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
+-- Hàm lấy danh sách servers có 4 players
+local function Get4PlayerServers()
+	local currentJobId = game.JobId
+	local targetPlayerCount = 4
+	
+	debug_print("Đang lấy danh sách servers có " .. targetPlayerCount .. " players...")
+	
+	local success, servers = pcall(function()
+		-- Lấy danh sách servers từ Roblox API
+		local response
+		
+		-- Thử dùng game:HttpGet
+		if game.HttpGet then
+			response = game:HttpGet(_servers)
+		elseif HttpService.GetAsync then
+			response = HttpService:GetAsync(_servers, true)
+		else
+			-- Fallback: dùng syn.request hoặc request
+			local requestFunc = syn and syn.request or request
+			if requestFunc then
+				local result = requestFunc({
+					Url = _servers,
+					Method = "GET"
+				})
+				response = result.Body
+			end
+		end
+		
+		if response then
+			local data = HttpService:JSONDecode(response)
+			if data and data.data then
+				return data.data
+			end
+		end
+		return nil
+	end)
+	
+	if not success or not servers or #servers == 0 then
+		warn("Không thể lấy danh sách servers")
+		return {}
+	end
+	
+	-- Tìm tất cả servers có đúng 4 players (không phải server hiện tại)
+	local fourPlayerServers = {}
+	for _, server in ipairs(servers) do
+		if server.id ~= currentJobId and server.playing == targetPlayerCount then
+			table.insert(fourPlayerServers, server.id)
+		end
+	end
+	
+	debug_print("Tìm thấy " .. #fourPlayerServers .. " server(s) có 4 players")
+	return fourPlayerServers
+end
 
--- // ------------------------------------------------ // --
--- // UPDATED DETECTION LOGIC (Uses HopTo4PlayerServer) // --
--- // ------------------------------------------------ // --
+-- Hàm lấy 3 job IDs có 4 players
+local function Fetch4PlayerJobIds()
+	local currentTime = tick()
+	
+	-- Kiểm tra xem có cần chờ không
+	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
+		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
+		if timeSinceLastFetch < ServerHopData.WaitTime then
+			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
+			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
+			return false
+		end
+	end
+	
+	-- Lấy danh sách servers có 4 players
+	local servers = Get4PlayerServers()
+	
+	if #servers == 0 then
+		warn("Không tìm thấy server nào có 4 players")
+		return false
+	end
+	
+	-- Lấy tối đa 3 job IDs
+	ServerHopData.JobIds = {}
+	local count = 0
+	for _, jobId in ipairs(servers) do
+		if count >= ServerHopData.MaxHops then
+			break
+		end
+		table.insert(ServerHopData.JobIds, jobId)
+		count = count + 1
+	end
+	
+	ServerHopData.LastFetchTime = currentTime
+	ServerHopData.HopCount = 0
+	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
+	return true
+end
 
+-- Hàm hop đến server có 4 players
+local function HopTo4PlayerServer()
+	-- Kiểm tra xem có job IDs không
+	if #ServerHopData.JobIds == 0 then
+		-- Thử lấy job IDs mới
+		if not Fetch4PlayerJobIds() then
+			return false
+		end
+	end
+	
+	-- Lấy job ID đầu tiên
+	local jobId = ServerHopData.JobIds[1]
+	if not jobId then
+		return false
+	end
+	
+	debug_print("Đang hop đến server: " .. jobId .. " (4 players)")
+	if StatusText then
+		StatusText.Text = "Status: Đang hop đến server có 4 players..."
+	end
+	
+	local hopSuccess, hopError = pcall(function()
+		TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+	end)
+	
+	if hopSuccess then
+		-- Xóa job ID đã dùng
+		table.remove(ServerHopData.JobIds, 1)
+		ServerHopData.HopCount = ServerHopData.HopCount + 1
+		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
+		return true
+	else
+		warn("Lỗi khi hop server: " .. tostring(hopError))
+		-- Xóa job ID lỗi và thử job ID tiếp theo
+		table.remove(ServerHopData.JobIds, 1)
+		return false
+	end
+end
+
+-- Hàm detect players khác teleport
 local function DetectOtherPlayersTeleport()
 	local detectedTeleports = 0
 	local currentTime = tick()
@@ -1640,7 +1640,7 @@ local function DetectOtherPlayersTeleport()
 							-- Nếu tốc độ > 25 studs/s (bình thường max ~16 studs/s), coi là teleport
 							if speed > 25 then
 								detectedTeleports = detectedTeleports + 1
-								debug_print("Detected TP: " .. plrName)
+								debug_print("Phát hiện player teleport: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s, khoảng cách: " .. string.format("%.2f", distance) .. " studs)")
 							end
 						end
 					end
@@ -1658,35 +1658,53 @@ local function DetectOtherPlayersTeleport()
 	return detectedTeleports
 end
 
+-- Hệ thống tự động hop khi detect players
 task.spawn(function()
-	-- Wait for game load
-	repeat task.wait(0.5) until StatusText and StatusText.Parent
+	-- Chờ game load hoàn toàn
+	repeat
+		task.wait(0.5)
+	until StatusText and StatusText.Parent
+	
 	task.wait(2)
 	
-	-- DETECTION LOOP
-	while true do
-		local success, err = pcall(function()
-			local teleportCount = DetectOtherPlayersTeleport()
+	-- Lấy job IDs ban đầu
+	Fetch4PlayerJobIds()
+	
+		-- Kiểm tra định kỳ
+		while true do
+			local success, err = pcall(function()
+				-- Detect players teleport
+				local teleportCount = DetectOtherPlayersTeleport()
+				
+				-- Nếu phát hiện player teleport, hop server
+				if teleportCount > 0 then
+					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+					if StatusText then
+						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+					end
+					
+					-- Thử lấy job IDs mới nếu cần
+					if #ServerHopData.JobIds == 0 then
+						Fetch4PlayerJobIds()
+					end
+					
+					-- Hop đến server có 4 players
+					if #ServerHopData.JobIds > 0 then
+						HopTo4PlayerServer()
+						-- Chờ một chút sau khi hop
+						task.wait(5)
+					end
+				end
+			end)
 			
-			if teleportCount > 0 then
-				debug_print("COMPETITION DETECTED! Initiating Escape Protocol...")
-				if StatusText then StatusText.Text = "Status: FARMER DETECTED! ESCAPING..." end
-				
-				-- Call the restored smart escape logic
-				HopTo4PlayerServer()
-				
-				task.wait(10) -- Pause checks while hopping
+			if not success then
+				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 			end
-		end)
-		
-		if not success then
-			warn("Detection Logic Error: " .. tostring(err))
+			
+			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
+			task.wait(1)
 		end
-		
-		task.wait(1)
-	end
 end)
-
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
