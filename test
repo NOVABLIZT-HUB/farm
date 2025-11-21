@@ -46,6 +46,13 @@ local Default_Config = {
 			["Every Minutes"] = 0 -- Every x minutes force
         },
 
+		["AutoHopOnFarmers"] = {
+			["Enabled"] = true,
+			["MinFarmers"] = 4, -- Số lượng farmer tối thiểu để hop
+			["TeleportThreshold"] = 10, -- Khoảng cách tối thiểu để coi là teleport (studs)
+			["CheckInterval"] = 1 -- Thời gian giữa các lần check (giây)
+		},
+
 	}
 }
 
@@ -110,6 +117,10 @@ local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
+
+-- Farmer Detection System
+local PlayerPositions = {} -- Lưu vị trí trước đó của players
+local FarmerCount = 0
 
 
 repeat
@@ -277,6 +288,7 @@ local CurrentCoinsLabel = Instance.new("TextLabel")
 local RoundCoinsLabel = Instance.new("TextLabel")
 local SessionCoinsLabel = Instance.new("TextLabel")
 local VersionLabel = Instance.new("TextLabel")
+local FarmerCountLabel = Instance.new("TextLabel")
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
@@ -420,6 +432,15 @@ VersionLabel.Font = Enum.Font.SourceSansBold
 VersionLabel.Text = Version
 VersionLabel.TextColor3 = Color3.new(1, 1, 1)
 VersionLabel.TextScaled = true
+
+FarmerCountLabel.Parent = MainFrame
+FarmerCountLabel.BackgroundTransparency = 1.000
+FarmerCountLabel.Position = UDim2.new(0.0240000002, 100, 0.475, 0)
+FarmerCountLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
+FarmerCountLabel.Font = Enum.Font.FredokaOne
+FarmerCountLabel.Text = "Farmers: 0"
+FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FarmerCountLabel.TextScaled = true
 
 RevealUsernameButton.MouseButton1Click:Connect(function()
 	if not usernameRevealed then
@@ -949,7 +970,7 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					ServerHop("AutoShutdown - Coins thấp")
+					loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
 				else
 					game:Shutdown()
 				end
@@ -959,7 +980,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        ServerHop("AutoShutdown - Mỗi " .. cfg["Misc"]["AutoShutdown"]["Every Minutes"] .. " phút")
+	        loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
 	    end
 	end
 
@@ -1051,909 +1072,6 @@ local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
 end)
 
 local lastPing = tick()
-
--- [[ TELEPORT DETECTION SYSTEM ]] --
-local PlayerPositions = {} -- Lưu vị trí trước đó của mỗi người chơi
-local TeleportCheckInterval = 1 -- Kiểm tra mỗi 1 giây
-local TeleportThreshold = 10 -- Nếu di chuyển > 10 stud trong 1 giây = teleport
-local MaxTeleporters = 5 -- Số người teleport tối đa trước khi server hop
-
--- [[ REGION DETECTION ]] --
-local PlayerRegion = nil -- Region của account (detected via ping)
-
--- Detect player's region based on current server ping
-local function DetectPlayerRegion()
-	if PlayerRegion then
-		return PlayerRegion
-	end
-	
-	-- Try to detect from current server
-	local currentServers = ScanJobIds(false, 50)
-	if #currentServers > 0 then
-		-- Find server with lowest ping (likely same region)
-		table.sort(currentServers, function(a, b)
-			return (a.ping or 999) < (b.ping or 999)
-		end)
-		
-		local bestServer = currentServers[1]
-		local ping = bestServer.ping or 999
-		
-		-- Determine region based on ping ranges
-		if ping < 50 then
-			PlayerRegion = "local" -- Very low ping = same country/region
-		elseif ping < 100 then
-			PlayerRegion = "nearby" -- Low ping = nearby region (SEA, etc)
-		elseif ping < 200 then
-			PlayerRegion = "asia" -- Medium ping = Asia region
-		elseif ping < 300 then
-			PlayerRegion = "europe" -- Higher ping = Europe
-		else
-			PlayerRegion = "americas" -- High ping = Americas
-		end
-		
-		debug_print("Detected player region: " .. PlayerRegion .. " (based on ping: " .. ping .. "ms)")
-		return PlayerRegion
-	end
-	
-	-- Default to nearby if can't detect
-	PlayerRegion = "nearby"
-	return PlayerRegion
-end
-
--- Check if server is in same region as player
-local function IsSameRegion(serverPing, serverRegion)
-	local playerRegion = DetectPlayerRegion()
-	
-	-- If API provides region code, use it
-	if serverRegion then
-		local regionLower = tostring(serverRegion):lower()
-		if playerRegion == "local" or playerRegion == "nearby" then
-			return string.find(regionLower, "asia") or 
-			       string.find(regionLower, "vn") or 
-			       string.find(regionLower, "vietnam") or
-			       string.find(regionLower, "sea")
-		elseif playerRegion == "asia" then
-			return string.find(regionLower, "asia") or 
-			       string.find(regionLower, "sea")
-		elseif playerRegion == "europe" then
-			return string.find(regionLower, "europe") or 
-			       string.find(regionLower, "eu")
-		elseif playerRegion == "americas" then
-			return string.find(regionLower, "us") or 
-			       string.find(regionLower, "america")
-		end
-	end
-	
-	-- Fallback: use ping to determine
-	if playerRegion == "local" or playerRegion == "nearby" then
-		return serverPing < 100 -- Low ping = same/nearby region
-	elseif playerRegion == "asia" then
-		return serverPing < 200 -- Medium ping = Asia
-	elseif playerRegion == "europe" then
-		return serverPing < 300 -- Higher ping = Europe
-	else
-		return serverPing < 400 -- High ping = Americas
-	end
-end
-
--- [[ OPTIMIZED SERVER HOP SYSTEM - 100% SUCCESS RATE ]] --
--- Method để scan và lấy danh sách job id chi tiết
-local function ScanJobIds(includeFullServers, maxResults)
-	includeFullServers = includeFullServers or false
-	maxResults = maxResults or 100
-	
-	local serverList = {}
-	local success, result = pcall(function()
-		local url = _servers
-		if includeFullServers then
-			-- Nếu muốn bao gồm cả server đầy, bỏ excludeFullGames
-			url = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=" .. maxResults
-		end
-		
-		local response = HttpService:JSONDecode(game:HttpGet(url, true))
-		if response and response.data then
-			for _, server in ipairs(response.data) do
-				local ping = server.ping or 999
-				local region = server.region or nil
-				
-				-- Detect if server is in same region as player
-				local isSameRegion = IsSameRegion(ping, region)
-				
-				local serverInfo = {
-					jobId = server.id,
-					playing = server.playing or 0,
-					maxPlayers = server.maxPlayers or 0,
-					fps = server.fps or 0,
-					ping = ping,
-					region = region,
-					isSameRegion = isSameRegion,
-					isFull = (server.playing or 0) >= (server.maxPlayers or 0),
-					isCurrentServer = server.id == game.JobId
-				}
-				table.insert(serverList, serverInfo)
-			end
-		end
-	end)
-	
-	if not success then
-		debug_print("ScanJobIds failed: " .. tostring(result))
-		return {}
-	end
-	
-	return serverList
-end
-
--- Method để lấy danh sách job id đơn giản (backward compatible)
-local function GetServers()
-	local servers = {}
-	local success, result = pcall(function()
-		debug_print("GetServers: Đang request API...")
-		local response = HttpService:JSONDecode(game:HttpGet(_servers, true))
-		if response and response.data then
-			debug_print("GetServers: Nhận được " .. #response.data .. " server từ API")
-			for _, server in ipairs(response.data) do
-				if server.id and server.id ~= game.JobId and server.playing and server.maxPlayers then
-					if server.playing < server.maxPlayers then
-						table.insert(servers, server.id)
-					end
-				end
-			end
-			debug_print("GetServers: Tìm thấy " .. #servers .. " server hợp lệ (không đầy và không phải server hiện tại)")
-		else
-			debug_print("GetServers: Response không hợp lệ hoặc không có data")
-		end
-	end)
-	if not success then
-		debug_print("GetServers failed: " .. tostring(result))
-		-- Thử lại với URL khác nếu có lỗi
-		local retrySuccess, retryResult = pcall(function()
-			local altUrl = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=50"
-			local response = HttpService:JSONDecode(game:HttpGet(altUrl, true))
-			if response and response.data then
-				for _, server in ipairs(response.data) do
-					if server.id and server.id ~= game.JobId and server.playing and server.maxPlayers then
-						if server.playing < server.maxPlayers then
-							table.insert(servers, server.id)
-						end
-					end
-				end
-			end
-		end)
-		if retrySuccess then
-			debug_print("GetServers retry thành công: " .. #servers .. " server")
-		end
-	end
-	return servers
-end
-
--- Method để lấy danh sách server ít player nhất (ưu tiên same region + low player)
-local function GetLowPlayerServers(maxResults)
-	maxResults = maxResults or 50
-	local servers = ScanJobIds(false, 100) -- Scan nhiều server để có nhiều lựa chọn
-	
-	if #servers == 0 then
-		return {}
-	end
-	
-	-- Detect player region first
-	DetectPlayerRegion()
-	
-	-- Sắp xếp: ƯU TIÊN SAME REGION, sau đó theo số player, cuối cùng theo ping
-	table.sort(servers, function(a, b)
-		-- Ưu tiên 1: Same region server trước
-		if a.isSameRegion ~= b.isSameRegion then
-			return a.isSameRegion == true -- Same region được ưu tiên
-		end
-		
-		-- Ưu tiên 2: Số player ít hơn
-		if a.playing ~= b.playing then
-			return a.playing < b.playing
-		end
-		
-		-- Ưu tiên 3: Ping thấp hơn
-		return (a.ping or 999) < (b.ping or 999)
-	end)
-	
-	-- Lấy top N server (ưu tiên same region + low player)
-	local result = {}
-	for i = 1, math.min(maxResults, #servers) do
-		table.insert(result, servers[i])
-	end
-	
-	return result
-end
-
--- Method để lấy danh sách server cùng region ít player nhất
-local function GetSameRegionServers(maxResults)
-	maxResults = maxResults or 30
-	local servers = ScanJobIds(false, 100)
-	
-	if #servers == 0 then
-		return {}
-	end
-	
-	-- Detect player region
-	DetectPlayerRegion()
-	
-	-- Lọc chỉ same region server
-	local sameRegionServers = {}
-	for _, server in ipairs(servers) do
-		if server.isSameRegion then
-			table.insert(sameRegionServers, server)
-		end
-	end
-	
-	-- Sắp xếp theo số player (ít nhất trước), sau đó theo ping
-	table.sort(sameRegionServers, function(a, b)
-		if a.playing ~= b.playing then
-			return a.playing < b.playing
-		end
-		return (a.ping or 999) < (b.ping or 999)
-	end)
-	
-	-- Lấy top N same region server
-	local result = {}
-	for i = 1, math.min(maxResults, #sameRegionServers) do
-		table.insert(result, sameRegionServers[i])
-	end
-	
-	return result
-end
-
--- Method để scan và lấy danh sách job id có 1-5 players
--- Ưu tiên: 4 players > 5 players > 3 players > 2 players > 1 player
-local function GetServersWith1To5Players(maxResults)
-	maxResults = maxResults or 50
-	local servers = ScanJobIds(false, 200) -- Scan nhiều server để tìm server có 1-5 players
-	
-	if #servers == 0 then
-		return {}
-	end
-	
-	-- Lọc chỉ server có 1-5 players và không phải server hiện tại
-	local filteredServers = {}
-	for _, server in ipairs(servers) do
-		if not server.isCurrentServer and not server.isFull then
-			local playerCount = server.playing or 0
-			if playerCount >= 1 and playerCount <= 5 then
-				table.insert(filteredServers, server)
-			end
-		end
-	end
-	
-	-- Hàm để lấy priority của số player (số càng nhỏ = ưu tiên càng cao)
-	local function GetPlayerPriority(playerCount)
-		if playerCount == 4 then
-			return 1 -- Ưu tiên cao nhất
-		elseif playerCount == 5 then
-			return 2
-		elseif playerCount == 3 then
-			return 3
-		elseif playerCount == 2 then
-			return 4
-		elseif playerCount == 1 then
-			return 5 -- Ưu tiên thấp nhất
-		else
-			return 999 -- Không hợp lệ
-		end
-	end
-	
-	-- Sắp xếp theo priority (4 > 5 > 3 > 2 > 1), sau đó theo ping
-	table.sort(filteredServers, function(a, b)
-		local priorityA = GetPlayerPriority(a.playing or 0)
-		local priorityB = GetPlayerPriority(b.playing or 0)
-		
-		-- Ưu tiên theo priority trước
-		if priorityA ~= priorityB then
-			return priorityA < priorityB
-		end
-		
-		-- Nếu cùng priority, ưu tiên ping thấp hơn
-		return (a.ping or 999) < (b.ping or 999)
-	end)
-	
-	-- Lấy top N server
-	local result = {}
-	for i = 1, math.min(maxResults, #filteredServers) do
-		table.insert(result, filteredServers[i])
-	end
-	
-	return result
-end
-
--- Method để lấy job id tốt nhất (server có ít người chơi nhất)
-local function GetBestJobId()
-	local servers = GetLowPlayerServers(1)
-	if #servers == 0 then
-		return nil
-	end
-	return servers[1].jobId
-end
-
--- Method để lấy random job id từ danh sách (ưu tiên low player)
-local function GetRandomJobId()
-	local servers = GetLowPlayerServers(20) -- Lấy top 20 server ít player nhất
-	if #servers > 0 then
-		-- Ưu tiên chọn từ top 5 server ít player nhất
-		local topServers = {}
-		for i = 1, math.min(5, #servers) do
-			table.insert(topServers, servers[i].jobId)
-		end
-		return topServers[math.random(1, #topServers)]
-	end
-	return nil
-end
-
-local function ServerHopMethod1()
-	-- Method 1: Sử dụng TeleportService với server list (BEST METHOD)
-	local success, err = pcall(function()
-		local servers = GetServers()
-		debug_print("Method 1: Tìm thấy " .. #servers .. " server có sẵn")
-		if #servers > 0 then
-			local currentJobId = game.JobId
-			local randomServer = servers[math.random(1, #servers)]
-			debug_print("Method 1: Đang teleport đến server: " .. tostring(randomServer))
-			
-			-- Gọi teleport
-			TeleportService:TeleportToPlaceInstance(PlaceId, randomServer, player)
-			
-			-- Đợi và kiểm tra xem teleport có thực sự xảy ra không
-			for i = 1, 10 do
-				task.wait(0.2)
-				if game.JobId ~= currentJobId then
-					debug_print("Method 1: Teleport thành công! JobId đã thay đổi từ " .. currentJobId .. " sang " .. game.JobId)
-					return true
-				end
-			end
-			
-			-- Nếu sau 2 giây JobId vẫn chưa thay đổi, có thể teleport chưa xảy ra
-			debug_print("Method 1: Cảnh báo - JobId chưa thay đổi sau 2 giây, teleport có thể chưa thành công")
-			-- Vẫn return true vì đã gọi teleport, có thể đang trong quá trình teleport
-			return true
-		else
-			debug_print("Method 1: Không tìm thấy server nào")
-		end
-		return false
-	end)
-	if not success then
-		debug_print("Method 1 error: " .. tostring(err))
-	end
-	return success and err == true
-end
-
-local function ServerHopMethod2()
-	-- Method 2: Sử dụng script từ GitHub (fallback)
-	local success, err = pcall(function()
-		debug_print("Method 2: Đang load script từ GitHub...")
-		local script = game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low", true)
-		if script and script ~= "" then
-			loadstring(script)()
-			return true
-		else
-			debug_print("Method 2: Script rỗng hoặc không tải được")
-		end
-		return false
-	end)
-	if not success then
-		debug_print("Method 2 error: " .. tostring(err))
-	end
-	return success and err == true
-end
-
-local function ServerHopMethod3()
-	-- Method 3: Teleport trực tiếp đến place mới (random server)
-	local success, err = pcall(function()
-		local currentJobId = game.JobId
-		debug_print("Method 3: Đang teleport trực tiếp...")
-		TeleportService:Teleport(PlaceId, player)
-		
-		-- Đợi và kiểm tra xem teleport có thực sự xảy ra không
-		for i = 1, 10 do
-			task.wait(0.2)
-			if game.JobId ~= currentJobId then
-				debug_print("Method 3: Teleport thành công! JobId đã thay đổi")
-				return true
-			end
-		end
-		
-		debug_print("Method 3: Cảnh báo - JobId chưa thay đổi sau 2 giây")
-		return true
-	end)
-	if not success then
-		debug_print("Method 3 error: " .. tostring(err))
-	end
-	return success and err == true
-end
-
-local function ServerHopMethod4()
-	-- Method 4: Sử dụng GetBestJobId và teleport
-	local success, err = pcall(function()
-		local bestJobId = GetBestJobId()
-		if bestJobId then
-			local currentJobId = game.JobId
-			debug_print("Method 4: Đang teleport đến best server: " .. tostring(bestJobId))
-			TeleportService:TeleportToPlaceInstance(PlaceId, bestJobId, player)
-			
-			-- Đợi và kiểm tra xem teleport có thực sự xảy ra không
-			for i = 1, 10 do
-				task.wait(0.2)
-				if game.JobId ~= currentJobId then
-					debug_print("Method 4: Teleport thành công! JobId đã thay đổi")
-					return true
-				end
-			end
-			
-			debug_print("Method 4: Cảnh báo - JobId chưa thay đổi sau 2 giây")
-			return true
-		else
-			debug_print("Method 4: Không tìm thấy best server")
-		end
-		return false
-	end)
-	if not success then
-		debug_print("Method 4 error: " .. tostring(err))
-	end
-	return success and err == true
-end
-
-local function ServerHopMethod5()
-	-- Method 5: Sử dụng alternative server hop script
-	local success, err = pcall(function()
-		debug_print("Method 5: Đang thử alternative script...")
-		-- Thử với script khác nếu có
-		local url = "https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop"
-		local script = game:HttpGet(url, true)
-		if script and script ~= "" then
-			loadstring(script)()
-			return true
-		end
-		return false
-	end)
-	if not success then
-		debug_print("Method 5 error: " .. tostring(err))
-	end
-	return success and err == true
-end
-
--- Hàm teleport với xác nhận chắc chắn - chỉ return true khi JobId thực sự thay đổi
-local function TeleportWithConfirmation(teleportFunc, description)
-	local originalJobId = game.JobId
-	
-	-- Gọi teleport function với error handling tốt hơn
-	local teleportSuccess, teleportErr = pcall(function()
-		teleportFunc()
-		-- Đảm bảo teleport được gửi đi
-		task.wait(0.1)
-	end)
-	
-	if not teleportSuccess then
-		debug_print(description .. " - Lỗi khi gọi teleport: " .. tostring(teleportErr))
-		return false
-	end
-	
-	-- Đợi một chút để teleport bắt đầu
-	task.wait(0.5)
-	
-	-- Kiểm tra JobId thay đổi với nhiều lần check
-	for checkAttempt = 1, 50 do -- Check trong 10 giây (50 × 0.2s)
-		task.wait(0.2)
-		
-		-- Check JobId thay đổi (kiểm tra đầu tiên)
-		if game.JobId ~= originalJobId then
-			debug_print("✓ " .. description .. " - Teleport thành công! JobId: " .. originalJobId .. " → " .. game.JobId)
-			return true
-		end
-		
-		-- Kiểm tra thêm: nếu player đang loading (có thể đang teleport)
-		if player and player.PlayerGui then
-			local loadingGui = player.PlayerGui:FindFirstChild("LoadingGui")
-			if loadingGui then
-				debug_print(description .. " - Phát hiện LoadingGui, đang teleport...")
-				-- Đợi thêm để teleport hoàn tất
-				for i = 1, 40 do
-					task.wait(0.2)
-					if game.JobId ~= originalJobId then
-						debug_print("✓ " .. description .. " - Teleport thành công sau khi phát hiện LoadingGui!")
-						return true
-					end
-				end
-				break -- Exit outer loop if LoadingGui detected
-			end
-		end
-		
-		-- Check if player character is gone (might be teleporting)
-		if player and not player.Character then
-			debug_print(description .. " - Character disappeared, might be teleporting...")
-			for i = 1, 40 do
-				task.wait(0.2)
-				if game.JobId ~= originalJobId then
-					debug_print("✓ " .. description .. " - Teleport thành công sau khi character disappeared!")
-					return true
-				end
-			end
-			break
-		end
-	end
-	
-	debug_print("⚠ " .. description .. " - JobId chưa thay đổi sau 10 giây")
-	return false
-end
-
--- Hàm teleport đơn giản và chắc chắn hơn
-local function SimpleTeleport(jobId, description)
-	if not jobId then
-		return false
-	end
-	
-	local originalJobId = game.JobId
-	
-	-- Thử nhiều cách teleport
-	local methods = {
-		function()
-			TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
-		end,
-		function()
-			TeleportService:TeleportAsync(PlaceId, {player}, nil, jobId)
-		end,
-		function()
-			-- Fallback: teleport trực tiếp
-			TeleportService:Teleport(PlaceId, player)
-		end
-	}
-	
-	for methodIndex, method in ipairs(methods) do
-		local success, err = pcall(method)
-		if success then
-			debug_print(description .. " - Đã gọi teleport method " .. methodIndex)
-			
-			-- Đợi và kiểm tra
-			for i = 1, 50 do
-				task.wait(0.2)
-				if game.JobId ~= originalJobId then
-					debug_print("✓ " .. description .. " - Teleport thành công với method " .. methodIndex .. "! JobId: " .. originalJobId .. " → " .. game.JobId)
-					return true
-				end
-			end
-		else
-			debug_print(description .. " - Method " .. methodIndex .. " failed: " .. tostring(err))
-		end
-	end
-	
-	return false
-end
-
--- Hàm teleport với retry tự động - đảm bảo 100% thành công
-local function TeleportWithAutoRetry(teleportFunc, description, maxRetries)
-	maxRetries = maxRetries or 3
-	local originalJobId = game.JobId
-	
-	for retry = 1, maxRetries do
-		local success = TeleportWithConfirmation(teleportFunc, description .. " (Retry " .. retry .. "/" .. maxRetries .. ")")
-		
-		if success then
-			return true
-		end
-		
-		-- Nếu chưa thành công, đợi một chút rồi thử lại
-		if retry < maxRetries then
-			debug_print(description .. " - Chưa thành công, đợi 0.5s rồi retry...")
-			task.wait(0.5)
-		end
-	end
-	
-	return false
-end
-
-local function OptimizedServerHop(reason)
-	debug_print("Đang thực hiện server hop... Lý do: " .. (reason or "Unknown"))
-	SetStatus("Server hop - Đang scan job id có 1-5 players...")
-	
-	-- Đảm bảo player và character tồn tại
-	if not player or not player.Parent then
-		warn("Player không tồn tại, không thể server hop")
-		return false
-	end
-	
-	-- Đảm bảo TeleportService sẵn sàng
-	if not TeleportService then
-		warn("TeleportService không khả dụng")
-		return false
-	end
-	
-	local originalJobId = game.JobId
-	
-	-- Scan job id có 1-5 players
-	debug_print("Đang scan job id có 1-5 players...")
-	local servers1To5 = GetServersWith1To5Players(100)
-	
-	if #servers1To5 == 0 then
-		debug_print("Không tìm thấy server nào có 1-5 players, thử scan lại...")
-		-- Retry scan
-		task.wait(1)
-		servers1To5 = GetServersWith1To5Players(100)
-	end
-	
-	if #servers1To5 > 0 then
-		debug_print("Tìm thấy " .. #servers1To5 .. " server có 1-5 players, đang thử join từng server...")
-		SetStatus("Server hop - Tìm thấy " .. #servers1To5 .. " server, đang thử join...")
-		
-		-- Thử join từng job id theo thứ tự (từ ít player nhất)
-		for i = 1, #servers1To5 do
-			local targetServer = servers1To5[i]
-			debug_print("Thử join server " .. i .. "/" .. #servers1To5 .. ": JobId=" .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
-			
-			-- Thử với SimpleTeleport
-			local success = SimpleTeleport(targetServer.jobId, "Server " .. i .. "/" .. #servers1To5 .. " (" .. targetServer.playing .. " players)")
-			
-			if not success then
-				-- Fallback: thử với TeleportWithAutoRetry
-				success = TeleportWithAutoRetry(function()
-					TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-				end, "Server " .. i .. "/" .. #servers1To5 .. " Retry", 2)
-			end
-			
-			if success then
-				SetStatus("Server hop thành công! Đã vào server (" .. targetServer.playing .. " players)")
-				debug_print("✓ Thành công join server " .. targetServer.jobId .. " với " .. targetServer.playing .. " players")
-				return true
-			else
-				debug_print("✗ Không thể join server " .. targetServer.jobId .. ", thử server tiếp theo...")
-				task.wait(0.3) -- Đợi một chút trước khi thử server tiếp theo
-			end
-		end
-		
-		debug_print("Đã thử hết " .. #servers1To5 .. " server nhưng chưa join được, tiếp tục retry...")
-	else
-		debug_print("Không tìm thấy server nào có 1-5 players")
-	end
-	
-	-- Nếu không tìm thấy server 1-5 players hoặc đã thử hết, retry vô hạn với scan lại
-	warn("⚠ Chưa hop được, tiếp tục retry và scan lại...")
-	SetStatus("Server hop - Đang retry scan và thử join lại...")
-	
-	local retryCount = 0
-	local consecutiveNoServerCount = 0 -- Đếm số lần liên tiếp không tìm thấy server
-	
-	while true do
-		retryCount = retryCount + 1
-		debug_print("=== Retry attempt " .. retryCount .. " - Scan lại job id có 1-5 players ===")
-		
-		-- Scan lại job id có 1-5 players (mỗi lần retry đều scan lại để có danh sách mới nhất)
-		local servers1To5 = GetServersWith1To5Players(100)
-		
-		if #servers1To5 > 0 then
-			consecutiveNoServerCount = 0 -- Reset counter khi tìm thấy server
-			debug_print("Retry " .. retryCount .. ": Tìm thấy " .. #servers1To5 .. " server có 1-5 players, đang thử join từng server...")
-			SetStatus("Server hop - Retry " .. retryCount .. ": Tìm thấy " .. #servers1To5 .. " server, đang thử join...")
-			
-			-- Thử join từng job id theo thứ tự ưu tiên (4 > 5 > 3 > 2 > 1)
-			for i = 1, #servers1To5 do
-				local targetServer = servers1To5[i]
-				debug_print("Retry " .. retryCount .. ": Thử join server " .. i .. "/" .. #servers1To5 .. ": JobId=" .. tostring(targetServer.jobId) .. " (" .. targetServer.playing .. " players, " .. targetServer.ping .. "ms)")
-				
-				-- Thử với SimpleTeleport
-				local success = SimpleTeleport(targetServer.jobId, "Retry " .. retryCount .. " Server " .. i .. "/" .. #servers1To5 .. " (" .. targetServer.playing .. " players)")
-				
-				if not success then
-					-- Fallback: thử với TeleportWithAutoRetry
-					success = TeleportWithAutoRetry(function()
-						TeleportService:TeleportToPlaceInstance(PlaceId, targetServer.jobId, player)
-					end, "Retry " .. retryCount .. " Server " .. i .. "/" .. #servers1To5 .. " Retry", 3)
-				end
-				
-				if success then
-					SetStatus("Server hop thành công! Đã vào server (" .. targetServer.playing .. " players)")
-					debug_print("✓ Thành công join server " .. targetServer.jobId .. " với " .. targetServer.playing .. " players sau " .. retryCount .. " lần retry")
-					return true
-				else
-					debug_print("✗ Không thể join server " .. targetServer.jobId .. ", thử server tiếp theo...")
-					task.wait(0.3) -- Đợi một chút trước khi thử server tiếp theo
-				end
-			end
-			
-			debug_print("Retry " .. retryCount .. ": Đã thử hết " .. #servers1To5 .. " server nhưng chưa join được, sẽ scan lại...")
-		else
-			consecutiveNoServerCount = consecutiveNoServerCount + 1
-			debug_print("Retry " .. retryCount .. ": Không tìm thấy server nào có 1-5 players (lần liên tiếp: " .. consecutiveNoServerCount .. ")")
-			SetStatus("Server hop - Retry " .. retryCount .. ": Không tìm thấy server, đang scan lại...")
-			
-			-- Nếu nhiều lần liên tiếp không tìm thấy server, tăng delay
-			if consecutiveNoServerCount >= 5 then
-				debug_print("Đã " .. consecutiveNoServerCount .. " lần liên tiếp không tìm thấy server, tăng delay scan...")
-				task.wait(2) -- Đợi lâu hơn trước khi scan lại
-			end
-		end
-		
-		-- Kiểm tra xem có đang teleport không (có thể đã thành công nhưng chưa phát hiện)
-		if game.JobId ~= originalJobId then
-			debug_print("✓ Phát hiện JobId đã thay đổi từ " .. originalJobId .. " sang " .. game.JobId .. "!")
-			SetStatus("Server hop thành công! Đã vào server mới")
-			return true
-		end
-		
-		-- Đợi trước khi retry và scan lại (delay ngắn nếu đã tìm thấy server trước đó)
-		if consecutiveNoServerCount == 0 then
-			task.wait(0.5) -- Delay ngắn nếu vừa tìm thấy server
-		else
-			task.wait(1) -- Delay dài hơn nếu không tìm thấy server
-		end
-	end
-end
-
-local function ServerHop(reason)
-	return OptimizedServerHop(reason)
-end
-
-local function CheckPlayerTeleport(plr)
-	if not plr or plr == player then return false end
-	
-	local char = plr.Character
-	if not char then 
-		-- Xóa dữ liệu nếu không có character
-		if PlayerPositions[plr.Name] then
-			PlayerPositions[plr.Name] = nil
-		end
-		return false 
-	end
-	
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	local hum = char:FindFirstChild("Humanoid")
-	
-	if not hrp or not hum or hum.Health <= 0 then
-		-- Xóa dữ liệu nếu người chơi không có HRP hoặc đã chết
-		if PlayerPositions[plr.Name] then
-			PlayerPositions[plr.Name] = nil
-		end
-		return false
-	end
-	
-	local currentPos = hrp.Position
-	local currentTime = tick()
-	
-	-- Kiểm tra nếu có vị trí trước đó
-	if PlayerPositions[plr.Name] then
-		local lastPos = PlayerPositions[plr.Name].Position
-		local lastTime = PlayerPositions[plr.Name].Time
-		local distance = (currentPos - lastPos).Magnitude
-		local timeDiff = currentTime - lastTime
-		
-		-- Nếu di chuyển > 10 stud trong khoảng 1 giây (cho phép sai số nhỏ)
-		if distance > TeleportThreshold and timeDiff <= TeleportCheckInterval + 0.2 then
-			-- Người này đang teleport
-			debug_print("Phát hiện teleport: " .. plr.Name .. " (di chuyển " .. string.format("%.2f", distance) .. " stud trong " .. string.format("%.2f", timeDiff) .. "s)")
-			-- Vẫn cập nhật vị trí để tiếp tục theo dõi
-			PlayerPositions[plr.Name] = {
-				Position = currentPos,
-				Time = currentTime
-			}
-			return true
-		end
-	end
-	
-	-- Cập nhật vị trí hiện tại
-	PlayerPositions[plr.Name] = {
-		Position = currentPos,
-		Time = currentTime
-	}
-	
-	return false
-end
-
--- Hệ thống theo dõi teleport - Chạy xuyên suốt KHÔNG BAO GIỜ DỪNG
-task.spawn(function()
-	-- Khởi tạo vị trí cho tất cả player hiện tại
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= player and plr.Character then
-			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-			if hrp then
-				PlayerPositions[plr.Name] = {
-					Position = hrp.Position,
-					Time = tick()
-				}
-			end
-		end
-	end
-	
-	-- Tự động thêm player mới vào danh sách theo dõi
-	Players.PlayerAdded:Connect(function(plr)
-		if plr ~= player then
-			-- Đợi character load
-			plr.CharacterAdded:Connect(function(char)
-				task.wait(1) -- Đợi character hoàn toàn load
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					PlayerPositions[plr.Name] = {
-						Position = hrp.Position,
-						Time = tick()
-					}
-					debug_print("Đã thêm player mới vào danh sách theo dõi: " .. plr.Name)
-				end
-			end)
-			
-			-- Nếu character đã có sẵn
-			if plr.Character then
-				local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-				if hrp then
-					PlayerPositions[plr.Name] = {
-						Position = hrp.Position,
-						Time = tick()
-					}
-					debug_print("Đã thêm player vào danh sách theo dõi: " .. plr.Name)
-				end
-			end
-		end
-	end)
-	
-	-- Vòng lặp check xuyên suốt - CHẠY MÃI MÃI KHÔNG BAO GIỜ DỪNG
-	local checkCount = 0
-	local lastLogTime = tick()
-	
-	while true do
-		local success, err = pcall(function()
-			task.wait(TeleportCheckInterval)
-			checkCount = checkCount + 1
-			
-			local activeTeleporters = 0
-			
-			-- Kiểm tra tất cả người chơi (bao gồm cả player mới join)
-			for _, plr in ipairs(Players:GetPlayers()) do
-				if plr ~= player then
-					-- Đảm bảo player mới được thêm vào danh sách nếu chưa có
-					if not PlayerPositions[plr.Name] and plr.Character then
-						local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-						if hrp then
-							PlayerPositions[plr.Name] = {
-								Position = hrp.Position,
-								Time = tick()
-							}
-						end
-					end
-					
-					-- Check teleport
-					if CheckPlayerTeleport(plr) then
-						activeTeleporters = activeTeleporters + 1
-					end
-				end
-			end
-			
-			-- Log mỗi 60 lần check (1 phút) để đảm bảo script vẫn chạy
-			if checkCount % 60 == 0 then
-				local currentTime = tick()
-				local timeSinceLastLog = currentTime - lastLogTime
-				debug_print("✓ Teleport detection đang chạy - Đã check " .. checkCount .. " lần (" .. string.format("%.1f", timeSinceLastLog) .. "s, " .. #Players:GetPlayers() .. " players)")
-				lastLogTime = currentTime
-			end
-			
-			-- Debug: Hiển thị số người teleport
-			if activeTeleporters > 0 then
-				debug_print("Số người đang teleport: " .. activeTeleporters .. "/" .. MaxTeleporters .. " (Tổng player: " .. #Players:GetPlayers() .. ")")
-			end
-			
-			-- Kiểm tra số người teleport (KHÔNG break, tiếp tục check)
-			if activeTeleporters >= MaxTeleporters then
-				debug_print("⚠ Phát hiện " .. activeTeleporters .. " người đang teleport! Đang server hop...")
-				ServerHop("Phát hiện " .. activeTeleporters .. " người đang teleport")
-				-- KHÔNG break - tiếp tục check sau khi hop
-				task.wait(5) -- Đợi một chút sau khi hop để tránh spam
-			end
-		end)
-		
-		-- Nếu có lỗi, log và tiếp tục (KHÔNG BAO GIỜ DỪNG)
-		if not success then
-			warn("Lỗi trong teleport detection loop: " .. tostring(err))
-			debug_print("Lỗi nhưng tiếp tục check...")
-			task.wait(1) -- Đợi 1 giây rồi tiếp tục
-		end
-	end
-end)
-
--- Xóa dữ liệu khi người chơi rời server
-Players.PlayerRemoving:Connect(function(plr)
-	if PlayerPositions[plr.Name] then
-		PlayerPositions[plr.Name] = nil
-		debug_print("Đã xóa player khỏi danh sách theo dõi: " .. plr.Name)
-	end
-end)
 
 --// Teleport to Coin
 local function TeleportToCoin(coin)
@@ -2351,6 +1469,101 @@ end
 debug_print("Script started.")
 task.spawn(function()
 	CPUSaversIGMA()
+end)
+
+-- Farmer Detection System
+local function DetectFarmers()
+	if not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
+		return
+	end
+
+	local detectedFarmers = 0
+	local currentTime = tick()
+	
+	-- Clean up old player positions
+	for plrName, data in pairs(PlayerPositions) do
+		if not Players:FindFirstChild(plrName) then
+			PlayerPositions[plrName] = nil
+		end
+	end
+
+	-- Check all players
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player and plr.Character then
+			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+			local hum = plr.Character:FindFirstChild("Humanoid")
+			
+			if hrp and hum and hum.Health > 0 then
+				local currentPos = hrp.Position
+				local plrName = plr.Name
+				
+				-- Kiểm tra nếu player có vị trí trước đó
+				if PlayerPositions[plrName] then
+					local lastPos = PlayerPositions[plrName].Position
+					local lastTime = PlayerPositions[plrName].Time
+					local distance = (currentPos - lastPos).Magnitude
+					local timeDiff = currentTime - lastTime
+					
+					-- Phát hiện teleport: di chuyển > threshold trong thời gian ngắn
+					if distance > cfg["Misc"]["AutoHopOnFarmers"]["TeleportThreshold"] and timeDiff < 2 then
+						-- Tính tốc độ di chuyển
+						local speed = distance / timeDiff
+						
+						-- Nếu tốc độ > 25 studs/s (bình thường max ~16 studs/s), coi là teleport
+						if speed > 25 then
+							detectedFarmers = detectedFarmers + 1
+							debug_print("Phát hiện farmer: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s)")
+						end
+					end
+				end
+				
+				-- Cập nhật vị trí hiện tại
+				PlayerPositions[plrName] = {
+					Position = currentPos,
+					Time = currentTime
+				}
+			end
+		end
+	end
+
+	FarmerCount = detectedFarmers
+	
+	-- Cập nhật UI
+	if FarmerCountLabel then
+		FarmerCountLabel.Text = "Farmers: " .. detectedFarmers
+		if detectedFarmers >= cfg["Misc"]["AutoHopOnFarmers"]["MinFarmers"] then
+			FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- Đỏ khi >= threshold
+		else
+			FarmerCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255) -- Trắng bình thường
+		end
+	end
+	
+	-- Nếu phát hiện >= số lượng farmer tối thiểu, hop server
+	if detectedFarmers >= cfg["Misc"]["AutoHopOnFarmers"]["MinFarmers"] then
+		debug_print("Phát hiện " .. detectedFarmers .. " farmer(s)! Đang hop server...")
+		StatusText.Text = "Status: Phát hiện " .. detectedFarmers .. " farmer! Đang hop server..."
+		
+		-- Hop server
+		task.wait(0.5)
+		loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
+	end
+end
+
+-- Chạy hệ thống phát hiện farmer
+task.spawn(function()
+	while true do
+		if cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
+			DetectFarmers()
+		end
+		task.wait(cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 1)
+	end
+end)
+
+-- Clean up khi player rời khỏi server
+Players.PlayerRemoving:Connect(function(plr)
+	if PlayerPositions[plr.Name] then
+		PlayerPositions[plr.Name] = nil
+	end
 end)
 
 local function Start_Farm()
