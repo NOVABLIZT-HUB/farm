@@ -1456,10 +1456,12 @@ local function HopTo4PlayerServer()
 	local targetPlayerCount = 4
 	
 	debug_print("Đang tìm server có " .. targetPlayerCount .. " players...")
-	StatusText.Text = "Status: Đang tìm server có " .. targetPlayerCount .. " players..."
+	if StatusText then
+		StatusText.Text = "Status: Đang tìm server có " .. targetPlayerCount .. " players..."
+	end
 	
 	local success, servers = pcall(function()
-		-- Lấy danh sách servers từ Roblox API
+		-- Lấy danh sách servers từ Roblox API (không cần cookie vì là public API)
 		local response = game:HttpGet(_servers)
 		if response then
 			local data = HttpService:JSONDecode(response)
@@ -1468,10 +1470,12 @@ local function HopTo4PlayerServer()
 		return nil
 	end)
 	
-	if not success or not servers then
+	if not success or not servers or #servers == 0 then
 		warn("Không thể lấy danh sách servers. Đang shutdown...")
 		debug_print("Không thể lấy danh sách servers. Đang shutdown...")
-		StatusText.Text = "Status: Lỗi! Đang shutdown..."
+		if StatusText then
+			StatusText.Text = "Status: Lỗi! Đang shutdown..."
+		end
 		task.wait(2)
 		game:Shutdown()
 		return false
@@ -1498,7 +1502,9 @@ local function HopTo4PlayerServer()
 	
 	if foundServer then
 		debug_print("Tìm thấy server: " .. foundServer.id .. " (Players: " .. foundServer.playing .. "). Đang hop...")
-		StatusText.Text = "Status: Đang hop đến server có " .. foundServer.playing .. " players..."
+		if StatusText then
+			StatusText.Text = "Status: Đang hop đến server có " .. foundServer.playing .. " players..."
+		end
 		
 		local hopSuccess, hopError = pcall(function()
 			TeleportService:TeleportToPlaceInstance(PlaceId, foundServer.id, player)
@@ -1512,7 +1518,9 @@ local function HopTo4PlayerServer()
 			if game.JobId == currentJobId then
 				warn("Hop server thất bại. Đang shutdown...")
 				debug_print("Hop server thất bại. Đang shutdown...")
-				StatusText.Text = "Status: Hop thất bại! Đang shutdown..."
+				if StatusText then
+					StatusText.Text = "Status: Hop thất bại! Đang shutdown..."
+				end
 				task.wait(2)
 				game:Shutdown()
 				return false
@@ -1523,7 +1531,9 @@ local function HopTo4PlayerServer()
 		else
 			warn("Lỗi khi hop server: " .. tostring(hopError) .. ". Đang shutdown...")
 			debug_print("Lỗi khi hop server: " .. tostring(hopError) .. ". Đang shutdown...")
-			StatusText.Text = "Status: Lỗi hop! Đang shutdown..."
+			if StatusText then
+				StatusText.Text = "Status: Lỗi hop! Đang shutdown..."
+			end
 			task.wait(2)
 			game:Shutdown()
 			return false
@@ -1531,7 +1541,9 @@ local function HopTo4PlayerServer()
 	else
 		warn("Không tìm thấy server có " .. targetPlayerCount .. " players. Đang shutdown...")
 		debug_print("Không tìm thấy server có " .. targetPlayerCount .. " players. Đang shutdown...")
-		StatusText.Text = "Status: Không tìm thấy server! Đang shutdown..."
+		if StatusText then
+			StatusText.Text = "Status: Không tìm thấy server! Đang shutdown..."
+		end
 		task.wait(2)
 		game:Shutdown()
 		return false
