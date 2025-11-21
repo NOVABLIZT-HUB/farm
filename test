@@ -553,7 +553,7 @@ local function Fetch4PlayerJobIds()
     end
 end
 
--- 6. The "Old Style" Hop Function (Main Entry Point)
+-- 6. The "Old Style" Hop Function with Retry Loop
 local function HopTo4PlayerServer()
     -- If we have no cached IDs, fetch new ones
     if #ServerHopData.JobIds == 0 then
@@ -565,24 +565,29 @@ local function HopTo4PlayerServer()
         end
     end
 
-    -- Pop the first ID from the cache
-    local jobId = table.remove(ServerHopData.JobIds, 1)
-    
-    if jobId then
-        debug_print("Hopping to cached server: " .. jobId)
-        if StatusText then StatusText.Text = "Status: Hopping (Cached ID)..." end
+    -- Loop until we find a server we can join or run out of IDs
+    while #ServerHopData.JobIds > 0 do
+        -- Pop the first ID from the cache
+        local jobId = table.remove(ServerHopData.JobIds, 1)
         
-        local success, err = pcall(function()
-            TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, Players.LocalPlayer)
-        end)
-        
-        if success then
-            return true
-        else
-            warn("Teleport failed, trying next cached ID...")
-            return false -- Will retry next loop
+        if jobId then
+            debug_print("Hopping to cached server: " .. jobId)
+            if StatusText then StatusText.Text = "Status: Hopping (Cached ID)..." end
+            
+            local success, err = pcall(function()
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, jobId, Players.LocalPlayer)
+            end)
+            
+            if success then
+                return true -- Success! Teleport started.
+            else
+                warn("Teleport failed (" .. tostring(err) .. "). Trying next cached ID...")
+                task.wait(1) -- Small wait before retrying next ID
+            end
         end
     end
+
+    warn("Exhausted all cached IDs in this batch.")
     return false
 end
 
