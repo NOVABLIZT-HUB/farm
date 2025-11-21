@@ -527,9 +527,12 @@ local function BetterServerHop()
             end
         end
 
-        -- If no 2-4 player server is found in this batch, wait 5s and try again
-        warn("No 2-4 player servers found. Retrying...")
-        task.wait(5)
+        -- If no 2-4 player server is found in this batch, wait 3-5 minutes to prevent API limit
+        warn("No 2-4 player servers found. Cooling down for 3-5 minutes...")
+        if StatusText then StatusText.Text = "Status: No Server Found. Waiting 3-5m..." end
+        
+        -- Random wait between 180s (3 mins) and 300s (5 mins)
+        task.wait(math.random(180, 300))
     end
 end
 
