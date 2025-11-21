@@ -50,7 +50,7 @@ local Default_Config = {
 			["Enabled"] = true,
 			["MinFarmers"] = 4, -- Số lượng farmer tối thiểu để hop
 			["TeleportThreshold"] = 10, -- Khoảng cách tối thiểu để coi là teleport (studs)
-			["CheckInterval"] = 1 -- Thời gian giữa các lần check (giây)
+			["CheckInterval"] = 60 -- Thời gian giữa các lần check (giây) - 1 phút
 		},
 
 	}
@@ -970,7 +970,7 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
+					HopServerNoAPI()
 				else
 					game:Shutdown()
 				end
@@ -980,7 +980,7 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
+	        HopServerNoAPI()
 	    end
 	end
 
@@ -1471,6 +1471,28 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
+-- Hàm hop server không dùng Roblox API (dùng TeleportService trực tiếp)
+local function HopServerNoAPI()
+	local success, result = pcall(function()
+		-- Teleport đến PlaceId mới, Roblox sẽ tự động chọn server khác
+		debug_print("Đang hop server (không dùng API)...")
+		StatusText.Text = "Status: Đang hop server..."
+		
+		-- Teleport đến cùng PlaceId, Roblox sẽ tự động tìm server mới
+		TeleportService:Teleport(PlaceId, player)
+		return true
+	end)
+	
+	if not success then
+		warn("Lỗi khi hop server: " .. tostring(result))
+		-- Fallback: thử lại sau 1 giây
+		task.wait(1)
+		pcall(function()
+			TeleportService:Teleport(PlaceId, player)
+		end)
+	end
+end
+
 -- Farmer Detection System
 local function DetectFarmers()
 	if not cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
@@ -1528,7 +1550,7 @@ local function DetectFarmers()
 
 	FarmerCount = detectedFarmers
 	
-	-- Cập nhật UI
+	-- Cập nhật UI (nếu có label)
 	if FarmerCountLabel then
 		FarmerCountLabel.Text = "Farmers: " .. detectedFarmers
 		if detectedFarmers >= cfg["Misc"]["AutoHopOnFarmers"]["MinFarmers"] then
@@ -1543,19 +1565,19 @@ local function DetectFarmers()
 		debug_print("Phát hiện " .. detectedFarmers .. " farmer(s)! Đang hop server...")
 		StatusText.Text = "Status: Phát hiện " .. detectedFarmers .. " farmer! Đang hop server..."
 		
-		-- Hop server
+		-- Hop server không dùng API
 		task.wait(0.5)
-		loadstring(game:HttpGet('https://raw.githubusercontent.com/Cesare0328/my-scripts/refs/heads/main/CachedServerhop.lua'))()
+		HopServerNoAPI()
 	end
 end
 
--- Chạy hệ thống phát hiện farmer
+-- Chạy hệ thống phát hiện farmer mỗi 1 phút
 task.spawn(function()
 	while true do
 		if cfg["Misc"]["AutoHopOnFarmers"]["Enabled"] then
 			DetectFarmers()
 		end
-		task.wait(cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 1)
+		task.wait(cfg["Misc"]["AutoHopOnFarmers"]["CheckInterval"] or 60)
 	end
 end)
 
