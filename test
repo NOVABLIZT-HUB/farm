@@ -113,11 +113,13 @@ local visited = {}
 
 -- Server Hop System với 4 players
 local ServerHopData = {
-	JobIds = {}, -- Lưu 3 job IDs có 4 players
+	JobIds = {}, -- Lưu danh sách servers có 4 players (cache)
 	LastFetchTime = 0, -- Thời gian lần cuối lấy job IDs
-	HopCount = 0, -- Số lần đã hop
+	HopCount = 0, -- Số lần đã hop trong chu kỳ hiện tại
 	MaxHops = 3, -- Tối đa 3 lần hop trước khi chờ
-	WaitTime = 300 -- 5 phút = 300 giây
+	WaitTime = 300, -- 5 phút = 300 giây
+	IsWaiting = false, -- Flag để biết đang trong thời gian chờ sau khi dùng hết 3 job IDs
+	UsedJobIds = {} -- Lưu các job IDs đã dùng trong chu kỳ hiện tại
 }
 
 -- Player Teleport Detection System
@@ -1521,57 +1523,55 @@ local function Get4PlayerServers()
 	return fourPlayerServers
 end
 
--- Hàm lấy 3 job IDs có 4 players
-local function Fetch4PlayerJobIds()
-	local currentTime = tick()
-	
-	-- Kiểm tra xem có cần chờ không
-	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
-		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
-		if timeSinceLastFetch < ServerHopData.WaitTime then
-			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
-			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
-			return false
+-- Hàm lấy 1 job ID có 4 players (quét từng cái một)
+local function Fetch1JobId()
+	-- Lấy danh sách servers có 4 players (hoặc dùng cache nếu có)
+	if #ServerHopData.JobIds == 0 then
+		local servers = Get4PlayerServers()
+		
+		if #servers == 0 then
+			warn("Không tìm thấy server nào có 4 players")
+			return nil
 		end
-	end
-	
-	-- Lấy danh sách servers có 4 players
-	local servers = Get4PlayerServers()
-	
-	if #servers == 0 then
-		warn("Không tìm thấy server nào có 4 players")
-		return false
-	end
-	
-	-- Lấy tối đa 3 job IDs
-	ServerHopData.JobIds = {}
-	local count = 0
-	for _, jobId in ipairs(servers) do
-		if count >= ServerHopData.MaxHops then
-			break
+		
+		-- Lọc bỏ các job IDs đã dùng
+		local availableServers = {}
+		for _, jobId in ipairs(servers) do
+			local alreadyUsed = false
+			for _, usedId in ipairs(ServerHopData.UsedJobIds) do
+				if jobId == usedId then
+					alreadyUsed = true
+					break
+				end
+			end
+			if not alreadyUsed then
+				table.insert(availableServers, jobId)
+			end
 		end
-		table.insert(ServerHopData.JobIds, jobId)
-		count = count + 1
+		
+		if #availableServers == 0 then
+			debug_print("Đã dùng hết tất cả servers có sẵn. Cần quét lại...")
+			-- Reset và quét lại
+			ServerHopData.UsedJobIds = {}
+			availableServers = servers
+		end
+		
+		ServerHopData.JobIds = availableServers
 	end
 	
-	ServerHopData.LastFetchTime = currentTime
-	ServerHopData.HopCount = 0
-	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
-	return true
+	-- Lấy job ID đầu tiên từ danh sách
+	if #ServerHopData.JobIds > 0 then
+		local jobId = ServerHopData.JobIds[1]
+		table.remove(ServerHopData.JobIds, 1) -- Xóa job ID đã lấy
+		debug_print("Đã lấy 1 job ID: " .. jobId)
+		return jobId
+	end
+	
+	return nil
 end
 
--- Hàm hop đến server có 4 players
-local function HopTo4PlayerServer()
-	-- Kiểm tra xem có job IDs không
-	if #ServerHopData.JobIds == 0 then
-		-- Thử lấy job IDs mới
-		if not Fetch4PlayerJobIds() then
-			return false
-		end
-	end
-	
-	-- Lấy job ID đầu tiên
-	local jobId = ServerHopData.JobIds[1]
+-- Hàm hop đến server có 4 players (dùng 1 job ID)
+local function HopTo4PlayerServer(jobId)
 	if not jobId then
 		return false
 	end
@@ -1586,15 +1586,15 @@ local function HopTo4PlayerServer()
 	end)
 	
 	if hopSuccess then
-		-- Xóa job ID đã dùng
-		table.remove(ServerHopData.JobIds, 1)
+		-- Đánh dấu job ID đã dùng
+		table.insert(ServerHopData.UsedJobIds, jobId)
 		ServerHopData.HopCount = ServerHopData.HopCount + 1
-		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
+		debug_print("Đã gửi yêu cầu hop server thành công! Đã hop " .. ServerHopData.HopCount .. "/" .. ServerHopData.MaxHops .. " lần")
 		return true
 	else
 		warn("Lỗi khi hop server: " .. tostring(hopError))
-		-- Xóa job ID lỗi và thử job ID tiếp theo
-		table.remove(ServerHopData.JobIds, 1)
+		-- Đánh dấu job ID lỗi đã dùng để không dùng lại
+		table.insert(ServerHopData.UsedJobIds, jobId)
 		return false
 	end
 end
@@ -1667,43 +1667,113 @@ task.spawn(function()
 	
 	task.wait(2)
 	
-	-- Lấy job IDs ban đầu
-	Fetch4PlayerJobIds()
+	-- Không lấy job IDs ban đầu, chờ phát hiện 4 players teleport trước
 	
-		-- Kiểm tra định kỳ
-		while true do
-			local success, err = pcall(function()
-				-- Detect players teleport
-				local teleportCount = DetectOtherPlayersTeleport()
+	-- Kiểm tra định kỳ
+	while true do
+		local success, err = pcall(function()
+			-- Kiểm tra xem có đang trong thời gian chờ không
+			if ServerHopData.IsWaiting then
+				local currentTime = tick()
+				local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
 				
-				-- Nếu phát hiện player teleport, hop server
-				if teleportCount > 0 then
-					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+				-- Nếu đã hết thời gian chờ (5 phút)
+				if timeSinceLastFetch >= ServerHopData.WaitTime then
+					ServerHopData.IsWaiting = false
+					debug_print("Đã hết thời gian chờ 5 phút. Tiếp tục quét players teleport...")
 					if StatusText then
-						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+						StatusText.Text = "Status: Đang quét players teleport..."
 					end
-					
-					-- Thử lấy job IDs mới nếu cần
-					if #ServerHopData.JobIds == 0 then
-						Fetch4PlayerJobIds()
-					end
-					
-					-- Hop đến server có 4 players
-					if #ServerHopData.JobIds > 0 then
-						HopTo4PlayerServer()
-						-- Chờ một chút sau khi hop
-						task.wait(5)
-					end
+				else
+					-- Vẫn đang trong thời gian chờ, không check teleport
+					local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
+					-- debug_print("Đang trong thời gian chờ: còn " .. math.floor(remainingTime) .. " giây...")
+					task.wait(1)
+					return
 				end
-			end)
-			
-			if not success then
-				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 			end
 			
-			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
+			-- Detect players teleport (chỉ chạy khi không trong thời gian chờ)
+			local teleportCount = DetectOtherPlayersTeleport()
+			
+			-- Chỉ lấy job IDs khi phát hiện ĐÚNG 4 players teleport
+			if teleportCount == 4 then
+				debug_print("Phát hiện đúng 4 players đang teleport! Đang quét job ID...")
+				if StatusText then
+					StatusText.Text = "Status: Phát hiện 4 players teleport! Đang quét job ID..."
+				end
+				
+				-- Reset counter khi bắt đầu quét mới
+				ServerHopData.HopCount = 0
+				ServerHopData.UsedJobIds = {}
+				
+				-- Quét và dùng từng job ID một
+				local hopSuccess = false
+				local attempts = 0
+				local maxAttempts = ServerHopData.MaxHops
+				
+				while not hopSuccess and attempts < maxAttempts do
+					-- Quét 1 job ID
+					local jobId = Fetch1JobId()
+					
+					if jobId then
+						attempts = attempts + 1
+						debug_print("Lần thử " .. attempts .. "/" .. maxAttempts .. ": Đang hop với job ID " .. jobId)
+						
+						-- Dùng job ID để hop
+						hopSuccess = HopTo4PlayerServer(jobId)
+						
+						if hopSuccess then
+							debug_print("Hop thành công! Dừng quét.")
+							-- Chờ một chút sau khi hop
+							task.wait(2)
+							break
+						else
+							debug_print("Hop không thành công. Quét job ID tiếp theo...")
+							-- Chờ một chút trước khi quét tiếp
+							task.wait(1)
+						end
+					else
+						debug_print("Không tìm thấy job ID nào. Tiếp tục quét...")
+						break
+					end
+				end
+				
+				-- Nếu đã dùng hết 3 job IDs (thành công hoặc thất bại)
+				if ServerHopData.HopCount >= ServerHopData.MaxHops then
+					-- Đánh dấu đang trong thời gian chờ
+					ServerHopData.IsWaiting = true
+					ServerHopData.LastFetchTime = tick()
+					ServerHopData.HopCount = 0
+					ServerHopData.UsedJobIds = {}
+					ServerHopData.JobIds = {}
+					debug_print("Đã dùng hết " .. ServerHopData.MaxHops .. " job IDs. Bắt đầu thời gian chờ 5 phút...")
+					if StatusText then
+						StatusText.Text = "Status: Đã dùng hết job IDs. Chờ 5 phút..."
+					end
+				elseif hopSuccess then
+					-- Hop thành công, reset cache
+					ServerHopData.JobIds = {}
+					debug_print("Hop thành công! Sẵn sàng quét lại khi phát hiện 4 players teleport.")
+				else
+					-- Hop không thành công nhưng chưa đủ 3 lần, tiếp tục quét khi phát hiện lại
+					debug_print("Hop không thành công. Đã thử " .. ServerHopData.HopCount .. "/" .. ServerHopData.MaxHops .. " lần. Sẵn sàng quét tiếp khi phát hiện 4 players teleport.")
+				end
+			elseif teleportCount > 0 then
+				-- Phát hiện teleport nhưng không đủ 4 players
+				debug_print("Phát hiện " .. teleportCount .. " player(s) teleport (cần 4). Tiếp tục quét...")
+			end
+		end)
+		
+		if not success then
+			warn("Lỗi trong hệ thống hop server: " .. tostring(err))
+		end
+		
+		-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh (chỉ khi không trong thời gian chờ)
+		if not ServerHopData.IsWaiting then
 			task.wait(1)
 		end
+	end
 end)
 
 local function Start_Farm()
