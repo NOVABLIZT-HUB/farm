@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1639,7 +1639,7 @@ local function DetectOtherPlayersTeleport()
 						if timeDiff > 0 and distance > TeleportThreshold and timeDiff < 2 then
 							local speed = distance / timeDiff
 							
-							if speed > 25 then
+							if speed > 50 then -- Updated from 25 to 50
 								detectedTeleports = detectedTeleports + 1
 								debug_print("Phát hiện player teleport: " .. plrName)
 							end
