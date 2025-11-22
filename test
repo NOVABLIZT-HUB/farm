@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -112,10 +112,10 @@ local visited = {}
 
 -- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
-	JobIds = {},
+    PriorityIds = {}, -- Stores 3-4 player servers
+    BackupIds = {},   -- Stores ALL valid servers (<12 players)
 	LastFetchTime = 0,
 	HopCount = 0,
-	MaxHops = 3,
 	WaitTime = 300 -- 5 minutes refresh
 }
 
@@ -1450,11 +1450,11 @@ task.spawn(function()
 end)
 
 -- [[ LOGIC: 4+ TELEPORTERS & TARGET PLAYERS UPDATE ]]
--- Hàm lấy danh sách servers có 3 hoặc 4 players
+-- Hàm lấy danh sách servers
 local function GetTargetServers()
 	local currentJobId = game.JobId
 	
-	debug_print("Đang lấy danh sách servers có 3-4 players...")
+	debug_print("Đang lấy danh sách tất cả servers < 12 players...")
 	
 	local success, servers = pcall(function()
 		-- Lấy danh sách servers từ Roblox API
@@ -1488,19 +1488,27 @@ local function GetTargetServers()
 	
 	if not success or not servers or #servers == 0 then
 		warn("Không thể lấy danh sách servers")
-		return {}
+		return {}, {}
 	end
 	
-	-- Tìm tất cả servers có 3 hoặc 4 players
-	local targetServers = {}
+	-- Tìm tất cả servers < 12 và lọc ra ưu tiên (3-4)
+	local priorityServers = {}
+    local allValidServers = {}
+
 	for _, server in ipairs(servers) do
-		if server.id ~= currentJobId and (server.playing == 3 or server.playing == 4) then
-			table.insert(targetServers, server.id)
+		if server.id ~= currentJobId and server.playing < 12 then
+            -- Lưu vào danh sách tổng hợp (để dùng backup)
+			table.insert(allValidServers, server.id)
+
+            -- Lưu vào danh sách ưu tiên (để dùng chính)
+            if server.playing >= 3 and server.playing <= 4 then
+			    table.insert(priorityServers, server.id)
+            end
 		end
 	end
 	
-	debug_print("Tìm thấy " .. #targetServers .. " server(s) có 3-4 players")
-	return targetServers
+	debug_print("Tìm thấy " .. #allValidServers .. " server hợp lệ (<12) và " .. #priorityServers .. " server ưu tiên (3-4)")
+	return priorityServers, allValidServers
 end
 
 -- [[ LOGIC: LAZY SCAN & REFRESH ]]
@@ -1508,96 +1516,95 @@ end
 local function FetchTargetJobIds()
 	local currentTime = tick()
 	
-    -- Kiểm tra thời gian refresh (5 phút)
-	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime then
-        debug_print("Server list older than 5 minutes. Forcing refresh.")
-        ServerHopData.JobIds = {} -- Clear old cache
-    end
-
-	-- Nếu còn cache hợp lệ, không scan
-	if #ServerHopData.JobIds >= 1 then
+    -- Kiểm tra thời gian refresh (5 phút) hoặc nếu danh sách backup rỗng
+	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime or (#ServerHopData.PriorityIds == 0 and #ServerHopData.BackupIds == 0) then
+        debug_print("Server list older than 5 mins or empty. Forcing refresh.")
+        ServerHopData.PriorityIds = {} 
+        ServerHopData.BackupIds = {}
+    else
+        -- Nếu còn cache hợp lệ, không scan
         return true
-	end
+    end
 	
 	-- Lấy danh sách servers mới
-	local servers = GetTargetServers()
+	local prio, backup = GetTargetServers()
 	
-	if #servers == 0 then
-		warn("Không tìm thấy server nào phù hợp (3-4 players)")
+	if #backup == 0 then
+		warn("Không tìm thấy server nào phù hợp")
 		return false
 	end
 	
-	-- Lấy tối đa 3 job IDs
-	ServerHopData.JobIds = {}
-	local count = 0
-	for _, jobId in ipairs(servers) do
-		if count >= ServerHopData.MaxHops then
-			break
-		end
-		table.insert(ServerHopData.JobIds, jobId)
-		count = count + 1
-	end
+    -- [[ SAVE ALL FOUND SERVERS ]]
+	ServerHopData.PriorityIds = prio
+    ServerHopData.BackupIds = backup
 	
 	ServerHopData.LastFetchTime = currentTime
-	ServerHopData.HopCount = 0
-	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s)")
+	debug_print("Đã cập nhật danh sách server.")
 	return true
 end
 
 -- [[ LOGIC: 3x FAIL FARM - PRIORITY & BACKUP ]]
 local function SmartServerHop(forceAnyBackup)
     -- Lazy scan: Chỉ scan khi hàm này được gọi
-	if not FetchTargetJobIds() then
-        if forceAnyBackup then
-            debug_print("No target servers found. Executing Backup: Random Server Hop.")
-            if StatusText then StatusText.Text = "Status: Backup Hop (Random)..." end
-            
-            -- Standard Hop Fallback
-            local PlaceId = game.PlaceId
-            local Api = "https://games.roblox.com/v1/games/"
-            local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
-            local function ListServers(cursor)
-                local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
-                return HttpService:JSONDecode(Raw)
-            end
-            
-            local Server, Next; repeat
-                local Servers = ListServers(Next)
-                Server = Servers.data[math.random(1, #Servers.data)]
-                Next = Servers.nextPageCursor
-            until Server
-            
-            TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
-            return true
-        else
-            debug_print("No target servers found. Staying in current server.")
-            return false
-        end
-	end
+	FetchTargetJobIds()
 	
-	local jobId = ServerHopData.JobIds[1]
-	if not jobId then
-		return false
-	end
-	
-	debug_print("Đang hop đến server priority: " .. jobId)
-	if StatusText then
-		StatusText.Text = "Status: Hopping to 3-4 player server..."
-	end
-	
-	local hopSuccess, hopError = pcall(function()
-		TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
-	end)
-	
-	if hopSuccess then
-		table.remove(ServerHopData.JobIds, 1)
-		ServerHopData.HopCount = ServerHopData.HopCount + 1
-		return true
-	else
-		warn("Lỗi khi hop server: " .. tostring(hopError))
-		table.remove(ServerHopData.JobIds, 1)
-		return false
-	end
+	-- 1. Ưu tiên: Thử hop vào server 3-4 người trước
+    if #ServerHopData.PriorityIds > 0 then
+         local jobId = ServerHopData.PriorityIds[1]
+         debug_print("Đang hop đến server ƯU TIÊN (3-4 players): " .. jobId)
+         if StatusText then StatusText.Text = "Status: Hopping to Priority Server..." end
+         
+         -- Xóa khỏi danh sách để ko thử lại
+         table.remove(ServerHopData.PriorityIds, 1)
+
+         local hopSuccess, hopError = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+         end)
+         
+         if hopSuccess then return true end
+    end
+
+    -- 2. Backup: Nếu forceAnyBackup (3x Fail) VÀ hết server ưu tiên, dùng danh sách Backup
+    if forceAnyBackup and #ServerHopData.BackupIds > 0 then
+        debug_print("3x Fail Farm: Hết server ưu tiên. Dùng Random Backup từ list đã lưu.")
+        if StatusText then StatusText.Text = "Status: Switching to Cached Backup Server..." end
+
+        -- Chọn Random từ danh sách Backup
+        local randomIndex = math.random(1, #ServerHopData.BackupIds)
+        local jobId = ServerHopData.BackupIds[randomIndex]
+
+        -- Xóa khỏi danh sách
+        table.remove(ServerHopData.BackupIds, randomIndex)
+
+        local hopSuccess, hopError = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+        end)
+
+        if hopSuccess then return true end
+    end
+
+    -- 3. Fallback cuối cùng: Random hoàn toàn (nếu list backup cũng lỗi hết)
+    if forceAnyBackup then
+         debug_print("Last Resort: Random Hop API.")
+         local PlaceId = game.PlaceId
+         local Api = "https://games.roblox.com/v1/games/"
+         local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+         local function ListServers(cursor)
+             local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
+             return HttpService:JSONDecode(Raw)
+         end
+         
+         local Server, Next; repeat
+             local Servers = ListServers(Next)
+             Server = Servers.data[math.random(1, #Servers.data)]
+             Next = Servers.nextPageCursor
+         until Server
+         
+         TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
+         return true
+    end
+    
+    return false
 end
 
 local function DetectOtherPlayersTeleport()
