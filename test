@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -110,14 +110,16 @@ local gun = nil
 local GoodPeople = {}
 local visited = {}
 
+-- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
 	JobIds = {},
 	LastFetchTime = 0,
 	HopCount = 0,
 	MaxHops = 3,
-	WaitTime = 300
+	WaitTime = 300 -- 5 minutes refresh
 }
 
+local FailFarmCount = 0 -- [[ LOGIC: 3x FAIL FARM ]]
 local PlayerPositions = {}
 local TeleportThreshold = 50
 
@@ -1046,14 +1048,15 @@ end)
 local lastPing = tick()
 
 --// Teleport to Coin
+-- [[ LOGIC: 3x FAIL FARM ]]
+-- Modified to return success status
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
+		return false -- Failed
 	end
 
 	if not coin:FindFirstChild("TouchInterest") then
-		-- debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return
+		return false -- Already collected or invalid
 	end
 
 	local pos = coin.Position
@@ -1075,18 +1078,22 @@ local function TeleportToCoin(coin)
 	end
 
 	local startTime = tick()
+	local success = false
 	
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait(0.3)
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait(0.3)
+	repeat
+		firetouchinterest(coin, HumanoidRootPart, 0)
+		task.wait(0.3)
+		firetouchinterest(coin, HumanoidRootPart, 1)
+		task.wait(0.3)
 		
 		if not coin or not coin:FindFirstChild("TouchInterest") then
+			success = true
 			break
 		end
 	until (tick() - startTime) > 1 
-    end
+    
+    return success
+end
 
 local function FindBestCoin(searchRadius, neighborRadius)
 	if not HumanoidRootPart then return nil end
@@ -1442,12 +1449,12 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- Hàm lấy danh sách servers có 4 players
-local function Get4PlayerServers()
+-- [[ LOGIC: 4+ TELEPORTERS & TARGET PLAYERS UPDATE ]]
+-- Hàm lấy danh sách servers có 3 hoặc 4 players
+local function GetTargetServers()
 	local currentJobId = game.JobId
-	local targetPlayerCount = 4
 	
-	debug_print("Đang lấy danh sách servers có " .. targetPlayerCount .. " players...")
+	debug_print("Đang lấy danh sách servers có 3-4 players...")
 	
 	local success, servers = pcall(function()
 		-- Lấy danh sách servers từ Roblox API
@@ -1484,37 +1491,39 @@ local function Get4PlayerServers()
 		return {}
 	end
 	
-	-- Tìm tất cả servers có đúng 4 players (không phải server hiện tại)
-	local fourPlayerServers = {}
+	-- Tìm tất cả servers có 3 hoặc 4 players
+	local targetServers = {}
 	for _, server in ipairs(servers) do
-		if server.id ~= currentJobId and server.playing == targetPlayerCount then
-			table.insert(fourPlayerServers, server.id)
+		if server.id ~= currentJobId and (server.playing == 3 or server.playing == 4) then
+			table.insert(targetServers, server.id)
 		end
 	end
 	
-	debug_print("Tìm thấy " .. #fourPlayerServers .. " server(s) có 4 players")
-	return fourPlayerServers
+	debug_print("Tìm thấy " .. #targetServers .. " server(s) có 3-4 players")
+	return targetServers
 end
 
--- Hàm lấy 3 job IDs có 4 players
-local function Fetch4PlayerJobIds()
+-- [[ LOGIC: LAZY SCAN & REFRESH ]]
+-- Hàm lấy job IDs với Logic Refresh 5 phút
+local function FetchTargetJobIds()
 	local currentTime = tick()
 	
-	-- Kiểm tra xem có cần chờ không
-	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
-		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
-		if timeSinceLastFetch < ServerHopData.WaitTime then
-			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
-			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
-			return false
-		end
+    -- Kiểm tra thời gian refresh (5 phút)
+	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime then
+        debug_print("Server list older than 5 minutes. Forcing refresh.")
+        ServerHopData.JobIds = {} -- Clear old cache
+    end
+
+	-- Nếu còn cache hợp lệ, không scan
+	if #ServerHopData.JobIds >= 1 then
+        return true
 	end
 	
-	-- Lấy danh sách servers có 4 players
-	local servers = Get4PlayerServers()
+	-- Lấy danh sách servers mới
+	local servers = GetTargetServers()
 	
 	if #servers == 0 then
-		warn("Không tìm thấy server nào có 4 players")
+		warn("Không tìm thấy server nào phù hợp (3-4 players)")
 		return false
 	end
 	
@@ -1531,15 +1540,39 @@ local function Fetch4PlayerJobIds()
 	
 	ServerHopData.LastFetchTime = currentTime
 	ServerHopData.HopCount = 0
-	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
+	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s)")
 	return true
 end
 
-local function HopTo4PlayerServer()
-	if #ServerHopData.JobIds == 0 then
-		if not Fetch4PlayerJobIds() then
-			return false
-		end
+-- [[ LOGIC: 3x FAIL FARM - PRIORITY & BACKUP ]]
+local function SmartServerHop(forceAnyBackup)
+    -- Lazy scan: Chỉ scan khi hàm này được gọi
+	if not FetchTargetJobIds() then
+        if forceAnyBackup then
+            debug_print("No target servers found. Executing Backup: Random Server Hop.")
+            if StatusText then StatusText.Text = "Status: Backup Hop (Random)..." end
+            
+            -- Standard Hop Fallback
+            local PlaceId = game.PlaceId
+            local Api = "https://games.roblox.com/v1/games/"
+            local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+            local function ListServers(cursor)
+                local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
+                return HttpService:JSONDecode(Raw)
+            end
+            
+            local Server, Next; repeat
+                local Servers = ListServers(Next)
+                Server = Servers.data[math.random(1, #Servers.data)]
+                Next = Servers.nextPageCursor
+            until Server
+            
+            TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
+            return true
+        else
+            debug_print("No target servers found. Staying in current server.")
+            return false
+        end
 	end
 	
 	local jobId = ServerHopData.JobIds[1]
@@ -1547,9 +1580,9 @@ local function HopTo4PlayerServer()
 		return false
 	end
 	
-	debug_print("Đang hop đến server: " .. jobId .. " (4 players)")
+	debug_print("Đang hop đến server priority: " .. jobId)
 	if StatusText then
-		StatusText.Text = "Status: Đang hop đến server có 4 players..."
+		StatusText.Text = "Status: Hopping to 3-4 player server..."
 	end
 	
 	local hopSuccess, hopError = pcall(function()
@@ -1559,7 +1592,6 @@ local function HopTo4PlayerServer()
 	if hopSuccess then
 		table.remove(ServerHopData.JobIds, 1)
 		ServerHopData.HopCount = ServerHopData.HopCount + 1
-		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
 		return true
 	else
 		warn("Lỗi khi hop server: " .. tostring(hopError))
@@ -1602,7 +1634,7 @@ local function DetectOtherPlayersTeleport()
 							
 							if speed > 25 then
 								detectedTeleports = detectedTeleports + 1
-								debug_print("Phát hiện player teleport: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s, khoảng cách: " .. string.format("%.2f", distance) .. " studs)")
+								debug_print("Phát hiện player teleport: " .. plrName)
 							end
 						end
 					end
@@ -1628,8 +1660,8 @@ task.spawn(function()
 	
 	task.wait(2)
 	
-	-- Lấy job IDs ban đầu
-	Fetch4PlayerJobIds()
+	-- [[ LOGIC: LAZY SCAN - DO NOT SCAN ON STARTUP ]]
+	-- FetchTargetJobIds() -- REMOVED
 	
 		-- Kiểm tra định kỳ
 		while true do
@@ -1637,24 +1669,18 @@ task.spawn(function()
 				-- Detect players teleport
 				local teleportCount = DetectOtherPlayersTeleport()
 				
-				-- Nếu phát hiện player teleport, hop server
-				if teleportCount > 0 then
-					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+				-- [[ LOGIC: 4+ TELEPORTERS ]]
+				if teleportCount >= 4 then
+					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Triggering Hop...")
 					if StatusText then
-						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+						StatusText.Text = "Status: 4+ Teleporters Detected. Trying to hop..."
 					end
 					
-					-- Thử lấy job IDs mới nếu cần
-					if #ServerHopData.JobIds == 0 then
-						Fetch4PlayerJobIds()
-					end
-					
-					-- Hop đến server có 4 players
-					if #ServerHopData.JobIds > 0 then
-						HopTo4PlayerServer()
-						-- Chờ một chút sau khi hop
-						task.wait(5)
-					end
+                    -- Try to hop to 3-4 player server. 
+                    -- ForceBackup = false (Stay if no specific server found)
+					SmartServerHop(false)
+                    
+                    task.wait(5)
 				end
 			end)
 			
@@ -1662,7 +1688,7 @@ task.spawn(function()
 				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 			end
 			
-			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
+			-- Kiểm tra mỗi 1 giây
 			task.wait(1)
 		end
 end)
@@ -1795,12 +1821,24 @@ local function Start_Farm()
 				continue
 			end
 
-			TeleportToCoin(coinToTeleport)
-			visited[coinToTeleport] = true
-			isFirstCoinOfRound = false
-			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-			task.wait(2)
+			local success = TeleportToCoin(coinToTeleport)
+            -- [[ LOGIC: 3x FAIL FARM CHECK ]]
+            if success then
+                FailFarmCount = 0
+                visited[coinToTeleport] = true
+                isFirstCoinOfRound = false
+                local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
+                debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
+                task.wait(2)
+            else
+                FailFarmCount = FailFarmCount + 1
+                debug_print("Failed to collect first coin. Fail Count: " .. FailFarmCount)
+                if FailFarmCount >= 3 then
+                    debug_print("3x Fail Farm Triggered. Hopping...")
+                    -- ForceBackup = true (Hop anywhere if fails)
+                    SmartServerHop(true)
+                end
+            end
 
 		else
 			
@@ -1859,34 +1897,53 @@ local function Start_Farm()
 			if not chainCoin then
 				task.wait(2)
 			else
-				TeleportToCoin(chainCoin)
-				visited[chainCoin] = true
-				
-				chainCount = 1
-				debug_print("Collected coin")
-				
-				for i = 2, 5 do
-					local nextCoin = RandomWaterfallWait(
-						50, 0.5, 0.5,
-						50, 0.2, 0.4,
-						50, 0.3, 0.6,
-						50, 0.2, 0.4
-					)
+				local success = TeleportToCoin(chainCoin)
+                
+                -- [[ LOGIC: 3x FAIL FARM CHECK ]]
+                if success then
+                    FailFarmCount = 0
+                    visited[chainCoin] = true
+                    chainCount = 1
+                    debug_print("Collected coin")
+                    
+                    for i = 2, 5 do
+                        local nextCoin = RandomWaterfallWait(
+                            50, 0.5, 0.5,
+                            50, 0.2, 0.4,
+                            50, 0.3, 0.6,
+                            50, 0.2, 0.4
+                        )
 
-					if not nextCoin then
-						break
-					else
-						TeleportToCoin(nextCoin)
-						visited[nextCoin] = true
-						chainCount = chainCount + 1
-						debug_print("Collected coin")
-					end
-				end
+                        if not nextCoin then
+                            break
+                        else
+                            local chainSuccess = TeleportToCoin(nextCoin)
+                            if chainSuccess then
+                                FailFarmCount = 0
+                                visited[nextCoin] = true
+                                chainCount = chainCount + 1
+                                debug_print("Collected coin")
+                            else
+                                FailFarmCount = FailFarmCount + 1
+                                if FailFarmCount >= 3 then
+                                    debug_print("3x Fail Farm Triggered (In Chain). Hopping...")
+                                    SmartServerHop(true)
+                                end
+                            end
+                        end
+                    end
 
-				if chainCount > 0 then
-
-					task.wait(0.5)
-				end
+                    if chainCount > 0 then
+                        task.wait(0.5)
+                    end
+                else
+                    FailFarmCount = FailFarmCount + 1
+                    debug_print("Failed to collect chain start coin. Fail Count: " .. FailFarmCount)
+                    if FailFarmCount >= 3 then
+                        debug_print("3x Fail Farm Triggered. Hopping...")
+                        SmartServerHop(true)
+                    end
+                end
 			end
 		end
 
