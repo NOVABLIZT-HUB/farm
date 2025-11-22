@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1831,7 +1831,7 @@ local function Start_Farm()
 			local success = TeleportToCoin(coinToTeleport)
             -- [[ LOGIC: 3x FAIL FARM CHECK ]]
             if success then
-                FailFarmCount = 0
+                FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
                 visited[coinToTeleport] = true
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
@@ -1908,7 +1908,7 @@ local function Start_Farm()
                 
                 -- [[ LOGIC: 3x FAIL FARM CHECK ]]
                 if success then
-                    FailFarmCount = 0
+                    FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
                     visited[chainCoin] = true
                     chainCount = 1
                     debug_print("Collected coin")
@@ -1926,7 +1926,7 @@ local function Start_Farm()
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
                             if chainSuccess then
-                                FailFarmCount = 0
+                                FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
                                 visited[nextCoin] = true
                                 chainCount = chainCount + 1
                                 debug_print("Collected coin")
@@ -1935,6 +1935,7 @@ local function Start_Farm()
                                 if FailFarmCount >= 3 then
                                     debug_print("3x Fail Farm Triggered (In Chain). Hopping...")
                                     SmartServerHop(true)
+                                    break -- Exit loop to hop
                                 end
                             end
                         end
