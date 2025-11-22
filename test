@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -40,7 +40,7 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 0, -- Sends the x minutes for 
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
             ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
@@ -110,13 +110,12 @@ local gun = nil
 local GoodPeople = {}
 local visited = {}
 
--- [[ CẤU HÌNH SERVER HOP MỚI ]] --
-local FailedCoinAttempts = 0
 local ServerHopData = {
-	PriorityList = {}, -- Kho Server 3-4 người (VIP)
-	BackupList = {},   -- Kho Server còn lại (Thường)
+	JobIds = {},
 	LastFetchTime = 0,
-	WaitTime = 300     -- Cooldown 5 phút
+	HopCount = 0,
+	MaxHops = 3,
+	WaitTime = 300
 }
 
 local PlayerPositions = {}
@@ -534,6 +533,9 @@ local function CPUSaversIGMA()
 
         -- Destroy Map Parts
 		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+             -- Keep CoinContainers if found inside map (handled by ProcessMap usually, but if we delete map, container goes too)
+             -- Assuming coins are extracted to CoinsFolder by ProccessMap which runs on ChildAdded
+             -- We delay destroy slightly to let scripts grab coins if needed, or just nuke it
              pcall(function() child:Destroy() end)
 		end
 	end
@@ -1084,8 +1086,7 @@ local function TeleportToCoin(coin)
 			break
 		end
 	until (tick() - startTime) > 1 
- 
-end
+    end
 
 local function FindBestCoin(searchRadius, neighborRadius)
 	if not HumanoidRootPart then return nil end
@@ -1240,14 +1241,17 @@ local function RandomWaterfallWait(
 	
 	-- 1. Chờ, Quét 15 stud
 	local wait1 = minWait1 + math.random() * (maxWait1 - minWait1)
+	-- debug_print("Waiting " .. string.format("%.2f", wait1) .. "s, then scanning " .. proximityRadius1 .. " stud...")
 	task.wait(wait1)
 	
 	local coin15
 	local isPlayerClose_P1 = IsPlayerNearMe(proximityRadius1)
 	
 	if isPlayerClose_P1 then
+		-- debug_print("Player is close (15)! Finding RANDOM coin in " .. proximityRadius1 .. " stud.")
 		coin15 = FindRandomUnvisitedCoin(proximityRadius1)
 	else
+		-- debug_print("Player is not close (15). Finding NEAREST coin in " .. proximityRadius1 .. " stud.")
 		coin15 = FindNearestUnvisitedCoin(proximityRadius1)
 	end
 
@@ -1257,14 +1261,17 @@ local function RandomWaterfallWait(
 
 	-- 2. Chờ, Quét 25 stud
 	local wait2 = minWait2 + math.random() * (maxWait2 - minWait2)
+	-- debug_print("No coin in " .. proximityRadius1 .. " stud. Waiting " .. string.format("%.2f", wait2) .. "s, then scanning " .. proximityRadius2 .. " stud...")
 	task.wait(wait2)
 	
 	local coin25
 	local isPlayerClose_P2 = IsPlayerNearMe(proximityRadius2)
 	
 	if isPlayerClose_P2 then
+		-- debug_print("Player is close (25)! Finding RANDOM coin in " .. proximityRadius2 .. " stud.")
 		coin25 = FindRandomUnvisitedCoin(proximityRadius2)
 	else
+		-- debug_print("Player is not close (25). Finding NEAREST coin in " .. proximityRadius2 .. " stud.")
 		coin25 = FindNearestUnvisitedCoin(proximityRadius2)
 	end
 
@@ -1274,14 +1281,17 @@ local function RandomWaterfallWait(
 
 	-- 3. Chờ, Quét 35 stud
 	local wait3 = minWait3 + math.random() * (maxWait3 - minWait3)
+	-- debug_print("No coin in " .. proximityRadius2 .. " stud. Waiting " .. string.format("%.2f", wait3) .. "s, then scanning " .. proximityRadius3 .. " stud...")
 	task.wait(wait3)
 	
 	local coin35
 	local isPlayerClose_P3 = IsPlayerNearMe(proximityRadius3)
 	
 	if isPlayerClose_P3 then
+		-- debug_print("Player is close (35)! Finding RANDOM coin in " .. proximityRadius3 .. " stud.")
 		coin35 = FindRandomUnvisitedCoin(proximityRadius3)
 	else
+		-- debug_print("Player is not close (35). Finding NEAREST coin in " .. proximityRadius3 .. " stud.")
 		coin35 = FindNearestUnvisitedCoin(proximityRadius3)
 	end
 
@@ -1290,14 +1300,17 @@ local function RandomWaterfallWait(
 	end
 
 	-- 4. Chờ 0.5s, Quét 50 stud
+	-- debug_print("No coin in " .. proximityRadius3 .. " stud. Waiting " .. finalWait .. "s, then scanning " .. finalRadius .. " stud...")
 	task.wait(finalWait)
 	
 	local coin50
 	local isPlayerClose_P4 = IsPlayerNearMe(finalRadius)
 	
 	if isPlayerClose_P4 then
+		-- debug_print("Player is close (50)! Finding RANDOM coin in " .. finalRadius .. " stud.")
 		coin50 = FindRandomUnvisitedCoin(finalRadius)
 	else
+		-- debug_print("Player is not close (50). Finding BEST coin in " .. finalRadius .. " stud.")
 		coin50 = FindBestCoin(finalRadius, 40)
 	end
 
@@ -1305,18 +1318,24 @@ local function RandomWaterfallWait(
 		return coin50 -- P4
 	end
 
+	-- debug_print("No neighbor coin found in 15, 25, 35, or 50 studs. Chain broken.")
 	return nil
 end
 
 
 local function FindNextChainCoin()
+	-- debug_print("Finding next chain coin...")
+
 	-- 1. Search 50 studs
+	-- debug_print("Scanning 50 studs...")
 	local coin50
 	local isPlayerClose_50 = IsPlayerNearMe(50)
 	
 	if isPlayerClose_50 then
+		-- debug_print("Player is close (50)! Finding RANDOM coin in 50 stud.")
 		coin50 = FindRandomUnvisitedCoin(50)
 	else
+		-- debug_print("Player is not close (50). Finding NEAREST coin in 50 stud.")
 		coin50 = FindNearestUnvisitedCoin(50)
 	end
 
@@ -1325,14 +1344,17 @@ local function FindNextChainCoin()
 	end
 
 	-- 2. Wait 0.5s, then search 100 studs
+	-- debug_print("No coin in 50 studs. Waiting 0.5s, then scanning 100 studs...")
 	task.wait(0.5)
 	
 	local coin100
 	local isPlayerClose_100 = IsPlayerNearMe(100)
 	
 	if isPlayerClose_100 then
+		-- debug_print("Player is close (100)! Finding RANDOM coin in 100 stud.")
 		coin100 = FindRandomUnvisitedCoin(100)
 	else
+		-- debug_print("Player is not close (100). Finding BEST coin in 100 stud.")
 		coin100 = FindBestCoin(100, 40)
 	end
 
@@ -1340,6 +1362,7 @@ local function FindNextChainCoin()
 		return coin100 -- Found coin in 100 studs
 	end
 
+	-- debug_print("No neighbor coin found in 50 or 100 studs. Chain broken.")
 	return nil
 end
 
@@ -1365,13 +1388,16 @@ local function FindCoin(isFirst)
 	end
 
 	if #allValidCoins == 0 then
+		-- debug_print("FindCoin: Found 0 total valid coins on map.")
 		return "NoCoins"
 	end
 	
 	if isFirst then
+		-- debug_print("FindCoin (Global): Picking a random coin from " .. #allValidCoins .. " total.")
 		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		return bestCoin
 	else
+		-- debug_print("FindCoin (Chain Start): Finding safest coin within 50 studs...")
 
 		local coinsInRadius = {}
 		for _, coin in ipairs(allValidCoins) do
@@ -1381,6 +1407,7 @@ local function FindCoin(isFirst)
 		end
 
 		if #coinsInRadius == 0 then
+			-- debug_print("FindCoin (Chain Start): No coins found within 50 studs.")
 			return "NoCoins"
 		end
 
@@ -1401,8 +1428,10 @@ local function FindCoin(isFirst)
 		end
 
 		if bestCoin then
+			-- debug_print("FindCoin (Chain Start): Found safest coin with " .. minPlayerCount .. " players nearby.")
 			return bestCoin
 		else
+			-- debug_print("FindCoin (Chain Start): Logic failed, returning NoCoins.")
 			return "NoCoins" 
 		end
 	end
@@ -1413,123 +1442,130 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- [[ LOGIC HOP SERVER MỚI ]] --
-
-local function GetPrioritizedServers()
+-- Hàm lấy danh sách servers có 4 players
+local function Get4PlayerServers()
 	local currentJobId = game.JobId
-	debug_print("Đang quét và phân loại server...")
+	local targetPlayerCount = 4
+	
+	debug_print("Đang lấy danh sách servers có " .. targetPlayerCount .. " players...")
 	
 	local success, servers = pcall(function()
+		-- Lấy danh sách servers từ Roblox API
 		local response
+		
+		-- Thử dùng game:HttpGet
 		if game.HttpGet then
 			response = game:HttpGet(_servers)
 		elseif HttpService.GetAsync then
 			response = HttpService:GetAsync(_servers, true)
 		else
+			-- Fallback: dùng syn.request hoặc request
 			local requestFunc = syn and syn.request or request
 			if requestFunc then
-				local result = requestFunc({Url = _servers, Method = "GET"})
+				local result = requestFunc({
+					Url = _servers,
+					Method = "GET"
+				})
 				response = result.Body
 			end
 		end
 		
 		if response then
 			local data = HttpService:JSONDecode(response)
-			if data and data.data then return data.data end
+			if data and data.data then
+				return data.data
+			end
 		end
 		return nil
 	end)
 	
 	if not success or not servers or #servers == 0 then
-		return {}, {} 
+		warn("Không thể lấy danh sách servers")
+		return {}
 	end
 	
-	local pList = {} -- 3-4 người
-	local bList = {} -- Còn lại
-	
+	-- Tìm tất cả servers có đúng 4 players (không phải server hiện tại)
+	local fourPlayerServers = {}
 	for _, server in ipairs(servers) do
-		if server.id ~= currentJobId and server.playing < server.maxPlayers then
-			if server.playing == 3 or server.playing == 4 then
-				table.insert(pList, server.id)
-			else
-				table.insert(bList, server.id)
-			end
+		if server.id ~= currentJobId and server.playing == targetPlayerCount then
+			table.insert(fourPlayerServers, server.id)
 		end
 	end
 	
-	debug_print("Kết quả: " .. #pList .. " server VIP (3-4) | " .. #bList .. " server thường.")
-	return pList, bList
+	debug_print("Tìm thấy " .. #fourPlayerServers .. " server(s) có 4 players")
+	return fourPlayerServers
 end
 
-local function FetchOnlyOnTrigger()
+-- Hàm lấy 3 job IDs có 4 players
+local function Fetch4PlayerJobIds()
 	local currentTime = tick()
-	local timeSinceLast = currentTime - ServerHopData.LastFetchTime
 	
-	-- 1. Kiểm tra Cooldown (Chặn tuyệt đối nếu chưa đủ 5 phút)
-	if timeSinceLast < ServerHopData.WaitTime then
-		return false -- Sử dụng danh sách cũ
+	-- Kiểm tra xem có cần chờ không
+	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
+		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
+		if timeSinceLastFetch < ServerHopData.WaitTime then
+			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
+			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
+			return false
+		end
 	end
 	
-    -- 2. Nếu đã đủ 5 phút -> QUÉT LUÔN (Ghi đè)
-	debug_print("Đã qua 5 phút. Tiến hành làm mới danh sách server...")
+	-- Lấy danh sách servers có 4 players
+	local servers = Get4PlayerServers()
 	
-	local pList, bList = GetPrioritizedServers()
-	
-	if #pList == 0 and #bList == 0 then
-        debug_print("Lỗi quét server mới. Giữ lại danh sách cũ.")
+	if #servers == 0 then
+		warn("Không tìm thấy server nào có 4 players")
 		return false
 	end
 	
-	-- 3. Ghi đè danh sách mới
-	ServerHopData.PriorityList = pList
-	ServerHopData.BackupList = bList
+	-- Lấy tối đa 3 job IDs
+	ServerHopData.JobIds = {}
+	local count = 0
+	for _, jobId in ipairs(servers) do
+		if count >= ServerHopData.MaxHops then
+			break
+		end
+		table.insert(ServerHopData.JobIds, jobId)
+		count = count + 1
+	end
 	
 	ServerHopData.LastFetchTime = currentTime
-    debug_print("Đã cập nhật kho mới: " .. #pList .. " VIP | " .. #bList .. " Backup.")
+	ServerHopData.HopCount = 0
+	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
 	return true
 end
 
--- Hop Khắt Khe (Detect 4 Teleport -> Chỉ vào server 3-4 người)
-local function HopStrict_Teleport()
-	FetchOnlyOnTrigger()
-	
-	if #ServerHopData.PriorityList == 0 then
-		debug_print("DETECT 4 TELEPORT: Không có server 3-4 người (Kho rỗng). Hủy Hop.")
-		if StatusText then StatusText.Text = "Status: Không có server 3-4 người. Ở lại..." end
-		return false 
+local function HopTo4PlayerServer()
+	if #ServerHopData.JobIds == 0 then
+		if not Fetch4PlayerJobIds() then
+			return false
+		end
 	end
 	
-	local jobId = ServerHopData.PriorityList[1]
-	table.remove(ServerHopData.PriorityList, 1)
-	
-	debug_print("DETECT 4 TELEPORT -> Hop server VIP: " .. jobId)
-    if StatusText then StatusText.Text = "Status: Né Exploiter -> Hop Server Ngon..." end
-	TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
-	return true
-end
-
--- Hop Linh Hoạt (Farm Xịt 3 lần -> Có gì dùng nấy)
-local function HopFlexible_CoinFail()
-	FetchOnlyOnTrigger()
-	
-	local jobId = nil
-	
-	if #ServerHopData.PriorityList > 0 then
-		jobId = ServerHopData.PriorityList[1]
-		table.remove(ServerHopData.PriorityList, 1)
-		debug_print("FARM FAIL -> Hop server VIP.")
-	elseif #ServerHopData.BackupList > 0 then
-		jobId = ServerHopData.BackupList[1]
-		table.remove(ServerHopData.BackupList, 1)
-		debug_print("FARM FAIL -> Hop server Backup.")
-	else
-		debug_print("FARM FAIL -> Hết server để hop. Chờ lần sau.")
-        if StatusText then StatusText.Text = "Status: Farm xịt (Hết server)..." end
+	local jobId = ServerHopData.JobIds[1]
+	if not jobId then
 		return false
 	end
 	
-    if StatusText then StatusText.Text = "Status: Farm lỗi -> Hop..." end
-	TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+	debug_print("Đang hop đến server: " .. jobId .. " (4 players)")
+	if StatusText then
+		StatusText.Text = "Status: Đang hop đến server có 4 players..."
+	end
+	
+	local hopSuccess, hopError = pcall(function()
+		TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+	end)
+	
+	if hopSuccess then
+		table.remove(ServerHopData.JobIds, 1)
+		ServerHopData.HopCount = ServerHopData.HopCount + 1
+		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
+		return true
+	else
+		warn("Lỗi khi hop server: " .. tostring(hopError))
+		table.remove(ServerHopData.JobIds, 1)
+		return false
+	end
 end
 
 local function DetectOtherPlayersTeleport()
@@ -1566,7 +1602,7 @@ local function DetectOtherPlayersTeleport()
 							
 							if speed > 25 then
 								detectedTeleports = detectedTeleports + 1
-								debug_print("Phát hiện player teleport: " .. plrName .. " (speed: " .. string.format("%.2f", speed) .. ")")
+								debug_print("Phát hiện player teleport: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s, khoảng cách: " .. string.format("%.2f", distance) .. " studs)")
 							end
 						end
 					end
@@ -1585,36 +1621,50 @@ end
 
 -- Hệ thống tự động hop khi detect players
 task.spawn(function()
+	-- Chờ game load hoàn toàn
 	repeat
 		task.wait(0.5)
 	until StatusText and StatusText.Parent
 	
 	task.wait(2)
 	
-	-- KHÔNG QUÉT TỰ ĐỘNG Ở ĐÂY NỮA (Lazy Scan)
+	-- Lấy job IDs ban đầu
+	Fetch4PlayerJobIds()
 	
-    while true do
-        local success, err = pcall(function()
-            local teleportCount = DetectOtherPlayersTeleport()
-            
-            -- CHỈ HOP KHI CÓ TỪ 4 NGƯỜI TRỞ LÊN TELEPORT
-            if teleportCount >= 4 then
-                debug_print("CẢNH BÁO: Có " .. teleportCount .. " thằng đang teleport!")
-                if StatusText then
-                    StatusText.Text = "Status: Detect 4+ Exploiter..."
-                end
-                
-                HopStrict_Teleport()
-                task.wait(5)
-            end
-        end)
-        
-        if not success then
-            warn("Lỗi hệ thống hop: " .. tostring(err))
-        end
-        
-        task.wait(1)
-    end
+		-- Kiểm tra định kỳ
+		while true do
+			local success, err = pcall(function()
+				-- Detect players teleport
+				local teleportCount = DetectOtherPlayersTeleport()
+				
+				-- Nếu phát hiện player teleport, hop server
+				if teleportCount > 0 then
+					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+					if StatusText then
+						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+					end
+					
+					-- Thử lấy job IDs mới nếu cần
+					if #ServerHopData.JobIds == 0 then
+						Fetch4PlayerJobIds()
+					end
+					
+					-- Hop đến server có 4 players
+					if #ServerHopData.JobIds > 0 then
+						HopTo4PlayerServer()
+						-- Chờ một chút sau khi hop
+						task.wait(5)
+					end
+				end
+			end)
+			
+			if not success then
+				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
+			end
+			
+			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
+			task.wait(1)
+		end
 end)
 
 local function Start_Farm()
@@ -1627,19 +1677,26 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
+			-- debug_print("Entered round wait block.")
 			if RoundTimerPart:GetAttribute("Time") == -1 then
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
+				-- debug_print("Round ended. Waiting for new round to start...")
 			else
 				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
+				-- debug_print("Waiting for round to end and new round to start...")
 			end
 			task.wait(0.5)
 			HumanoidRootPart, Humanoid = GetHumanoid()
+			-- SafetyPart.Position = Vector3.new(0, 100, 0) -- REMOVED
 			repeat
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+                    -- UPDATED: Keep player in safe sky position, platform will follow
                     HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-                    currentPlatformY = 142 
+                    -- [[ PLATFORM SNAP UPDATE ]]
+                    currentPlatformY = 142 -- 150 - 8
                     WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
@@ -1648,10 +1705,14 @@ local function Start_Farm()
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
+			-- debug_print("After round wait, got HumanoidRootPart: " .. tostring(HumanoidRootPart))
 			if HumanoidRootPart then
 				HumanoidRootPart.Anchored = false
+				-- debug_print("Unanchored HumanoidRootPart.")
 				for i = 1, 3 do
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
                     HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					-- debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
 					task.wait(0.1)
 				end
 			end
@@ -1660,6 +1721,7 @@ local function Start_Farm()
 			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
+            -- OPTIMIZATION: Clear Memory Tables
 			visited = {} 
             CoinsFolder:ClearAllChildren()
 		end
@@ -1667,11 +1729,14 @@ local function Start_Farm()
 		ClearMap()
 		
 		if isFirstCoinOfRound then
+			-- debug_print("Doing Find Coin (First)...")
 			local coinToTeleport = FindCoin(true)
 			
-			if type(coinToTeleport) == "string" then
+			if type(coinToTeletoCoin) == "string" then
+				-- debug_print("FindCoin Response: " .. coinToTeleport)
 				if coinToTeleport == "Dead" then
 					StatusText.Text = "Status: You are dead!"
+					-- debug_print("[DEBUG] Player died, waiting for respawn...")
 					repeat
 						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
@@ -1681,8 +1746,9 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
+					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) -- SafetyPart.CFrame + Vector3.new(0, 3, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1697,7 +1763,11 @@ local function Start_Farm()
 						Humanoid.Health = 0
 						task.wait(0.1)
 					end
+
+					-- debug_print("Reset command sent. Waiting for respawn logic...")
 					task.wait(1)
+					
+					-- debug_print("[DEBUG] Player died (from 'Full'), waiting for respawn...")
 					repeat
 						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
@@ -1707,40 +1777,25 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned after 'Full' reset!")
+					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
 						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 						task.wait(0.1)
 					end
 					continue
 				end
+				-- debug_print("No first coin found, waiting 1s...")
 				task.wait(1)
 				continue
 			end
 
 			if not coinToTeleport or not coinToTeleport.Position then
+				-- debug_print("Searching for first coin...")
 				task.wait(0.3)
 				continue
 			end
 
-            -- [[ LOGIC FARM CHECK MỚI ]] --
-			local currentCoinsBefore = getCurrentCoins() 
 			TeleportToCoin(coinToTeleport)
-			task.wait(0.5)
-			local currentCoinsAfter = getCurrentCoins() 
-
-			if currentCoinsAfter > currentCoinsBefore then
-				FailedCoinAttempts = 0 
-			else
-				FailedCoinAttempts = FailedCoinAttempts + 1
-				debug_print("Collect xịt (" .. FailedCoinAttempts .. "/3)")
-				if FailedCoinAttempts >= 3 then
-					debug_print("Đã xịt 3 coin liên tiếp -> Kích hoạt Hop.")
-					HopFlexible_CoinFail()
-					FailedCoinAttempts = 0 
-					task.wait(10)
-				end
-			end
-			
 			visited[coinToTeleport] = true
 			isFirstCoinOfRound = false
 			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
@@ -1752,6 +1807,7 @@ local function Start_Farm()
 			local status = FindCoin(false)
 			if status == "Dead" then
 				StatusText.Text = "Status: You are dead!"
+				-- debug_print("[DEBUG] Player died, waiting for respawn...")
 				repeat
 					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
@@ -1761,6 +1817,7 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
+				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
@@ -1769,12 +1826,17 @@ local function Start_Farm()
 			elseif status == "Full" then
 				StatusText.Text = "Status: Coin inventory full! Resetting."
 				debug_print("Coin inventory full! Forcing reset...")
+				
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
 					task.wait(0.1)
 				end
+
+				-- debug_print("Reset command sent. Waiting for respawn logic...")
 				task.wait(1)
+				
+				-- debug_print("[DEBUG] Player died (from 'Full' in chain), waiting for respawn...")
 				repeat
 					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
@@ -1784,6 +1846,7 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
+				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
@@ -1796,27 +1859,11 @@ local function Start_Farm()
 			if not chainCoin then
 				task.wait(2)
 			else
-                -- [[ LOGIC FARM CHECK MỚI (CHAIN) ]] --
-				local currentCoinsBefore = getCurrentCoins() 
 				TeleportToCoin(chainCoin)
-				task.wait(0.5)
-				local currentCoinsAfter = getCurrentCoins() 
-
-				if currentCoinsAfter > currentCoinsBefore then
-					FailedCoinAttempts = 0 
-				else
-					FailedCoinAttempts = FailedCoinAttempts + 1
-					debug_print("Collect xịt (" .. FailedCoinAttempts .. "/3)")
-					if FailedCoinAttempts >= 3 then
-						debug_print("Đã xịt 3 coin liên tiếp -> Kích hoạt Hop.")
-						HopFlexible_CoinFail()
-						FailedCoinAttempts = 0 
-						task.wait(10)
-					end
-				end
-
 				visited[chainCoin] = true
+				
 				chainCount = 1
+				debug_print("Collected coin")
 				
 				for i = 2, 5 do
 					local nextCoin = RandomWaterfallWait(
@@ -1829,35 +1876,22 @@ local function Start_Farm()
 					if not nextCoin then
 						break
 					else
-                        -- [[ LOGIC FARM CHECK MỚI (WATERFALL) ]] --
-						local currentCoinsBefore = getCurrentCoins() 
 						TeleportToCoin(nextCoin)
-						task.wait(0.5)
-						local currentCoinsAfter = getCurrentCoins() 
-
-						if currentCoinsAfter > currentCoinsBefore then
-							FailedCoinAttempts = 0 
-						else
-							FailedCoinAttempts = FailedCoinAttempts + 1
-							debug_print("Collect xịt (" .. FailedCoinAttempts .. "/3)")
-							if FailedCoinAttempts >= 3 then
-								debug_print("Đã xịt 3 coin liên tiếp -> Kích hoạt Hop.")
-								HopFlexible_CoinFail()
-								FailedCoinAttempts = 0 
-								task.wait(10)
-							end
-						end
-
 						visited[nextCoin] = true
 						chainCount = chainCount + 1
+						debug_print("Collected coin")
 					end
 				end
 
 				if chainCount > 0 then
+
 					task.wait(0.5)
 				end
 			end
 		end
+
+
+		-- debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time")) .. "...")
 	end
 end
 
