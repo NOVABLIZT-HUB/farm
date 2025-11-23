@@ -40,8 +40,8 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
+            ["Minutes"] = 60, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 600, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -119,7 +119,10 @@ local ServerHopData = {
 	WaitTime = 300 -- 5 minutes refresh
 }
 
-local FailFarmCount = 0 -- [[ LOGIC: 3x FAIL FARM ]]
+-- [[ Forward Declaration for SmartServerHop so it can be used in updatePlayerInfo ]]
+local SmartServerHop
+
+local FailFarmCount = 0 -- [[ LOGIC: 10x FAIL FARM PER ROUND ]]
 local PlayerPositions = {}
 local TeleportThreshold = 50
 
@@ -944,7 +947,10 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+					if SmartServerHop then
+						SmartServerHop(true)
+					end
 				else
 					game:Shutdown()
 				end
@@ -954,7 +960,10 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+	        -- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+			if SmartServerHop then
+				SmartServerHop(true)
+			end
 	    end
 	end
 
@@ -1544,7 +1553,8 @@ local function FetchTargetJobIds()
 end
 
 -- [[ LOGIC: 3x FAIL FARM - PRIORITY & BACKUP ]]
-local function SmartServerHop(forceAnyBackup)
+-- [[ CHANGED to Global function assignment for forward compatibility ]]
+SmartServerHop = function(forceAnyBackup)
     -- Lazy scan: Chỉ scan khi hàm này được gọi
 	FetchTargetJobIds()
 	
@@ -1757,6 +1767,7 @@ local function Start_Farm()
             -- OPTIMIZATION: Clear Memory Tables
 			visited = {} 
             CoinsFolder:ClearAllChildren()
+            FailFarmCount = 0 -- [[ NEW: Reset per round ]]
 		end
 
 		ClearMap()
@@ -1829,9 +1840,9 @@ local function Start_Farm()
 			end
 
 			local success = TeleportToCoin(coinToTeleport)
-            -- [[ LOGIC: 3x FAIL FARM CHECK ]]
+            -- [[ LOGIC: 10x FAIL FARM CHECK ]]
             if success then
-                FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
+                -- FailFarmCount = 0 -- REMOVED: Do not reset on success
                 visited[coinToTeleport] = true
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
@@ -1839,9 +1850,9 @@ local function Start_Farm()
                 task.wait(2)
             else
                 FailFarmCount = FailFarmCount + 1
-                debug_print("Failed to collect first coin. Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 3 then
-                    debug_print("3x Fail Farm Triggered. Hopping...")
+                debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
+                if FailFarmCount >= 10 then
+                    debug_print("10x Fail Farm (Round). Hopping...")
                     -- ForceBackup = true (Hop anywhere if fails)
                     SmartServerHop(true)
                 end
@@ -1906,9 +1917,9 @@ local function Start_Farm()
 			else
 				local success = TeleportToCoin(chainCoin)
                 
-                -- [[ LOGIC: 3x FAIL FARM CHECK ]]
+                -- [[ LOGIC: 10x FAIL FARM CHECK ]]
                 if success then
-                    FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
+                    -- FailFarmCount = 0 -- REMOVED
                     visited[chainCoin] = true
                     chainCount = 1
                     debug_print("Collected coin")
@@ -1931,7 +1942,7 @@ local function Start_Farm()
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
                             if chainSuccess then
-                                FailFarmCount = 0 -- RESET COUNTER (CONSECUTIVE LOGIC)
+                                -- FailFarmCount = 0 -- REMOVED
                                 visited[nextCoin] = true
                                 chainCount = chainCount + 1
                                 debug_print("Collected coin")
@@ -1944,12 +1955,12 @@ local function Start_Farm()
                                 -- [FIX] If fail, double check if it's because bag is full
                                 local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
                                 if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
-                                     FailFarmCount = 0
-                                     break -- It was full, so not a fail farm. Stop chain.
+                                     -- Not a failure, just full bag
+                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 3 then
-                                        debug_print("3x Fail Farm Triggered (In Chain). Hopping...")
+                                    if FailFarmCount >= 10 then
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break -- Exit loop to hop
                                     end
@@ -1963,9 +1974,9 @@ local function Start_Farm()
                     end
                 else
                     FailFarmCount = FailFarmCount + 1
-                    debug_print("Failed to collect chain start coin. Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 3 then
-                        debug_print("3x Fail Farm Triggered. Hopping...")
+                    debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
+                    if FailFarmCount >= 10 then
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
