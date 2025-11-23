@@ -40,8 +40,8 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
+            ["Minutes"] = 30, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 300, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
         },
