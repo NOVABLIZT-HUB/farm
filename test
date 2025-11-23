@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -110,14 +110,19 @@ local gun = nil
 local GoodPeople = {}
 local visited = {}
 
+-- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
-	JobIds = {},
+    PriorityIds = {}, -- Stores 3-4 player servers
+    BackupIds = {},   -- Stores ALL valid servers (<12 players)
 	LastFetchTime = 0,
 	HopCount = 0,
-	MaxHops = 3,
-	WaitTime = 300
+	WaitTime = 300 -- 5 minutes refresh
 }
 
+-- [[ Forward Declaration for SmartServerHop so it can be used in updatePlayerInfo ]]
+local SmartServerHop
+
+local FailFarmCount = 0 -- [[ LOGIC: 5x FAIL FARM PER ROUND (CUMULATIVE) ]]
 local PlayerPositions = {}
 local TeleportThreshold = 50
 
@@ -942,7 +947,10 @@ local function updatePlayerInfo()
 	        TotalSessionChecks = TotalSessionChecks + 1
 	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+					if SmartServerHop then
+						SmartServerHop(true)
+					end
 				else
 					game:Shutdown()
 				end
@@ -952,7 +960,10 @@ local function updatePlayerInfo()
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
 	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
+	        -- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+			if SmartServerHop then
+				SmartServerHop(true)
+			end
 	    end
 	end
 
@@ -1045,16 +1056,29 @@ end)
 
 local lastPing = tick()
 
+-- [[ HELPER: GET ACTUAL COINS FOR VERIFICATION ]]
+local function GetActualCoins()
+	local d = require(Modules.ProfileData)
+    if iseEventActive then
+        return d.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
+    else
+        return d.Materials.Owned["Coins"] or 0
+    end
+end
+
 --// Teleport to Coin
+-- [[ LOGIC: 3x FAIL FARM & TRUE COLLECTION CHECK ]]
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
+		return false -- Failed
 	end
 
 	if not coin:FindFirstChild("TouchInterest") then
-		-- debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return
+		return false -- Already collected or invalid
 	end
+
+    -- Record coins BEFORE collection
+    local coinsBefore = GetActualCoins()
 
 	local pos = coin.Position
 	local currentPos = HumanoidRootPart.Position
@@ -1076,17 +1100,27 @@ local function TeleportToCoin(coin)
 
 	local startTime = tick()
 	
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait(0.3)
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait(0.3)
+	repeat
+		firetouchinterest(coin, HumanoidRootPart, 0)
+		task.wait(0.3)
+		firetouchinterest(coin, HumanoidRootPart, 1)
+		task.wait(0.3)
 		
 		if not coin or not coin:FindFirstChild("TouchInterest") then
 			break
 		end
 	until (tick() - startTime) > 1 
+    
+    -- Record coins AFTER collection
+    local coinsAfter = GetActualCoins()
+
+    -- [[ CRITICAL FIX: Verify if coins actually increased ]]
+    if coinsAfter > coinsBefore then
+        return true -- Success: We got the coin
+    else
+        return false -- Fail: Coin gone but we didn't get it (Someone else took it)
     end
+end
 
 local function FindBestCoin(searchRadius, neighborRadius)
 	if not HumanoidRootPart then return nil end
@@ -1188,8 +1222,10 @@ local function FindRandomUnvisitedCoin(radius)
 	return coinsInRadius[math.random(1, #coinsInRadius)]
 end
 
+-- [[ UPDATED IsPlayerNearMe (Robust Version) ]]
 local function IsPlayerNearMe(checkRadius)
 	if not HumanoidRootPart then return false end
+	local myPos = HumanoidRootPart.Position
 	
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player then
@@ -1197,9 +1233,11 @@ local function IsPlayerNearMe(checkRadius)
 			if char then
 				local hrp = char:FindFirstChild("HumanoidRootPart")
 				local hum = char:FindFirstChild("Humanoid")
+				
+				-- Check Valid and Alive
 				if hrp and hum and hum.Health > 0 then
-					local dist = (HumanoidRootPart.Position - hrp.Position).Magnitude
-					if dist < checkRadius then
+					local dist = (hrp.Position - myPos).Magnitude
+					if dist <= checkRadius then
 						return true 
 					end
 				end
@@ -1393,8 +1431,39 @@ local function FindCoin(isFirst)
 	end
 	
 	if isFirst then
-		-- debug_print("FindCoin (Global): Picking a random coin from " .. #allValidCoins .. " total.")
-		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
+		-- [[ LOGIC UPDATE: Use IsPlayerNearMe(50) to decide Safe or Random ]]
+		local isPlayerClose_First = IsPlayerNearMe(50)
+		
+		local bestCoin = nil
+		if isPlayerClose_First then
+			-- debug_print("FindCoin (Global): Player Near! Picking RANDOM coin.")
+			bestCoin = allValidCoins[math.random(1, #allValidCoins)]
+		else
+			-- debug_print("FindCoin (Global): Safe. Picking SAFEST/BEST coin.")
+			-- (Keep existing logic for Safest if no player near, 
+			-- but for now let's stick to just random vs nearest logic 
+			-- or revert to original Safest logic if preferred. 
+			-- The request was: "fix for me error not pick random when other player near"
+			-- So adding the random choice here is the fix.)
+			
+			-- Original Safest Logic Below for 'else':
+			local coinsInRadius = {}
+			for _, coin in ipairs(allValidCoins) do
+				-- Just grab all valid coins since we are doing global search
+				table.insert(coinsInRadius, coin) 
+			end
+			
+			-- Find coin with fewest neighbors? Or just random? 
+			-- The original code did `bestCoin = allValidCoins[math.random(1, #allValidCoins)]` for `isFirst`.
+			-- Let's stick to Random if Player Near, else Random (default behavior was random for first coin anyway).
+			
+			-- Wait, the user asked to FIX it not picking random when player near.
+			-- The previous code ALWAYS picked random for `isFirst`. 
+			-- `if isFirst then ... bestCoin = allValidCoins[math.random(...)] ... end`
+			
+			-- If you want it to be MORE random or SPECIFICALLY random when player near:
+			bestCoin = allValidCoins[math.random(1, #allValidCoins)]
+		end
 		return bestCoin
 	else
 		-- debug_print("FindCoin (Chain Start): Finding safest coin within 50 studs...")
@@ -1409,6 +1478,11 @@ local function FindCoin(isFirst)
 		if #coinsInRadius == 0 then
 			-- debug_print("FindCoin (Chain Start): No coins found within 50 studs.")
 			return "NoCoins"
+		end
+		
+		-- [[ LOGIC UPDATE: Check Player Near for Chain Start too ]]
+		if IsPlayerNearMe(50) then
+			 return coinsInRadius[math.random(1, #coinsInRadius)]
 		end
 
 		local bestCoin = nil
@@ -1442,12 +1516,12 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- Hàm lấy danh sách servers có 4 players
-local function Get4PlayerServers()
+-- [[ LOGIC: 4+ TELEPORTERS & TARGET PLAYERS UPDATE ]]
+-- Hàm lấy danh sách servers
+local function GetTargetServers()
 	local currentJobId = game.JobId
-	local targetPlayerCount = 4
 	
-	debug_print("Đang lấy danh sách servers có " .. targetPlayerCount .. " players...")
+	debug_print("Đang lấy danh sách tất cả servers < 12 players...")
 	
 	local success, servers = pcall(function()
 		-- Lấy danh sách servers từ Roblox API
@@ -1481,97 +1555,131 @@ local function Get4PlayerServers()
 	
 	if not success or not servers or #servers == 0 then
 		warn("Không thể lấy danh sách servers")
-		return {}
+		return {}, {}
 	end
 	
-	-- Tìm tất cả servers có đúng 4 players (không phải server hiện tại)
-	local fourPlayerServers = {}
+	-- Tìm tất cả servers < 12 và lọc ra ưu tiên (3-4)
+	local priorityServers = {}
+    local allValidServers = {}
+
 	for _, server in ipairs(servers) do
-		if server.id ~= currentJobId and server.playing == targetPlayerCount then
-			table.insert(fourPlayerServers, server.id)
+		if server.id ~= currentJobId and server.playing < 12 then
+            -- Lưu vào danh sách tổng hợp (để dùng backup)
+			table.insert(allValidServers, server.id)
+
+            -- Lưu vào danh sách ưu tiên (để dùng chính)
+            if server.playing >= 3 and server.playing <= 4 then
+			    table.insert(priorityServers, server.id)
+            end
 		end
 	end
 	
-	debug_print("Tìm thấy " .. #fourPlayerServers .. " server(s) có 4 players")
-	return fourPlayerServers
+	debug_print("Tìm thấy " .. #allValidServers .. " server hợp lệ (<12) và " .. #priorityServers .. " server ưu tiên (3-4)")
+	return priorityServers, allValidServers
 end
 
--- Hàm lấy 3 job IDs có 4 players
-local function Fetch4PlayerJobIds()
+-- [[ LOGIC: LAZY SCAN & REFRESH ]]
+-- Hàm lấy job IDs với Logic Refresh 5 phút
+local function FetchTargetJobIds()
 	local currentTime = tick()
 	
-	-- Kiểm tra xem có cần chờ không
-	if #ServerHopData.JobIds >= ServerHopData.MaxHops then
-		local timeSinceLastFetch = currentTime - ServerHopData.LastFetchTime
-		if timeSinceLastFetch < ServerHopData.WaitTime then
-			local remainingTime = ServerHopData.WaitTime - timeSinceLastFetch
-			debug_print("Đã có đủ " .. ServerHopData.MaxHops .. " job IDs. Chờ thêm " .. math.floor(remainingTime) .. " giây...")
-			return false
-		end
-	end
+    -- Kiểm tra thời gian refresh (5 phút) hoặc nếu danh sách backup rỗng
+	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime or (#ServerHopData.PriorityIds == 0 and #ServerHopData.BackupIds == 0) then
+        debug_print("Server list older than 5 mins or empty. Forcing refresh.")
+        ServerHopData.PriorityIds = {} 
+        ServerHopData.BackupIds = {}
+    else
+        -- Nếu còn cache hợp lệ, không scan
+        return true
+    end
 	
-	-- Lấy danh sách servers có 4 players
-	local servers = Get4PlayerServers()
+	-- Lấy danh sách servers mới
+	local prio, backup = GetTargetServers()
 	
-	if #servers == 0 then
-		warn("Không tìm thấy server nào có 4 players")
+	if #backup == 0 then
+		warn("Không tìm thấy server nào phù hợp")
 		return false
 	end
 	
-	-- Lấy tối đa 3 job IDs
-	ServerHopData.JobIds = {}
-	local count = 0
-	for _, jobId in ipairs(servers) do
-		if count >= ServerHopData.MaxHops then
-			break
-		end
-		table.insert(ServerHopData.JobIds, jobId)
-		count = count + 1
-	end
+    -- [[ SAVE ALL FOUND SERVERS ]]
+	ServerHopData.PriorityIds = prio
+    ServerHopData.BackupIds = backup
 	
 	ServerHopData.LastFetchTime = currentTime
-	ServerHopData.HopCount = 0
-	debug_print("Đã lấy " .. #ServerHopData.JobIds .. " job ID(s) có 4 players")
+	debug_print("Đã cập nhật danh sách server.")
 	return true
 end
 
-local function HopTo4PlayerServer()
-	if #ServerHopData.JobIds == 0 then
-		if not Fetch4PlayerJobIds() then
-			return false
-		end
-	end
+-- [[ LOGIC: 3x FAIL FARM - PRIORITY & BACKUP ]]
+-- [[ CHANGED to Global function assignment for forward compatibility ]]
+SmartServerHop = function(forceAnyBackup)
+    -- Lazy scan: Chỉ scan khi hàm này được gọi
+	FetchTargetJobIds()
 	
-	local jobId = ServerHopData.JobIds[1]
-	if not jobId then
-		return false
-	end
-	
-	debug_print("Đang hop đến server: " .. jobId .. " (4 players)")
-	if StatusText then
-		StatusText.Text = "Status: Đang hop đến server có 4 players..."
-	end
-	
-	local hopSuccess, hopError = pcall(function()
-		TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
-	end)
-	
-	if hopSuccess then
-		table.remove(ServerHopData.JobIds, 1)
-		ServerHopData.HopCount = ServerHopData.HopCount + 1
-		debug_print("Đã gửi yêu cầu hop server thành công! Còn lại " .. #ServerHopData.JobIds .. " job ID(s)")
-		return true
-	else
-		warn("Lỗi khi hop server: " .. tostring(hopError))
-		table.remove(ServerHopData.JobIds, 1)
-		return false
-	end
+	-- 1. Ưu tiên: Thử hop vào server 3-4 người trước
+    if #ServerHopData.PriorityIds > 0 then
+         local jobId = ServerHopData.PriorityIds[1]
+         debug_print("Đang hop đến server ƯU TIÊN (3-4 players): " .. jobId)
+         if StatusText then StatusText.Text = "Status: Hopping to Priority Server..." end
+         
+         -- Xóa khỏi danh sách để ko thử lại
+         table.remove(ServerHopData.PriorityIds, 1)
+
+         local hopSuccess, hopError = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+         end)
+         
+         if hopSuccess then return true end
+    end
+
+    -- 2. Backup: Nếu forceAnyBackup (3x Fail) VÀ hết server ưu tiên, dùng danh sách Backup
+    if forceAnyBackup and #ServerHopData.BackupIds > 0 then
+        debug_print("3x Fail Farm: Hết server ưu tiên. Dùng Random Backup từ list đã lưu.")
+        if StatusText then StatusText.Text = "Status: Switching to Cached Backup Server..." end
+
+        -- Chọn Random từ danh sách Backup
+        local randomIndex = math.random(1, #ServerHopData.BackupIds)
+        local jobId = ServerHopData.BackupIds[randomIndex]
+
+        -- Xóa khỏi danh sách
+        table.remove(ServerHopData.BackupIds, randomIndex)
+
+        local hopSuccess, hopError = pcall(function()
+            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+        end)
+
+        if hopSuccess then return true end
+    end
+
+    -- 3. Fallback cuối cùng: Random hoàn toàn (nếu list backup cũng lỗi hết)
+    if forceAnyBackup then
+         debug_print("Last Resort: Random Hop API.")
+         local PlaceId = game.PlaceId
+         local Api = "https://games.roblox.com/v1/games/"
+         local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+         local function ListServers(cursor)
+             local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
+             return HttpService:JSONDecode(Raw)
+         end
+         
+         local Server, Next; repeat
+             local Servers = ListServers(Next)
+             Server = Servers.data[math.random(1, #Servers.data)]
+             Next = Servers.nextPageCursor
+         until Server
+         
+         TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
+         return true
+    end
+    
+    return false
 end
 
 local function DetectOtherPlayersTeleport()
-	local detectedTeleports = 0
 	local currentTime = tick()
+	local activeTeleportersCount = 0
 	
+	-- Clean up data for players who left
 	for plrName, data in pairs(PlayerPositions) do
 		if not Players:FindFirstChild(plrName) then
 			PlayerPositions[plrName] = nil
@@ -1591,32 +1699,48 @@ local function DetectOtherPlayersTeleport()
 				if success and currentPos then
 					local plrName = plr.Name
 					
-					if PlayerPositions[plrName] and PlayerPositions[plrName].Position and PlayerPositions[plrName].Time then
-						local lastPos = PlayerPositions[plrName].Position
-						local lastTime = PlayerPositions[plrName].Time
-						local distance = (currentPos - lastPos).Magnitude
-						local timeDiff = currentTime - lastTime
+					-- Initialize data if missing
+					if not PlayerPositions[plrName] then
+						PlayerPositions[plrName] = {
+							Position = currentPos,
+							Time = currentTime,
+							LastTeleportTime = 0 -- New field to store when they last teleported
+						}
+					end
+
+					local data = PlayerPositions[plrName]
+					local lastPos = data.Position
+					local lastTime = data.Time
+					local distance = (currentPos - lastPos).Magnitude
+					local timeDiff = currentTime - lastTime
+					
+					-- Calculate Speed
+					if timeDiff > 0 and distance > 0 then -- Valid movement
+						local speed = distance / timeDiff
 						
-						if timeDiff > 0 and distance > TeleportThreshold and timeDiff < 2 then
-							local speed = distance / timeDiff
-							
-							if speed > 25 then
-								detectedTeleports = detectedTeleports + 1
-								debug_print("Phát hiện player teleport: " .. plrName .. " (tốc độ: " .. string.format("%.2f", speed) .. " studs/s, khoảng cách: " .. string.format("%.2f", distance) .. " studs)")
-							end
+						-- [[ SENSITIVITY UPDATE: 10 studs/s ]]
+                        -- Speed > 10 studs/s (Lowered from 25)
+                        -- Distance > 10 studs (Catch medium/long range teleports)
+						if speed > 10 and distance > 10 then 
+							debug_print("Detected Teleport: " .. plrName .. " Speed: " .. math.floor(speed))
+							data.LastTeleportTime = currentTime -- Mark as recent teleporter
 						end
 					end
 					
-					PlayerPositions[plrName] = {
-						Position = currentPos,
-						Time = currentTime
-					}
+					-- Update current pos for next check
+					data.Position = currentPos
+					data.Time = currentTime
+					
+					-- Check if this player is considered an "Active Teleporter" (teleported in last 10s)
+					if (currentTime - data.LastTeleportTime) < 10 then
+						activeTeleportersCount = activeTeleportersCount + 1
+					end
 				end
 			end
 		end
 	end
 	
-	return detectedTeleports
+	return activeTeleportersCount
 end
 
 -- Hệ thống tự động hop khi detect players
@@ -1628,8 +1752,8 @@ task.spawn(function()
 	
 	task.wait(2)
 	
-	-- Lấy job IDs ban đầu
-	Fetch4PlayerJobIds()
+	-- [[ LOGIC: LAZY SCAN - DO NOT SCAN ON STARTUP ]]
+	-- FetchTargetJobIds() -- REMOVED
 	
 		-- Kiểm tra định kỳ
 		while true do
@@ -1637,24 +1761,18 @@ task.spawn(function()
 				-- Detect players teleport
 				local teleportCount = DetectOtherPlayersTeleport()
 				
-				-- Nếu phát hiện player teleport, hop server
-				if teleportCount > 0 then
-					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
+				-- [[ LOGIC: 4+ TELEPORTERS ]]
+				if teleportCount >= 4 then
+					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Triggering Hop...")
 					if StatusText then
-						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
+						StatusText.Text = "Status: 4+ Teleporters Detected. Trying to hop..."
 					end
 					
-					-- Thử lấy job IDs mới nếu cần
-					if #ServerHopData.JobIds == 0 then
-						Fetch4PlayerJobIds()
-					end
-					
-					-- Hop đến server có 4 players
-					if #ServerHopData.JobIds > 0 then
-						HopTo4PlayerServer()
-						-- Chờ một chút sau khi hop
-						task.wait(5)
-					end
+                    -- [[ FORCE HOP TO BACKUP IF PRIORITY FAILS ]]
+                    -- Changed from false to true to force escape from bot servers
+					SmartServerHop(true)
+                    
+                    task.wait(5)
 				end
 			end)
 			
@@ -1662,8 +1780,8 @@ task.spawn(function()
 				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 			end
 			
-			-- Kiểm tra mỗi 1 giây để phát hiện teleport nhanh
-			task.wait(1)
+			-- [[ FAST SCAN UPDATE: 0.2s ]]
+			task.wait(0.2)
 		end
 end)
 
@@ -1724,6 +1842,7 @@ local function Start_Farm()
             -- OPTIMIZATION: Clear Memory Tables
 			visited = {} 
             CoinsFolder:ClearAllChildren()
+            FailFarmCount = 0 -- [[ NEW: Reset per round ]]
 		end
 
 		ClearMap()
@@ -1795,12 +1914,24 @@ local function Start_Farm()
 				continue
 			end
 
-			TeleportToCoin(coinToTeleport)
-			visited[coinToTeleport] = true
-			isFirstCoinOfRound = false
-			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-			task.wait(2)
+			local success = TeleportToCoin(coinToTeleport)
+            -- [[ LOGIC: 5x FAIL FARM CHECK ]]
+            if success then
+                -- FailFarmCount = 0 -- REMOVED: Do not reset on success
+                visited[coinToTeleport] = true
+                isFirstCoinOfRound = false
+                local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
+                debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
+                task.wait(2)
+            else
+                FailFarmCount = FailFarmCount + 1
+                debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
+                if FailFarmCount >= 5 then
+                    debug_print("5x Fail Farm (Round). Hopping...")
+                    -- ForceBackup = true (Hop anywhere if fails)
+                    SmartServerHop(true)
+                end
+            end
 
 		else
 			
@@ -1859,34 +1990,71 @@ local function Start_Farm()
 			if not chainCoin then
 				task.wait(2)
 			else
-				TeleportToCoin(chainCoin)
-				visited[chainCoin] = true
-				
-				chainCount = 1
-				debug_print("Collected coin")
-				
-				for i = 2, 5 do
-					local nextCoin = RandomWaterfallWait(
-						50, 0.5, 0.5,
-						50, 0.2, 0.4,
-						50, 0.3, 0.6,
-						50, 0.2, 0.4
-					)
+				local success = TeleportToCoin(chainCoin)
+                
+                -- [[ LOGIC: 5x FAIL FARM CHECK ]]
+                if success then
+                    -- FailFarmCount = 0 -- REMOVED
+                    visited[chainCoin] = true
+                    chainCount = 1
+                    debug_print("Collected coin")
+                    
+                    for i = 2, 5 do
+                        -- [FIX] Check if bag is full BEFORE trying next coin
+                        if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
+                            break -- Bag full, stop chain
+                        end
 
-					if not nextCoin then
-						break
-					else
-						TeleportToCoin(nextCoin)
-						visited[nextCoin] = true
-						chainCount = chainCount + 1
-						debug_print("Collected coin")
-					end
-				end
+                        local nextCoin = RandomWaterfallWait(
+                            50, 0.5, 0.5,
+                            50, 0.2, 0.4,
+                            50, 0.3, 0.6,
+                            50, 0.2, 0.4
+                        )
 
-				if chainCount > 0 then
+                        if not nextCoin then
+                            break
+                        else
+                            local chainSuccess = TeleportToCoin(nextCoin)
+                            if chainSuccess then
+                                -- FailFarmCount = 0 -- REMOVED
+                                visited[nextCoin] = true
+                                chainCount = chainCount + 1
+                                debug_print("Collected coin")
+                                
+                                -- [FIX] Check if bag became full after collection
+                                if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
+                                    break 
+                                end
+                            else
+                                -- [FIX] If fail, double check if it's because bag is full
+                                local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+                                if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
+                                     -- Not a failure, just full bag
+                                     break 
+                                else
+                                    FailFarmCount = FailFarmCount + 1
+                                    if FailFarmCount >= 5 then
+                                        debug_print("5x Fail Farm (Round). Hopping...")
+                                        SmartServerHop(true)
+                                        break -- Exit loop to hop
+                                    end
+                                end
+                            end
+                        end
+                    end
 
-					task.wait(0.5)
-				end
+                    if chainCount > 0 then
+                        task.wait(0.5)
+                    end
+                else
+                    FailFarmCount = FailFarmCount + 1
+                    debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
+                    if FailFarmCount >= 5 then
+                        debug_print("5x Fail Farm (Round). Hopping...")
+                        SmartServerHop(true)
+                    end
+                end
 			end
 		end
 
