@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -944,8 +944,11 @@ local function updatePlayerInfo()
 	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
-	        TotalSessionChecks = TotalSessionChecks + 1
-	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
+	        
+            -- [[ AUTO SHUTDOWN FIX: Compare ACTUAL EARNED COINS ]]
+            local coinsEarned = totalCoins - StartedCoins
+	        if coinsEarned < (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks) then
+                print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
 					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
 					if SmartServerHop then
@@ -955,6 +958,8 @@ local function updatePlayerInfo()
 					game:Shutdown()
 				end
 	        end
+            -- [[ INCREMENT CHECK COUNTER AFTER CHECK ]]
+            TotalSessionChecks = TotalSessionChecks + 1
 	    end
 	end
 
