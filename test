@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1637,8 +1637,8 @@ task.spawn(function()
 				-- Detect players teleport
 				local teleportCount = DetectOtherPlayersTeleport()
 				
-				-- UPDATED LINE: Check if 4 or more players are teleporting
-				if teleportCount >= 4 then
+				-- Nếu phát hiện player teleport, hop server
+				if teleportCount > 0 then
 					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Đang hop server...")
 					if StatusText then
 						StatusText.Text = "Status: Phát hiện " .. teleportCount .. " player teleport! Đang hop..."
