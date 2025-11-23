@@ -40,8 +40,8 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 60, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 600, -- Min Coins needed to have after x minutes
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -1683,6 +1683,10 @@ end
 local function DetectOtherPlayersTeleport()
 	local currentTime = tick()
 	local activeTeleportersCount = 0
+	local playerList = Players:GetPlayers()
+	local playerCount = #playerList
+	local clusterThreshold = 3 -- Distance to consider "Stacked"
+	local stackCountMax = 0
 	
 	-- Clean up data for players who left
 	for plrName, data in pairs(PlayerPositions) do
@@ -1691,7 +1695,31 @@ local function DetectOtherPlayersTeleport()
 		end
 	end
 	
-	for _, plr in ipairs(Players:GetPlayers()) do
+	-- [[ NEW: Stack Detection Logic (Detect bots sticking together) ]]
+	for i = 1, playerCount do
+		local p1 = playerList[i]
+		if p1 ~= player and p1.Character and p1.Character:FindFirstChild("HumanoidRootPart") then
+			local pos1 = p1.Character.HumanoidRootPart.Position
+			local currentStack = 0
+			
+			for j = 1, playerCount do
+				local p2 = playerList[j]
+				if i ~= j and p2 ~= player and p2.Character and p2.Character:FindFirstChild("HumanoidRootPart") then
+					local pos2 = p2.Character.HumanoidRootPart.Position
+					if (pos1 - pos2).Magnitude < clusterThreshold then
+						currentStack = currentStack + 1
+					end
+				end
+			end
+			
+			if currentStack > stackCountMax then
+				stackCountMax = currentStack
+			end
+		end
+	end
+	
+	-- [[ Original Speed Detection ]]
+	for _, plr in ipairs(playerList) do
 		if plr ~= player and plr.Character then
 			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
 			local hum = plr.Character:FindFirstChild("Humanoid")
@@ -1723,10 +1751,8 @@ local function DetectOtherPlayersTeleport()
 					if timeDiff > 0 and distance > 0 then -- Valid movement
 						local speed = distance / timeDiff
 						
-						-- [[ SENSITIVITY UPDATE: 10 studs/s ]]
-                        -- Speed > 10 studs/s (Lowered from 25)
-                        -- Distance > 10 studs (Catch medium/long range teleports)
-						if speed > 10 and distance > 10 then 
+						-- [[ SENSITIVITY UPDATE: 22 studs/s (Safety margin above 18) ]]
+						if speed > 22 and distance > 10 then 
 							debug_print("Detected Teleport: " .. plrName .. " Speed: " .. math.floor(speed))
 							data.LastTeleportTime = currentTime -- Mark as recent teleporter
 						end
@@ -1743,6 +1769,12 @@ local function DetectOtherPlayersTeleport()
 				end
 			end
 		end
+	end
+	
+	-- Return BOTH individual teleporters AND stack count
+	-- If stack count >= 3 (meaning 4 players total in one spot), treat as massive bot farm
+	if stackCountMax >= 3 then
+		return 99 -- Force trigger
 	end
 	
 	return activeTeleportersCount
@@ -1766,11 +1798,11 @@ task.spawn(function()
 				-- Detect players teleport
 				local teleportCount = DetectOtherPlayersTeleport()
 				
-				-- [[ LOGIC: 4+ TELEPORTERS ]]
+				-- [[ LOGIC: 4+ TELEPORTERS OR STACKED BOTS ]]
 				if teleportCount >= 4 then
-					debug_print("Phát hiện " .. teleportCount .. " player(s) đang teleport! Triggering Hop...")
+					debug_print("Phát hiện " .. teleportCount .. " bot/teleporter! Triggering Hop...")
 					if StatusText then
-						StatusText.Text = "Status: 4+ Teleporters Detected. Trying to hop..."
+						StatusText.Text = "Status: Bots/Teleporters Detected. Hopping..."
 					end
 					
                     -- [[ FORCE HOP TO BACKUP IF PRIORITY FAILS ]]
