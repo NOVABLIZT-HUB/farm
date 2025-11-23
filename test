@@ -1618,9 +1618,10 @@ SmartServerHop = function(forceAnyBackup)
 end
 
 local function DetectOtherPlayersTeleport()
-	local detectedTeleports = 0
 	local currentTime = tick()
+	local activeTeleportersCount = 0
 	
+	-- Clean up data for players who left
 	for plrName, data in pairs(PlayerPositions) do
 		if not Players:FindFirstChild(plrName) then
 			PlayerPositions[plrName] = nil
@@ -1640,32 +1641,48 @@ local function DetectOtherPlayersTeleport()
 				if success and currentPos then
 					local plrName = plr.Name
 					
-					if PlayerPositions[plrName] and PlayerPositions[plrName].Position and PlayerPositions[plrName].Time then
-						local lastPos = PlayerPositions[plrName].Position
-						local lastTime = PlayerPositions[plrName].Time
-						local distance = (currentPos - lastPos).Magnitude
-						local timeDiff = currentTime - lastTime
+					-- Initialize data if missing
+					if not PlayerPositions[plrName] then
+						PlayerPositions[plrName] = {
+							Position = currentPos,
+							Time = currentTime,
+							LastTeleportTime = 0 -- New field to store when they last teleported
+						}
+					end
+
+					local data = PlayerPositions[plrName]
+					local lastPos = data.Position
+					local lastTime = data.Time
+					local distance = (currentPos - lastPos).Magnitude
+					local timeDiff = currentTime - lastTime
+					
+					-- Calculate Speed
+					if timeDiff > 0 and distance > 0 then -- Valid movement
+						local speed = distance / timeDiff
 						
-						if timeDiff > 0 and distance > TeleportThreshold and timeDiff < 2 then
-							local speed = distance / timeDiff
-							
-							if speed > 10 then -- CHANGED FROM 25 TO 10 AS REQUESTED
-								detectedTeleports = detectedTeleports + 1
-								debug_print("Phát hiện player teleport: " .. plrName)
-							end
+						-- [[ SENSITIVITY UPDATE: 25 studs/s ]]
+                        -- Speed > 25 studs/s (Default walk is 16, Sprint/Haste ~20-22)
+                        -- Distance > 10 studs (Catch medium/long range teleports)
+						if speed > 25 and distance > 10 then 
+							debug_print("Detected Teleport: " .. plrName .. " Speed: " .. math.floor(speed))
+							data.LastTeleportTime = currentTime -- Mark as recent teleporter
 						end
 					end
 					
-					PlayerPositions[plrName] = {
-						Position = currentPos,
-						Time = currentTime
-					}
+					-- Update current pos for next check
+					data.Position = currentPos
+					data.Time = currentTime
+					
+					-- Check if this player is considered an "Active Teleporter" (teleported in last 10s)
+					if (currentTime - data.LastTeleportTime) < 10 then
+						activeTeleportersCount = activeTeleportersCount + 1
+					end
 				end
 			end
 		end
 	end
 	
-	return detectedTeleports
+	return activeTeleportersCount
 end
 
 -- Hệ thống tự động hop khi detect players
