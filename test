@@ -40,8 +40,8 @@ local Default_Config = {
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
 
-            ["Minutes"] = 30, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 300, -- Min Coins needed to have after x minutes
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -122,7 +122,7 @@ local ServerHopData = {
 -- [[ Forward Declaration for SmartServerHop so it can be used in updatePlayerInfo ]]
 local SmartServerHop
 
-local FailFarmCount = 0 -- [[ LOGIC: 5x FAIL FARM PER ROUND (CUMULATIVE) ]]
+local FailFarmCount = 0 -- [[ LOGIC: 10x FAIL FARM PER ROUND (CUMULATIVE) ]]
 local PlayerPositions = {}
 local TeleportThreshold = 50
 
@@ -1915,7 +1915,7 @@ local function Start_Farm()
 			end
 
 			local success = TeleportToCoin(coinToTeleport)
-            -- [[ LOGIC: 5x FAIL FARM CHECK ]]
+            -- [[ LOGIC: 10x FAIL FARM CHECK ]]
             if success then
                 -- FailFarmCount = 0 -- REMOVED: Do not reset on success
                 visited[coinToTeleport] = true
@@ -1926,8 +1926,8 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 5 then
-                    debug_print("5x Fail Farm (Round). Hopping...")
+                if FailFarmCount >= 10 then
+                    debug_print("10x Fail Farm (Round). Hopping...")
                     -- ForceBackup = true (Hop anywhere if fails)
                     SmartServerHop(true)
                 end
@@ -1992,7 +1992,7 @@ local function Start_Farm()
 			else
 				local success = TeleportToCoin(chainCoin)
                 
-                -- [[ LOGIC: 5x FAIL FARM CHECK ]]
+                -- [[ LOGIC: 10x FAIL FARM CHECK ]]
                 if success then
                     -- FailFarmCount = 0 -- REMOVED
                     visited[chainCoin] = true
@@ -2034,8 +2034,8 @@ local function Start_Farm()
                                      break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 5 then
-                                        debug_print("5x Fail Farm (Round). Hopping...")
+                                    if FailFarmCount >= 10 then
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break -- Exit loop to hop
                                     end
@@ -2050,8 +2050,8 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 5 then
-                        debug_print("5x Fail Farm (Round). Hopping...")
+                    if FailFarmCount >= 10 then
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
