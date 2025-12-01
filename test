@@ -26,7 +26,6 @@ local Default_Config = {
 		["Auto Restart on Update"] = false,
 		["Auto Craft"] = false, -- not implemented yet
 	},
-
 	
 	["Event"] = {
 		["Auto Do Battle Pass"] = true,
@@ -39,13 +38,10 @@ local Default_Config = {
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
-
             ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
             ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
-
 			["Every Minutes"] = 0 -- Every x minutes force
         },
-
 	}
 }
 
@@ -266,7 +262,6 @@ local currentPlatformY = 142
 RunService.Heartbeat:Connect(function()
 	if HumanoidRootPart then
 		local rootPos = HumanoidRootPart.Position
-		
 		WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
 	end
 end)
@@ -538,9 +533,6 @@ local function CPUSaversIGMA()
 
         -- Destroy Map Parts
 		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-             -- Keep CoinContainers if found inside map (handled by ProcessMap usually, but if we delete map, container goes too)
-             -- Assuming coins are extracted to CoinsFolder by ProccessMap which runs on ChildAdded
-             -- We delay destroy slightly to let scripts grab coins if needed, or just nuke it
              pcall(function() child:Destroy() end)
 		end
 	end
@@ -1444,28 +1436,6 @@ local function FindCoin(isFirst)
 			-- debug_print("FindCoin (Global): Player Near! Picking RANDOM coin.")
 			bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		else
-			-- debug_print("FindCoin (Global): Safe. Picking SAFEST/BEST coin.")
-			-- (Keep existing logic for Safest if no player near, 
-			-- but for now let's stick to just random vs nearest logic 
-			-- or revert to original Safest logic if preferred. 
-			-- The request was: "fix for me error not pick random when other player near"
-			-- So adding the random choice here is the fix.)
-			
-			-- Original Safest Logic Below for 'else':
-			local coinsInRadius = {}
-			for _, coin in ipairs(allValidCoins) do
-				-- Just grab all valid coins since we are doing global search
-				table.insert(coinsInRadius, coin) 
-			end
-			
-			-- Find coin with fewest neighbors? Or just random? 
-			-- The original code did `bestCoin = allValidCoins[math.random(1, #allValidCoins)]` for `isFirst`.
-			-- Let's stick to Random if Player Near, else Random (default behavior was random for first coin anyway).
-			
-			-- Wait, the user asked to FIX it not picking random when player near.
-			-- The previous code ALWAYS picked random for `isFirst`. 
-			-- `if isFirst then ... bestCoin = allValidCoins[math.random(...)] ... end`
-			
 			-- If you want it to be MORE random or SPECIFICALLY random when player near:
 			bestCoin = allValidCoins[math.random(1, #allValidCoins)]
 		end
@@ -1650,7 +1620,7 @@ SmartServerHop = function(forceAnyBackup)
         table.remove(ServerHopData.BackupIds, randomIndex)
 
         local hopSuccess, hopError = pcall(function()
-            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+             TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
         end)
 
         if hopSuccess then return true end
@@ -1667,7 +1637,8 @@ SmartServerHop = function(forceAnyBackup)
              return HttpService:JSONDecode(Raw)
          end
          
-         local Server, Next; repeat
+         local Server, Next;
+         repeat
              local Servers = ListServers(Next)
              Server = Servers.data[math.random(1, #Servers.data)]
              Next = Servers.nextPageCursor
@@ -1780,46 +1751,77 @@ local function DetectOtherPlayersTeleport()
 	return activeTeleportersCount
 end
 
--- Hệ thống tự động hop khi detect players
+-- [[ HỆ THỐNG TỰ ĐỘNG HOP (ĐÃ SỬA LỖI LOBBY/MAP TELEPORT) ]]
 task.spawn(function()
-	-- Chờ game load hoàn toàn
+	-- Chờ game load hoàn toàn các UI
 	repeat
 		task.wait(0.5)
 	until StatusText and StatusText.Parent
 	
 	task.wait(2)
 	
-	-- [[ LOGIC: LAZY SCAN - DO NOT SCAN ON STARTUP ]]
-	-- FetchTargetJobIds() -- REMOVED
+	local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart")
+	local LastRoundState = -1
+	local RoundStartTime = 0
 	
-		-- Kiểm tra định kỳ
-		while true do
-			local success, err = pcall(function()
-				-- Detect players teleport
-				local teleportCount = DetectOtherPlayersTeleport()
-				
-				-- [[ LOGIC: 4+ TELEPORTERS OR STACKED BOTS ]]
-				if teleportCount >= 4 then
-					debug_print("Phát hiện " .. teleportCount .. " bot/teleporter! Triggering Hop...")
-					if StatusText then
-						StatusText.Text = "Status: Bots/Teleporters Detected. Hopping..."
-					end
-					
-                    -- [[ FORCE HOP TO BACKUP IF PRIORITY FAILS ]]
-                    -- Changed from false to true to force escape from bot servers
-					SmartServerHop(true)
-                    
-                    task.wait(5)
-				end
-			end)
+	-- Kiểm tra định kỳ
+	while true do
+		local success, err = pcall(function()
+			local CurrentTime = RoundTimerPart:GetAttribute("Time")
 			
-			if not success then
-				warn("Lỗi trong hệ thống hop server: " .. tostring(err))
+			-- [[ LOGIC SỬA LỖI 1: KHÔNG QUÉT KHI Ở LOBBY ]]
+			-- Nếu thời gian là -1 (Intermission) hoặc nil, nghĩa là đang ở Lobby.
+			-- Lúc này người chơi stack (chồng lên nhau) ở spawn là bình thường.
+			if CurrentTime == nil or CurrentTime == -1 then
+				LastRoundState = -1
+				-- Không làm gì cả, return để skip lần quét này
+				return 
+			end
+
+			-- [[ LOGIC SỬA LỖI 2: GRACE PERIOD (THỜI GIAN ÂN HẠN) ]]
+			-- Nếu trạng thái trước đó là Lobby (-1) và giờ khác -1 -> Nghĩa là VỪA MỚI VÀO TRẬN
+			if LastRoundState == -1 and CurrentTime ~= -1 then
+				RoundStartTime = tick() -- Đánh dấu thời điểm bắt đầu trận
+				LastRoundState = CurrentTime
+				debug_print("Vừa vào trận - Tạm dừng quét 15s để tránh báo ảo teleport...")
 			end
 			
-			-- [[ FAST SCAN UPDATE: 0.2s ]]
-			task.wait(0.2)
+			-- Cập nhật trạng thái vòng chơi hiện tại
+			LastRoundState = CurrentTime
+
+			-- Nếu chưa trôi qua 15 giây kể từ lúc bắt đầu trận -> KHÔNG QUÉT
+			-- Để tránh báo ảo khi người chơi teleport từ Lobby ra Map
+			if (tick() - RoundStartTime) < 15 then
+				return
+			end
+
+			-- =======================================================
+			-- CHỈ CHẠY CODE QUÉT KHI ĐANG TRONG TRẬN VÀ ĐÃ ỔN ĐỊNH
+			-- =======================================================
+			
+			local teleportCount = DetectOtherPlayersTeleport()
+			
+			-- [[ LOGIC: 4+ TELEPORTERS OR STACKED BOTS ]]
+			if teleportCount >= 4 then
+				debug_print("Phát hiện " .. teleportCount .. " bot/teleporter! Triggering Hop...")
+				if StatusText then
+					StatusText.Text = "Status: Bots/Teleporters Detected. Hopping..."
+				end
+				
+				-- [[ FORCE HOP TO BACKUP ]]
+				SmartServerHop(true)
+				
+				task.wait(5)
+			end
+		end)
+		
+		if not success then
+			warn("Lỗi trong hệ thống hop server: " .. tostring(err))
 		end
+		
+		-- Scan mỗi 0.5s thay vì 0.2s để giảm lag
+		task.wait(0.5)
+	end
 end)
 
 local function Start_Farm()
@@ -2050,7 +2052,7 @@ local function Start_Farm()
                         )
 
                         if not nextCoin then
-                            break
+                             break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
                             if chainSuccess then
