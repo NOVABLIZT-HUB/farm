@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.6 Randomized Priority Hop" .. "\n"
+local Version = "v2.4.7 Stable Anti-Fall" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -246,10 +246,13 @@ local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
 
--- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
+-- [[ UPDATED PLATFORM LOGIC - FALL PROTECTION ]] --
+-- [[ Destroy existing to preventing dupes if re-executed ]]
+if Workspace:FindFirstChild("WalkingPlatform") then Workspace.WalkingPlatform:Destroy() end
+
 local WalkingPlatform = Instance.new("Part")
 WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(5, 1, 5) -- 5x5 Size
+WalkingPlatform.Size = Vector3.new(20, 1, 20) -- Increased size to 20x20 to prevent falling
 WalkingPlatform.Anchored = true
 WalkingPlatform.Transparency = 1 -- Invisible
 WalkingPlatform.CanCollide = true
@@ -260,9 +263,18 @@ local currentPlatformY = 142
 
 -- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
-	if HumanoidRootPart then
-		local rootPos = HumanoidRootPart.Position
+    local char = player.Character
+	if char and char:FindFirstChild("HumanoidRootPart") then
+        local hrp = char.HumanoidRootPart
+		local rootPos = hrp.Position
 		WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
+        
+        -- [[ EMERGENCY FALL PROTECTION ]]
+        -- If player somehow falls way below platform (lag/glitch), snap them back up
+        if rootPos.Y < (currentPlatformY - 10) then
+             hrp.AssemblyLinearVelocity = Vector3.zero -- Stop falling
+             hrp.CFrame = CFrame.new(rootPos.X, currentPlatformY + 5, rootPos.Z)
+        end
 	end
 end)
 
@@ -1659,7 +1671,9 @@ local function DetectOtherPlayersTeleport()
 	local activeTeleportersCount = 0
 	local playerList = Players:GetPlayers()
 	local playerCount = #playerList
-	local clusterThreshold = 3 -- Distance to consider "Stacked"
+	
+    -- [MODIFIED] Stricter thresholds to avoid false positives with normal players
+	local clusterThreshold = 1.5 -- Reduced from 3 to 1.5 (Must be practically touching/inside each other)
 	local stackCountMax = 0
 	
 	-- Clean up data for players who left
@@ -1725,8 +1739,8 @@ local function DetectOtherPlayersTeleport()
 					if timeDiff > 0 and distance > 0 then -- Valid movement
 						local speed = distance / timeDiff
 						
-						-- [[ SENSITIVITY UPDATE: 22 studs/s (Safety margin above 18) ]]
-						if speed > 22 and distance > 10 then 
+						-- [[ SENSITIVITY UPDATE: Increased to 28 speed and 20 distance as requested ]]
+						if speed > 28 and distance > 20 then 
 							debug_print("Detected Teleport: " .. plrName .. " Speed: " .. math.floor(speed))
 							data.LastTeleportTime = currentTime -- Mark as recent teleporter
 						end
@@ -1746,8 +1760,9 @@ local function DetectOtherPlayersTeleport()
 	end
 	
 	-- Return BOTH individual teleporters AND stack count
-	-- If stack count >= 3 (meaning 4 players total in one spot), treat as massive bot farm
-	if stackCountMax >= 3 then
+	-- If stack count >= 5 (meaning 6 players total in one spot), treat as massive bot farm
+    -- [MODIFIED] Increased from 3 to 5 to avoid hopping on groups of friends/traders
+	if stackCountMax >= 5 then
 		return 99 -- Force trigger
 	end
 	
@@ -1852,12 +1867,18 @@ local function Start_Farm()
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
-                    -- UPDATED: Keep player in safe sky position, platform will follow
-                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ ROBUST ANTI-FALLING LOGIC ]]
+                    -- Anchor the player while waiting so they absolutely cannot fall
+                    HumanoidRootPart.Anchored = true 
+                    HumanoidRootPart.Velocity = Vector3.zero
+                    HumanoidRootPart.AssemblyLinearVelocity = Vector3.zero
+                    
+					-- Keep player in safe sky position, platform will follow
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					
                     -- [[ PLATFORM SNAP UPDATE ]]
-                    currentPlatformY = 142 -- 150 - 8
-                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
+					currentPlatformY = 142 -- 150 - 8
+					WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
@@ -1867,7 +1888,7 @@ local function Start_Farm()
 			HumanoidRootPart, Humanoid = GetHumanoid()
 			-- debug_print("After round wait, got HumanoidRootPart: " .. tostring(HumanoidRootPart))
 			if HumanoidRootPart then
-				HumanoidRootPart.Anchored = false
+				HumanoidRootPart.Anchored = false -- Unanchor when round starts
 				-- debug_print("Unanchored HumanoidRootPart.")
 				for i = 1, 3 do
 					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
