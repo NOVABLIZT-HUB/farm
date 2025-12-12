@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.8 Final Stable" .. "\n"
+local Version = "v2.4.9 Final Stable + Fixes" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -1018,6 +1018,11 @@ local function ProccessMap(child)
 
 	print("Map found: " .. child.Name)
 
+    -- [[ FIX: Clear data here (on new map load) to prevent deleting new coins by accident ]]
+    CoinsFolder:ClearAllChildren()
+    visited = {}
+    FailFarmCount = 0
+
 	local conn = nil
 	AllCoins = {}
 	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
@@ -1672,8 +1677,8 @@ local function DetectOtherPlayersTeleport()
 	local playerList = Players:GetPlayers()
 	local playerCount = #playerList
 	
-    -- [MODIFIED] Stricter thresholds to avoid false positives with normal players
-	local clusterThreshold = 1.5 -- Reduced from 3 to 1.5 (Must be practically touching/inside each other)
+    -- [MODIFIED] Stricter thresholds
+	local clusterThreshold = 1.5 
 	local stackCountMax = 0
 	
 	-- Clean up data for players who left
@@ -1683,7 +1688,7 @@ local function DetectOtherPlayersTeleport()
 		end
 	end
 	
-	-- [[ NEW: Stack Detection Logic (Detect bots sticking together) ]]
+	-- [[ Stack Detection Logic ]]
 	for i = 1, playerCount do
 		local p1 = playerList[i]
 		if p1 ~= player and p1.Character and p1.Character:FindFirstChild("HumanoidRootPart") then
@@ -1706,7 +1711,7 @@ local function DetectOtherPlayersTeleport()
 		end
 	end
 	
-	-- [[ Original Speed Detection ]]
+	-- [[ IMPROVED Speed Detection ]]
 	for _, plr in ipairs(playerList) do
 		if plr ~= player and plr.Character then
 			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
@@ -1725,24 +1730,32 @@ local function DetectOtherPlayersTeleport()
 						PlayerPositions[plrName] = {
 							Position = currentPos,
 							Time = currentTime,
-							LastTeleportTime = 0 -- New field to store when they last teleported
+							LastTeleportTime = 0,
+                            SuspiciousCount = 0 -- [[ NEW: Counter for consecutive teleports ]]
 						}
 					end
 
 					local data = PlayerPositions[plrName]
 					local lastPos = data.Position
 					local lastTime = data.Time
-					local distance = (currentPos - lastPos).Magnitude
+					
+                    -- [[ LOGIC FIX: Check Horizontal Distance ONLY (Ignore Falling) ]]
+                    local horizontalDist = (Vector3.new(currentPos.X, 0, currentPos.Z) - Vector3.new(lastPos.X, 0, lastPos.Z)).Magnitude
 					local timeDiff = currentTime - lastTime
 					
 					-- Calculate Speed
-					if timeDiff > 0 and distance > 0 then -- Valid movement
-						local speed = distance / timeDiff
+					if timeDiff > 0 and horizontalDist > 0 then
+						local speed = horizontalDist / timeDiff
 						
-						-- [[ SENSITIVITY UPDATE: Increased to 28 speed and 20 distance as requested ]]
-						if speed > 28 and distance > 20 then 
-							debug_print("Detected Teleport: " .. plrName .. " Speed: " .. math.floor(speed))
-							data.LastTeleportTime = currentTime -- Mark as recent teleporter
+						-- [[ STRIKE SYSTEM: Player needs 2 suspicious movements to be flagged ]]
+						-- Threshold: Speed > 40 (Very fast) AND Distance > 25 (Big jump)
+						if speed > 40 and horizontalDist > 25 then 
+							data.SuspiciousCount = (data.SuspiciousCount or 0) + 1
+                            data.LastTeleportTime = currentTime
+                            debug_print("Suspicious Movement: " .. plrName .. " (Strike " .. data.SuspiciousCount .. ")")
+                        elseif (currentTime - data.LastTeleportTime) > 15 then
+                            -- Reset strikes if they behave normally for 15 seconds
+                            data.SuspiciousCount = 0
 						end
 					end
 					
@@ -1750,8 +1763,8 @@ local function DetectOtherPlayersTeleport()
 					data.Position = currentPos
 					data.Time = currentTime
 					
-					-- Check if this player is considered an "Active Teleporter" (teleported in last 10s)
-					if (currentTime - data.LastTeleportTime) < 10 then
+					-- Check if this player has 2 or more strikes
+					if data.SuspiciousCount >= 2 then
 						activeTeleportersCount = activeTeleportersCount + 1
 					end
 				end
@@ -1760,10 +1773,8 @@ local function DetectOtherPlayersTeleport()
 	end
 	
 	-- Return BOTH individual teleporters AND stack count
-	-- If stack count >= 5 (meaning 6 players total in one spot), treat as massive bot farm
-    -- [MODIFIED] Increased from 3 to 5 to avoid hopping on groups of friends/traders
 	if stackCountMax >= 5 then
-		return 99 -- Force trigger
+		return 99 -- Force trigger if 6+ players stacked
 	end
 	
 	return activeTeleportersCount
@@ -1861,11 +1872,7 @@ local function Start_Farm()
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				-- debug_print("Round ended. Waiting for new round to start...")
                 
-                -- [[ FIX: Only clear coins/reset vars if the round actually ended ]]
-                -- This prevents deleting valid coins when simply resetting/dying mid-round
-                CoinsFolder:ClearAllChildren()
-                visited = {}
-                FailFarmCount = 0
+                -- [[ FIX: Cleanup now handled in ProccessMap to protect new coins ]]
 			else
 				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 				-- debug_print("Waiting for round to end and new round to start...")
