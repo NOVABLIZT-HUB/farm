@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Original + RAM Fix" .. "\n"
+local Version = "v2.4.6 Custom Platform Fix" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -256,7 +256,11 @@ WalkingPlatform.CanCollide = true
 WalkingPlatform.Parent = Workspace
 
 -- Initialize Platform Height variable (Default Safe Height - 8)
-local currentPlatformY = 142 
+local currentPlatformY = 0
+
+if HumanoidRootPart then
+    currentPlatformY = HumanoidRootPart.Position.Y - 5
+end
 
 -- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
@@ -266,7 +270,8 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
-HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+-- Removed Initial Sky Teleport
+-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
@@ -1652,7 +1657,7 @@ repeat
     return false
 end
 
--- [[ HỆ THỐNG TỰ ĐỘNG HOP NẾU KẸT (STUCK DETECTION) ]]
+-- [[ HỆ THỐNG TỰ ĐỘNG REJOIN NẾU KẸT (STUCK DETECTION) ]]
 task.spawn(function()
     -- Wait for UI loading
     repeat task.wait(0.5) until StatusText and StatusText.Parent
@@ -1661,7 +1666,7 @@ task.spawn(function()
     local lastPos = nil
     local lastMoveTime = tick()
     local stuckThreshold = 10 -- 10 seconds allowed without movement
-    local moveThreshold = 3   -- 3 studs movement required
+    local moveThreshold = 3   -- 3 studs movement required (UPDATED)
 
     while task.wait(1) do
         local success, err = pcall(function()
@@ -1674,7 +1679,14 @@ task.spawn(function()
             if CurrentTime ~= nil and CurrentTime ~= -1 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                 
                 local hum = player.Character:FindFirstChild("Humanoid")
-                if hum and hum.Health > 0 then
+                local isDead = false
+                
+                -- [[ DEAD CHECK ]]
+                if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == true then
+                    isDead = true
+                end
+                
+                if hum and hum.Health > 0 and not isDead then
                     local currentPos = player.Character.HumanoidRootPart.Position
 
                     if lastPos then
@@ -1689,9 +1701,15 @@ task.spawn(function()
                                 debug_print("Player stuck for 10 seconds in active round. Rejoining Current Server...")
                                 if StatusText then StatusText.Text = "Status: Stuck detected. Rejoining Old Server..." end
                                 
-                                -- Trigger Rejoin (Same Server)
-                                local TeleportService = game:GetService("TeleportService")
-                                TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+                                -- Trigger Rejoin (Same Server) using PCALL
+                                local successTeleport, teleportErr = pcall(function()
+                                    local TeleportService = game:GetService("TeleportService")
+                                    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+                                end)
+                                
+                                if not successTeleport then
+                                    warn("Failed to rejoin: " .. tostring(teleportErr))
+                                end
                             end
                         end
                     else
@@ -1699,6 +1717,9 @@ task.spawn(function()
                         lastPos = currentPos
                         lastMoveTime = tick()
                     end
+                else
+                    -- If dead, Reset timer so we don't rejoin while spectating
+                    lastMoveTime = tick()
                 end
             else
                 -- If in Lobby, reset the timer
@@ -1738,12 +1759,12 @@ local function Start_Farm()
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
-                    -- UPDATED: Keep player in safe sky position, platform will follow
-                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-                    -- [[ PLATFORM SNAP UPDATE ]]
-                    currentPlatformY = 142 -- 150 - 8
-                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
+                    -- [[ REMOVED SKY TELEPORT ]]
+                    -- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    
+                    -- [[ PLATFORM SNAP UPDATE: Keep it under player ]]
+                    currentPlatformY = HumanoidRootPart.Position.Y - 5 
+                    WalkingPlatform.CFrame = CFrame.new(HumanoidRootPart.Position.X, currentPlatformY, HumanoidRootPart.Position.Z)
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
@@ -1756,8 +1777,8 @@ local function Start_Farm()
 				HumanoidRootPart.Anchored = false
 				-- debug_print("Unanchored HumanoidRootPart.")
 				for i = 1, 3 do
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
-                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ REMOVED SKY TELEPORT IN LOOP ]]
+					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					-- debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
 					task.wait(0.1)
 				end
@@ -1795,7 +1816,8 @@ local function Start_Farm()
 					debug_print("Player respawned!")
 					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) -- SafetyPart.CFrame + Vector3.new(0, 3, 0)
+                        -- [[ REMOVED SKY TELEPORT ]]
+						-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
 						task.wait(0.1)
 					end
 					continue
@@ -1826,7 +1848,8 @@ local function Start_Farm()
 					debug_print("Player respawned after 'Full' reset!")
 					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                        -- [[ REMOVED SKY TELEPORT ]]
+						-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1878,7 +1901,8 @@ local function Start_Farm()
 				debug_print("Player respawned!")
 				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ REMOVED SKY TELEPORT ]]
+					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
@@ -1907,7 +1931,8 @@ local function Start_Farm()
 				debug_print("Player respawned after 'Full' reset!")
 				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ REMOVED SKY TELEPORT ]]
+					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
