@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.5.1 Final Fixed (Coin Recovery)" .. "\n"
+local Version = "v2.5.2 Smart Coin Preservation" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -1054,7 +1054,7 @@ local function ClearMap()
 	end
 end
 
--- [MODIFIED] Robust Map Processing to catch all coins
+-- [MODIFIED] Robust Map Processing with Soft Wipe
 local CurrentMapID = nil
 local function ProccessMap(child)
 	local mapID = child:GetAttribute("MapID")
@@ -1066,26 +1066,31 @@ local function ProccessMap(child)
 
 	print("Map found: " .. child.Name)
 
-    -- [[ CRITICAL FIX: Only clear coins if we are genuinely on a NEW map ]]
-    -- AND we did not just recover coins from a crash
+    -- [[ CRITICAL FIX: "Soft Wipe" - Mark old coins but don't delete yet ]]
     if CurrentMapID ~= mapID then
         CurrentMapID = mapID
         if not JustRecovered then
-             CoinsFolder:ClearAllChildren()
+             -- Mark existing as old (don't delete yet)
+             for _, c in ipairs(CoinsFolder:GetChildren()) do
+                c:SetAttribute("OldCoin", true)
+             end
+             
              AllCoins = {}
              visited = {}
              FailFarmCount = 0
         else
-             JustRecovered = false -- Reset flag, don't wipe this time (these are the recovered coins)
+             JustRecovered = false 
         end
     end
 
     -- Helper to process a coin
+    local newCoinsCount = 0
     local function registerCoin(coin)
         if not coin or coin:GetAttribute("Collected") then return end
         
         -- Add to our list
         table.insert(AllCoins, coin)
+        newCoinsCount = newCoinsCount + 1
 
         task.wait(0.1) -- small delay for physics
         if cfg["CPU Saver"] and coin:FindFirstChild("CoinVisual") then
@@ -1094,12 +1099,29 @@ local function ProccessMap(child)
 
         coin.Parent = CoinsFolder
         coin:SetAttribute("Collected", false)
+        coin.SetAttribute(coin, "OldCoin", nil) -- Mark as valid/new
         coin.Transparency = 1
     end
 
     -- 1. Grab ALL existing coins immediately
     for _, c in ipairs(container:GetChildren()) do
         registerCoin(c)
+    end
+
+    -- [[ SMART CLEANUP ]]
+    if newCoinsCount > 0 then
+        -- We found new coins, safe to delete old ones
+        for _, c in ipairs(CoinsFolder:GetChildren()) do
+            if c:GetAttribute("OldCoin") then
+                c:Destroy()
+            end
+        end
+    else
+        -- We found 0 new coins (maybe lag). KEEP OLD COINS!
+        for _, c in ipairs(CoinsFolder:GetChildren()) do
+            c:SetAttribute("OldCoin", nil) -- Untag them so we can use them
+        end
+        print("Warning: 0 new coins found. Kept old coins to prevent farming stop.")
     end
 
     -- 2. Listen for new coins spawning
@@ -1924,6 +1946,15 @@ local function Start_Farm()
 
 	while task.wait(0) do
 		lastPing = tick()
+
+        -- [[ INTEGRITY CHECK: Recreate CoinsFolder if it gets deleted ]]
+        if not CoinsFolder or not CoinsFolder.Parent then
+            CoinsFolder = Instance.new("Folder")
+            CoinsFolder.Name = "CoinsFolder"
+            CoinsFolder.Parent = Workspace
+            print("Restored missing CoinsFolder")
+        end
+
 		if
 			RoundTimerPart:GetAttribute("Time") == -1
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
@@ -1938,13 +1969,7 @@ local function Start_Farm()
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				-- debug_print("Round ended. Waiting for new round to start...")
                 
-                -- [[ FIX: Clear only if we are truly back in lobby ]]
-                if #CoinsFolder:GetChildren() > 0 then
-                    CoinsFolder:ClearAllChildren()
-                    AllCoins = {}
-                    visited = {}
-                    FailFarmCount = 0
-                end
+                -- [[ FIX: Do NOT clear coins here. We let ProccessMap handle it on new map load only. ]]
 			else
 				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 				-- debug_print("Waiting for round to end and new round to start...")
