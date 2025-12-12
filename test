@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.6 Custom Platform Fix" .. "\n"
+local Version = "v2.4.7 Stuck Logic Update" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -1663,73 +1663,75 @@ task.spawn(function()
     repeat task.wait(0.5) until StatusText and StatusText.Parent
     task.wait(2)
 
+    -- [[ CONFIGURATION FROM USER REQUEST ]]
+    local StuckConfig = {
+        Timeout = 10,      -- Seconds to wait before rejoining
+        Distance = 5,      -- Radius in studs. If you move less than this, you are "stuck".
+        CheckInterval = 1  -- How often to check (seconds)
+    }
+
+    print("Stuck Monitor Started: Will rejoin if stuck for " .. StuckConfig.Timeout .. " seconds while alive in a round.")
+
     local lastPos = nil
-    local lastMoveTime = tick()
-    local stuckThreshold = 10 -- 10 seconds allowed without movement
-    local moveThreshold = 3   -- 3 studs movement required (UPDATED)
+    local lastTime = tick()
 
-    while task.wait(1) do
-        local success, err = pcall(function()
-            local RoundTimerPart = Workspace:FindFirstChild("RoundTimerPart")
-            if not RoundTimerPart then return end
-            
-            local CurrentTime = RoundTimerPart:GetAttribute("Time")
-            
-            -- Checks: Round must be active (Time ~= -1 and ~= nil)
-            if CurrentTime ~= nil and CurrentTime ~= -1 and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                
-                local hum = player.Character:FindFirstChild("Humanoid")
-                local isDead = false
-                
-                -- [[ DEAD CHECK ]]
-                if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == true then
-                    isDead = true
-                end
-                
-                if hum and hum.Health > 0 and not isDead then
-                    local currentPos = player.Character.HumanoidRootPart.Position
-
-                    if lastPos then
-                        local dist = (currentPos - lastPos).Magnitude
-                        -- If moved more than 3 studs, reset timer
-                        if dist > moveThreshold then
-                            lastMoveTime = tick()
-                            lastPos = currentPos
-                        else
-                            -- If time exceeded threshold
-                            if (tick() - lastMoveTime) > stuckThreshold then
-                                debug_print("Player stuck for 10 seconds in active round. Rejoining Current Server...")
-                                if StatusText then StatusText.Text = "Status: Stuck detected. Rejoining Old Server..." end
-                                
-                                -- Trigger Rejoin (Same Server) using PCALL
-                                local successTeleport, teleportErr = pcall(function()
-                                    local TeleportService = game:GetService("TeleportService")
-                                    TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
-                                end)
-                                
-                                if not successTeleport then
-                                    warn("Failed to rejoin: " .. tostring(teleportErr))
-                                end
-                            end
-                        end
-                    else
-                        -- First initialization of position
-                        lastPos = currentPos
-                        lastMoveTime = tick()
-                    end
-                else
-                    -- If dead, Reset timer so we don't rejoin while spectating
-                    lastMoveTime = tick()
-                end
-            else
-                -- If in Lobby, reset the timer
-                lastMoveTime = tick()
-                lastPos = nil
-            end
+    while task.wait(StuckConfig.CheckInterval) do
+        -- 1. Check Character Existence
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then 
+            lastTime = tick() -- Reset timer if spawning/dead
+            continue 
+        end
+        
+        local roundTime = RoundTimerPart:GetAttribute("Time")
+        
+        -- 2. Check if player is ALIVE in the current round
+        -- We invoke the server to get real data to ensure we don't rejoin if we are just spectating
+        local isParticipating = false
+        local success, rData = pcall(function()
+                return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
         end)
         
-        if not success then
-             warn("Error in Stuck Detection: " .. tostring(err))
+        if success and rData and rData[player.Name] and not rData[player.Name]["Dead"] then
+            isParticipating = true
+        end
+        
+        -- 3. Main Logic
+        -- Only monitor if: Round is Active (Time > -1) AND Player is Alive
+        if roundTime and roundTime > -1 and isParticipating then
+            local currentPos = player.Character.HumanoidRootPart.Position
+            
+            if not lastPos then
+                lastPos = currentPos
+                lastTime = tick()
+            else
+                local dist = (currentPos - lastPos).Magnitude
+                
+                if dist > StuckConfig.Distance then
+                    -- Player moved successfully, reset timer
+                    lastPos = currentPos
+                    lastTime = tick()
+                else
+                    -- Player has NOT moved enough
+                    local timeStuck = tick() - lastTime
+                    
+                    if timeStuck > StuckConfig.Timeout then
+                        warn("Stuck detected! (" .. math.floor(timeStuck) .. "s). Rejoining server...")
+                        if StatusText then StatusText.Text = "Status: Stuck detected (" .. math.floor(timeStuck) .. "s). Rejoining..." end
+                        
+                        -- Execute Rejoin
+                        TeleportService:TeleportToPlaceInstance(PlaceId, game.JobId, player)
+                        
+                        -- Pause to prevent crash/spam while teleporting
+                        task.wait(20) 
+                    end
+                end
+            end
+        else
+            -- If in Lobby, Intermission, or Dead, strictly reset the timer so we don't rejoin
+            lastTime = tick()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                lastPos = player.Character.HumanoidRootPart.Position
+            end
         end
     end
 end)
