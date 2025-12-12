@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false, -- Set to true if you want to delete map/UI to boost FPS
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -34,7 +34,7 @@ local Default_Config = {
 	["Misc"] = {
 		["FARM_MURDERER_SHERIF_WINS"] = true,
 		["STOP_MURDERER_AFTER_KILLS"] = 20,
-		["FPS"] = 3,
+		["FPS"] = 60, -- Higher FPS default for better physics handling
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.9 Final Stable + Fixes" .. "\n"
+local Version = "v2.5.1 Final Fixed (Coin Recovery)" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -105,6 +105,7 @@ local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
+local AllCoins = {} -- Global coins table
 
 -- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
@@ -152,12 +153,27 @@ end)
 
 
 -- Clean up unnecessary Workspace objects
-Workspace:WaitForChild("Lobby"):Destroy()
-Workspace:WaitForChild("WeaponDisplays"):Destroy()
-Workspace:WaitForChild("PetContainer"):Destroy()
-Workspace:WaitForChild("EffectLoader"):Destroy()
-Workspace:WaitForChild("ServerStatus"):Destroy()
-Workspace:WaitForChild("GameSettings"):Destroy()
+-- [MODIFIED] Only destroy Lobby/UI if CPU Saver is explicitly enabled
+if cfg["CPU Saver"] then
+	task.spawn(function()
+		task.wait(3) -- Wait for game to settle
+		local objects = {
+			"Lobby",
+			"WeaponDisplays",
+			"PetContainer",
+			"EffectLoader",
+			"ServerStatus",
+			"GameSettings"
+		}
+		
+		for _, name in ipairs(objects) do
+			local obj = Workspace:FindFirstChild(name)
+			if obj then
+				pcall(function() obj:Destroy() end)
+			end
+		end
+	end)
+end
 
 -- Set up player and round references
 local player = Players.LocalPlayer
@@ -245,6 +261,27 @@ local totalCoins = StartedCoins
 local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
+
+-- [[ COIN RECOVERY SYSTEM ]]
+local JustRecovered = false
+-- Look for old folders and recover coins to prevent stuck glitch
+for _, child in ipairs(Workspace:GetChildren()) do
+    if child.Name == "CoinsFolder" and child ~= CoinsFolder then
+        local recoveredCount = 0
+        for _, coin in ipairs(child:GetChildren()) do
+            if coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") then
+                coin.Parent = CoinsFolder
+                table.insert(AllCoins, coin) -- Ensure AllCoins has them
+                recoveredCount = recoveredCount + 1
+            end
+        end
+        if recoveredCount > 0 then
+            JustRecovered = true
+            print("Recovered " .. recoveredCount .. " coins from previous session.")
+        end
+        pcall(function() child:Destroy() end)
+    end
+end
 
 -- [[ UPDATED PLATFORM LOGIC - FALL PROTECTION ]] --
 -- [[ Destroy existing to preventing dupes if re-executed ]]
@@ -527,8 +564,11 @@ local function CPUSaversIGMA()
 		end
 	end
 
-    -- [[ DELETE ALL MAP LOGIC ]]
+    -- [[ DELETE ALL MAP LOGIC (ONLY IF CPU SAVER IS ON) ]]
 	local function WorkspaceCleanerABitIDK(child)
+        -- Safety check
+        if not cfg["CPU Saver"] then return end
+
 		task.wait(0.5)
 		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
 			child:Destroy()
@@ -1002,6 +1042,9 @@ end)
 
 
 local function ClearMap()
+	-- [MODIFIED] Disable this function to prevent random deletions if CPU Saver is off
+    if not cfg["CPU Saver"] then return end
+
 	if map then
 		for _, child in ipairs(map:GetChildren()) do
 			if child:IsA("Model") and child.Name ~= "CoinContainer" then
@@ -1011,37 +1054,60 @@ local function ClearMap()
 	end
 end
 
+-- [MODIFIED] Robust Map Processing to catch all coins
+local CurrentMapID = nil
 local function ProccessMap(child)
-	if not child:GetAttribute("MapID") then return end
+	local mapID = child:GetAttribute("MapID")
+	if not mapID then return end
 
-	repeat task.wait(0) until child:FindFirstChild("CoinContainer")
+    -- Wait safely for CoinContainer
+	local container = child:WaitForChild("CoinContainer", 10)
+    if not container then return end
 
 	print("Map found: " .. child.Name)
 
-    -- [[ FIX: Clear data here (on new map load) to prevent deleting new coins by accident ]]
-    CoinsFolder:ClearAllChildren()
-    visited = {}
-    FailFarmCount = 0
+    -- [[ CRITICAL FIX: Only clear coins if we are genuinely on a NEW map ]]
+    -- AND we did not just recover coins from a crash
+    if CurrentMapID ~= mapID then
+        CurrentMapID = mapID
+        if not JustRecovered then
+             CoinsFolder:ClearAllChildren()
+             AllCoins = {}
+             visited = {}
+             FailFarmCount = 0
+        else
+             JustRecovered = false -- Reset flag, don't wipe this time (these are the recovered coins)
+        end
+    end
 
-	local conn = nil
-	AllCoins = {}
-	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
-		if not coin or coin:GetAttribute("Collected") then return end
+    -- Helper to process a coin
+    local function registerCoin(coin)
+        if not coin or coin:GetAttribute("Collected") then return end
+        
+        -- Add to our list
+        table.insert(AllCoins, coin)
 
-		table.insert(AllCoins, coin)
+        task.wait(0.1) -- small delay for physics
+        if cfg["CPU Saver"] and coin:FindFirstChild("CoinVisual") then
+            pcall(function() coin.CoinVisual:Destroy() end)
+        end
 
-		task.wait(0.5)
-		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
-			coin.CoinVisual:Destroy()
-		end
+        coin.Parent = CoinsFolder
+        coin:SetAttribute("Collected", false)
+        coin.Transparency = 1
+    end
 
-		coin.Parent = CoinsFolder
-		coin:SetAttribute("Collected", false)
-		coin.Transparency = 1
-	end)
+    -- 1. Grab ALL existing coins immediately
+    for _, c in ipairs(container:GetChildren()) do
+        registerCoin(c)
+    end
 
-	while child.CoinContainer and child.CoinContainer.Parent == child do
-		task.wait(0)
+    -- 2. Listen for new coins spawning
+	local conn = container.ChildAdded:Connect(registerCoin)
+
+    -- Keep this connection alive as long as the map is valid
+	while child.Parent == Workspace do
+		task.wait(1)
 	end
 
 	if conn then conn:Disconnect() end
@@ -1872,7 +1938,13 @@ local function Start_Farm()
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				-- debug_print("Round ended. Waiting for new round to start...")
                 
-                -- [[ FIX: Cleanup now handled in ProccessMap to protect new coins ]]
+                -- [[ FIX: Clear only if we are truly back in lobby ]]
+                if #CoinsFolder:GetChildren() > 0 then
+                    CoinsFolder:ClearAllChildren()
+                    AllCoins = {}
+                    visited = {}
+                    FailFarmCount = 0
+                end
 			else
 				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 				-- debug_print("Waiting for round to end and new round to start...")
