@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1745,7 +1745,7 @@ local function Start_Farm()
 			    isFirstCoinOfRound = true
                 -- OPTIMIZATION: Clear Memory Tables
 			    visited = {} 
-                CoinsFolder:ClearAllChildren()
+                -- CoinsFolder:ClearAllChildren() -- [[ REMOVED AS REQUESTED ]]
                 FailFarmCount = 0 -- [[ NEW: Reset per round ]]
             else
                 -- If we didn't see intermission, it was just a glitch/respawn. KEEP COINS.
