@@ -4,8 +4,10 @@ if _G.Start then
 end
 
 _G.Start = true
+-- getgenv().Config = {}
 
 local Default_Config = {
+	--["Script_Key"] = "",
 	["CPU Saver"] = false,
 
 	["Auto Open"] = {
@@ -22,7 +24,7 @@ local Default_Config = {
 	["Other"] = {
 		["Auto Prestige"] = true,
 		["Auto Restart on Update"] = false,
-		["Auto Craft"] = false, 
+		["Auto Craft"] = false, -- not implemented yet
 	},
 	
 	["Event"] = {
@@ -33,12 +35,12 @@ local Default_Config = {
 		["FARM_MURDERER_SHERIF_WINS"] = true,
 		["STOP_MURDERER_AFTER_KILLS"] = 20,
 		["FPS"] = 3,
-        -- AutoShutdown settings removed from logic, keeping config structure to avoid errors
+
 		["AutoShutdown"] = {
-			["Mode"] = 1,
-            ["Minutes"] = 0,
-            ["MinCoins"] = 0,
-			["Every Minutes"] = 0 
+			["Mode"] = 1,  -- 1 = hop, 2 = close
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
+            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
+			["Every Minutes"] = 0 -- Every x minutes force
         },
 	}
 }
@@ -61,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Modded [No-Hop + Folder Fix]" .. "\n"
+local Version = "v2.4.5 Original + RAM Fix" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -71,6 +73,8 @@ local SessionCrates = 0
 local TotalStagesBought = 0
 local TotalWeapons = 0
 local TotalGodlies, TotalChromas = 0, 0
+
+local TotalRoundswithout30coinsplus = 0
 
 local CoreGui = game:GetService("CoreGui")
 local TeleportService = game:GetService("TeleportService")
@@ -93,7 +97,7 @@ local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excl
 
 local headers = {
 	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" 
+	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
 }
 
 local map = nil
@@ -111,12 +115,13 @@ local ServerHopData = {
 	WaitTime = 300 -- 5 minutes refresh
 }
 
--- [[ Forward Declaration for SmartServerHop ]]
+-- [[ Forward Declaration for SmartServerHop so it can be used in updatePlayerInfo ]]
 local SmartServerHop
 
-local FailFarmCount = 0 
+local FailFarmCount = 0 -- [[ LOGIC: 10x FAIL FARM PER ROUND (CUMULATIVE) ]]
 local PlayerPositions = {}
 local TeleportThreshold = 50
+
 
 repeat
 	task.wait(0.3)
@@ -139,19 +144,22 @@ task.spawn(function()
 		while task.wait(600) do
 			NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
 			if NewestVersion ~= Version then
-				-- Auto Update Logic would go here
+				
 			end
 		end
 	end
 end)
 
--- Clean up unnecessary Workspace objects
-pcall(function() Workspace:WaitForChild("Lobby"):Destroy() end)
-pcall(function() Workspace:WaitForChild("WeaponDisplays"):Destroy() end)
-pcall(function() Workspace:WaitForChild("PetContainer"):Destroy() end)
-pcall(function() Workspace:WaitForChild("EffectLoader"):Destroy() end)
-pcall(function() Workspace:WaitForChild("ServerStatus"):Destroy() end)
-pcall(function() Workspace:WaitForChild("GameSettings"):Destroy() end)
+
+-- Clean up unnecessary Workspace objects ONLY if CPU Saver is ON
+if cfg["CPU Saver"] then
+    if Workspace:FindFirstChild("Lobby") then Workspace:WaitForChild("Lobby"):Destroy() end
+    if Workspace:FindFirstChild("WeaponDisplays") then Workspace:WaitForChild("WeaponDisplays"):Destroy() end
+    if Workspace:FindFirstChild("PetContainer") then Workspace:WaitForChild("PetContainer"):Destroy() end
+    if Workspace:FindFirstChild("EffectLoader") then Workspace:WaitForChild("EffectLoader"):Destroy() end
+    if Workspace:FindFirstChild("ServerStatus") then Workspace:WaitForChild("ServerStatus"):Destroy() end
+    if Workspace:FindFirstChild("GameSettings") then Workspace:WaitForChild("GameSettings"):Destroy() end
+end
 
 -- Set up player and round references
 local player = Players.LocalPlayer
@@ -162,6 +170,7 @@ local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local Database = ReplicatedStorage:WaitForChild("Database")
 local Sync = Database:WaitForChild("Sync")
+
 
 task.spawn(function()
 	local GC = getconnections or get_signal_cons
@@ -180,13 +189,16 @@ task.spawn(function()
 		VirtualUser:CaptureController()
 		VirtualUser:ClickButton2(Vector2.new())
 	end)
+
 end)
+
 
 local Modules = ReplicatedStorage:WaitForChild("Modules")
 local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
 
 local LevelModule = require(Modules.LevelModule)
 local EventInfoService = require(SharedServices.EventInfoService)
+
 
 local GodlyList = {}
 local ChromaList = {}
@@ -227,6 +239,7 @@ if iseEventActive then
 	StartedStage = Data[Event.Title].CurrentTier or 0
 end
 
+
 local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 local OwnedWeapons = Data["Weapons"]["Owned"]
 local totalCoins = StartedCoins
@@ -238,14 +251,16 @@ CoinsFolder.Parent = Workspace
 -- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
 local WalkingPlatform = Instance.new("Part")
 WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(5, 1, 5) 
+WalkingPlatform.Size = Vector3.new(5, 1, 5) -- 5x5 Size
 WalkingPlatform.Anchored = true
-WalkingPlatform.Transparency = 1 
+WalkingPlatform.Transparency = 1 -- Invisible
 WalkingPlatform.CanCollide = true
 WalkingPlatform.Parent = Workspace
 
+-- Initialize Platform Height variable (Default Safe Height - 8)
 local currentPlatformY = 142 
 
+-- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
 	if HumanoidRootPart then
 		local rootPos = HumanoidRootPart.Position
@@ -920,8 +935,37 @@ local function updatePlayerInfo()
 
 	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
 	
-    -- [[ REMOVED AUTO SHUTDOWN CHECKS FOR MOD ]]
-	-- No longer checking for Minutes or MinCoins/EveryMinutes hop trigger
+	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
+	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
+	        lastShutdownCheck = tick()
+	        
+            -- [[ AUTO SHUTDOWN FIX: Compare ACTUAL EARNED COINS ]]
+            local coinsEarned = totalCoins - StartedCoins
+	        if coinsEarned < (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks) then
+                print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
+	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
+					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+					if SmartServerHop then
+						SmartServerHop(true)
+					end
+				else
+					game:Shutdown()
+				end
+	        end
+            -- [[ INCREMENT CHECK COUNTER AFTER CHECK ]]
+            TotalSessionChecks = TotalSessionChecks + 1
+	    end
+	end
+
+	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
+	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
+	        -- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
+			if SmartServerHop then
+				SmartServerHop(true)
+			end
+	    end
+	end
+
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
 		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
@@ -948,6 +992,9 @@ end)
 
 
 local function ClearMap()
+    -- Only clear map if CPU Saver is ON
+    if not cfg["CPU Saver"] then return end
+
 	if map then
 		for _, child in ipairs(map:GetChildren()) do
 			if child:IsA("Model") and child.Name ~= "CoinContainer" then
@@ -1567,7 +1614,7 @@ SmartServerHop = function(forceAnyBackup)
 
     -- 2. Backup: Nếu forceAnyBackup (3x Fail) VÀ hết server ưu tiên, dùng danh sách Backup
     if forceAnyBackup and #ServerHopData.BackupIds > 0 then
-        debug_print("10x Fail Farm: Hết server ưu tiên. Dùng Random Backup từ list đã lưu.")
+        debug_print("3x Fail Farm: Hết server ưu tiên. Dùng Random Backup từ list đã lưu.")
         if StatusText then StatusText.Text = "Status: Switching to Cached Backup Server..." end
 
         -- Chọn Random từ danh sách Backup
@@ -1578,7 +1625,7 @@ SmartServerHop = function(forceAnyBackup)
         table.remove(ServerHopData.BackupIds, randomIndex)
 
         local hopSuccess, hopError = pcall(function()
-            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+             TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
         end)
 
         if hopSuccess then return true end
@@ -1609,14 +1656,13 @@ SmartServerHop = function(forceAnyBackup)
     return false
 end
 
--- [[ REMOVED TELEPORTER DETECTION LOGIC ]]
--- The `DetectOtherPlayersTeleport` function and its associated loop have been removed.
+-- [ REMOVED ] DetectOtherPlayersTeleport function was here
+-- [ REMOVED ] Auto-Hop System loop (HỆ THỐNG TỰ ĐỘNG HOP) was here
 
--- [[ HỆ THỐNG TỰ ĐỘNG HOP (ĐÃ SỬA LỖI LOBBY/MAP TELEPORT) ]]
--- The loop scanning for teleporters has been removed as requested.
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
+    local wasIntermission = false -- [[ TRACKER: DID WE SEE INTERMISSION? ]]
 
 	while task.wait(0) do
 		lastPing = tick()
@@ -1625,6 +1671,12 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
+            -- [[ CHECK: IF WE ENTERED THIS BLOCK, CHECK IF IT WAS LOBBY/INTERMISSION ]]
+            wasIntermission = false -- Reset
+            if RoundTimerPart:GetAttribute("Time") == -1 then
+                wasIntermission = true
+            end
+
 			-- debug_print("Entered round wait block.")
 			if RoundTimerPart:GetAttribute("Time") == -1 then
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
@@ -1637,6 +1689,11 @@ local function Start_Farm()
 			HumanoidRootPart, Humanoid = GetHumanoid()
 			-- SafetyPart.Position = Vector3.new(0, 100, 0) -- REMOVED
 			repeat
+                -- [[ TRACK INTERMISSION INSIDE LOOP TOO ]]
+                if RoundTimerPart:GetAttribute("Time") == -1 then
+                    wasIntermission = true
+                end
+
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
@@ -1668,14 +1725,20 @@ local function Start_Farm()
 			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("Status: New round active. Safe platform reached!")
 			
-			isFirstCoinOfRound = true
-            -- OPTIMIZATION: Clear Memory Tables
-			visited = {} 
-            -- CoinsFolder:ClearAllChildren() -- [[ REMOVED: Keep coin folder intact as requested ]]
-            FailFarmCount = 0 -- [[ NEW: Reset per round ]]
+            -- [[ FIX: Only clear coins if we ACTUALLY had an Intermission ]]
+            if wasIntermission then
+			    isFirstCoinOfRound = true
+                -- OPTIMIZATION: Clear Memory Tables
+			    visited = {} 
+                CoinsFolder:ClearAllChildren()
+                FailFarmCount = 0 -- [[ NEW: Reset per round ]]
+            else
+                -- If we didn't see intermission, it was just a glitch/respawn. KEEP COINS.
+                debug_print("Resumed farming same round (No Intermission detected). Keeping coins.")
+            end
 		end
 
-		ClearMap()
+		-- ClearMap() -- [[ REMOVED: Causing issues and redundant ]]
 		
 		if isFirstCoinOfRound then
 			-- debug_print("Doing Find Coin (First)...")
@@ -1822,7 +1885,7 @@ local function Start_Farm()
 			else
 				local success = TeleportToCoin(chainCoin)
                 
-                -- [[ LOGIC: 10x FAIL FARM CHECK ]]
+                 -- [[ LOGIC: 10x FAIL FARM CHECK ]]
                 if success then
                     -- FailFarmCount = 0 -- REMOVED
                     visited[chainCoin] = true
@@ -1843,7 +1906,7 @@ local function Start_Farm()
                         )
 
                         if not nextCoin then
-                              break
+                             break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
                             if chainSuccess then
@@ -1852,10 +1915,10 @@ local function Start_Farm()
                                 chainCount = chainCount + 1
                                 debug_print("Collected coin")
                                 
-                                -- [FIX] Check if bag became full after collection
+                                 -- [FIX] Check if bag became full after collection
                                 if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
                                     break 
-                                 end
+                                end
                             else
                                 -- [FIX] If fail, double check if it's because bag is full
                                  local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
@@ -1863,15 +1926,15 @@ local function Start_Farm()
                                      -- Not a failure, just full bag
                                      break 
                                 else
-                                     FailFarmCount = FailFarmCount + 1
+                                    FailFarmCount = FailFarmCount + 1
                                     if FailFarmCount >= 10 then
-                                         debug_print("10x Fail Farm (Round). Hopping...")
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break -- Exit loop to hop
-                                     end
+                                    end
                                 end
                             end
-                         end
+                        end
                     end
 
                     if chainCount > 0 then
@@ -1881,7 +1944,7 @@ local function Start_Farm()
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
                     if FailFarmCount >= 10 then
-                         debug_print("10x Fail Farm (Round). Hopping...")
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
