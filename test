@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.7 Stable Anti-Fall" .. "\n"
+local Version = "v2.4.8 Final Stable" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -1853,12 +1853,23 @@ local function Start_Farm()
 			or (RoundData and not RoundData[player.Name])
 		then
 			-- debug_print("Entered round wait block.")
-			if RoundTimerPart:GetAttribute("Time") == -1 then
+            
+            -- [[ BUG FIX: Check if it is actually a new round (Lobby) vs just a death ]]
+            local isLobby = RoundTimerPart:GetAttribute("Time") == -1
+
+			if isLobby then
 				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 				-- debug_print("Round ended. Waiting for new round to start...")
+                
+                -- [[ FIX: Only clear coins/reset vars if the round actually ended ]]
+                -- This prevents deleting valid coins when simply resetting/dying mid-round
+                CoinsFolder:ClearAllChildren()
+                visited = {}
+                FailFarmCount = 0
 			else
 				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 				-- debug_print("Waiting for round to end and new round to start...")
+                -- If just dead, we don't clear coins, so we can farm immediately upon respawn
 			end
 			task.wait(0.5)
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1903,9 +1914,8 @@ local function Start_Farm()
 			
 			isFirstCoinOfRound = true
             -- OPTIMIZATION: Clear Memory Tables
+            -- [[ FIX: Removed CoinsFolder:ClearAllChildren() from here to prevent deleting new round coins ]]
 			visited = {} 
-            CoinsFolder:ClearAllChildren()
-            FailFarmCount = 0 -- [[ NEW: Reset per round ]]
 		end
 
 		ClearMap()
