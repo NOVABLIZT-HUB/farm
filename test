@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Original + RAM Fix" .. "\n"
+local Version = "v2.4.6 Randomized Priority Hop" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -1593,12 +1593,15 @@ SmartServerHop = function(forceAnyBackup)
 	
 	-- 1. Ưu tiên: Thử hop vào server 3-4 người trước
     if #ServerHopData.PriorityIds > 0 then
-         local jobId = ServerHopData.PriorityIds[1]
-         debug_print("Đang hop đến server ƯU TIÊN (3-4 players): " .. jobId)
-         if StatusText then StatusText.Text = "Status: Hopping to Priority Server..." end
+         -- [[ UPDATED LOGIC: RANDOMIZE PRIORITY SELECTION ]]
+         local randomIndex = math.random(1, #ServerHopData.PriorityIds)
+         local jobId = ServerHopData.PriorityIds[randomIndex]
+         
+         debug_print("Đang hop đến server ƯU TIÊN (3-4 players) [Random Selection]: " .. jobId)
+         if StatusText then StatusText.Text = "Status: Hopping to Random Priority Server..." end
          
          -- Xóa khỏi danh sách để ko thử lại
-         table.remove(ServerHopData.PriorityIds, 1)
+         table.remove(ServerHopData.PriorityIds, randomIndex)
 
          local hopSuccess, hopError = pcall(function()
             TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
