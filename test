@@ -42,6 +42,13 @@ local Default_Config = {
             ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 			["Every Minutes"] = 0 -- Every x minutes force
         },
+        
+        -- [[ NEW: Auto Rejoin if Stuck ]]
+        ["Stuck Monitor"] = {
+            ["Enabled"] = true,
+            ["Timeout"] = 10, -- Seconds to wait before rejoining
+            ["Distance"] = 5 -- Stud radius to consider "not moving"
+        }
 	}
 }
 
@@ -1674,6 +1681,54 @@ end
 -- [ REMOVED ] DetectOtherPlayersTeleport function was here
 -- [ REMOVED ] Auto-Hop System loop (HỆ THỐNG TỰ ĐỘNG HOP) was here
 
+-- [[ AUTO REJOIN ON STUCK LOGIC ]]
+task.spawn(function()
+    local monitor = cfg["Misc"]["Stuck Monitor"]
+    if not monitor["Enabled"] then return end
+    
+    local lastPos = nil
+    local lastTime = tick()
+    
+    while task.wait(5) do -- Check every 5 seconds
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then 
+            lastTime = tick()
+            continue 
+        end
+        
+        local roundTime = RoundTimerPart:GetAttribute("Time")
+        
+        -- Only check if Round is Active (Time > -1 and not nil)
+        if roundTime and roundTime > -1 then
+            local currentPos = player.Character.HumanoidRootPart.Position
+            
+            if not lastPos then
+                lastPos = currentPos
+                lastTime = tick()
+            else
+                local dist = (currentPos - lastPos).Magnitude
+                if dist > monitor["Distance"] then
+                    -- Moved successfully
+                    lastPos = currentPos
+                    lastTime = tick()
+                else
+                    -- Still in same spot
+                    if (tick() - lastTime) > monitor["Timeout"] then
+                        print("Stuck detected ("..math.floor(tick()-lastTime).."s). Rejoining same server...")
+                        if StatusText then StatusText.Text = "Status: Stuck! Rejoining Server..." end
+                        
+                        -- Rejoin Same Server
+                        TeleportService:TeleportToPlaceInstance(PlaceId, game.JobId, player)
+                        task.wait(20) -- Stop logic while TPing
+                    end
+                end
+            end
+        else
+            -- In Lobby/Intermission, reset timer
+            lastTime = tick()
+            lastPos = player.Character.HumanoidRootPart.Position
+        end
+    end
+end)
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
@@ -1745,7 +1800,6 @@ local function Start_Farm()
 			    isFirstCoinOfRound = true
                 -- OPTIMIZATION: Clear Memory Tables
 			    visited = {} 
-                -- CoinsFolder:ClearAllChildren() -- [[ REMOVED AS REQUESTED ]]
                 FailFarmCount = 0 -- [[ NEW: Reset per round ]]
             else
                 -- If we didn't see intermission, it was just a glitch/respawn. KEEP COINS.
