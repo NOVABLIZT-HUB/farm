@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1697,8 +1697,18 @@ task.spawn(function()
         
         local roundTime = RoundTimerPart:GetAttribute("Time")
         
-        -- Only check if Round is Active (Time > -1 and not nil)
-        if roundTime and roundTime > -1 then
+        -- [[ FIX: Check if player is actually IN the round (alive) ]]
+        local isParticipating = false
+        local success, rData = pcall(function()
+             return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+        end)
+        
+        if success and rData and rData[player.Name] and not rData[player.Name]["Dead"] then
+            isParticipating = true
+        end
+        
+        -- Only check if Round is Active AND Player is Participating
+        if roundTime and roundTime > -1 and isParticipating then
             local currentPos = player.Character.HumanoidRootPart.Position
             
             if not lastPos then
@@ -1723,7 +1733,7 @@ task.spawn(function()
                 end
             end
         else
-            -- In Lobby/Intermission, reset timer
+            -- In Lobby/Intermission or Dead/Spectating, reset timer
             lastTime = tick()
             lastPos = player.Character.HumanoidRootPart.Position
         end
