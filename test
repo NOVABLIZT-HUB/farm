@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.5 Original + RAM Fix" .. "\n"
+local Version = "v2.4.6 Optimized RAM" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -105,6 +105,7 @@ local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
+local AllCoins = {} -- Made global for access, processed in loop
 
 -- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
@@ -249,7 +250,7 @@ CoinsFolder.Parent = Workspace
 -- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
 local WalkingPlatform = Instance.new("Part")
 WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(5, 1, 5) -- 5x5 Size
+WalkingPlatform.Size = Vector3.new(50, 1, 50) -- [[ CHANGED FROM 5x5 TO 50x50 ]] --
 WalkingPlatform.Anchored = true
 WalkingPlatform.Transparency = 1 -- Invisible
 WalkingPlatform.CanCollide = true
@@ -515,34 +516,34 @@ local function CPUSaversIGMA()
 		end
 	end
 
-    -- [[ DELETE ALL MAP LOGIC ]]
-	local function WorkspaceCleanerABitIDK(child)
-		task.wait(0.5)
-		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
-			child:Destroy()
-			return
-		end
-		if child:FindFirstChild("HumanoidRootPart") then
-			character = player.Character or player.CharacterAdded:Wait()
-		end
-		
-        -- Protect Important Things
-        if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name then
-            return
+    -- [[ RAM OPTIMIZATION: PERIODIC CLEANER INSTEAD OF EVENT LISTENERS ]]
+    -- Previous version used ChildAdded with task.wait which spawned 1000s of threads on map load
+    task.spawn(function()
+        while task.wait(3) do -- Clean every 3 seconds
+            pcall(function()
+                for _, child in ipairs(Workspace:GetChildren()) do
+                    if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
+                        child:Destroy()
+                        continue
+                    end
+                    
+                    -- Protect Important Things
+                    if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") then
+                        continue
+                    end
+
+                    -- Destroy Map Parts
+                    if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
+                        -- Check if it contains humanoid (Player)
+                        if child:FindFirstChild("Humanoid") then
+                            continue
+                        end
+                         pcall(function() child:Destroy() end)
+                    end
+                end
+            end)
         end
-
-        -- Destroy Map Parts
-		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-             pcall(function() child:Destroy() end)
-		end
-	end
-
-	for _,child in Workspace:GetChildren() do
-		WorkspaceCleanerABitIDK(child)
-	end
-	Workspace.ChildAdded:Connect(function(child)
-		WorkspaceCleanerABitIDK(child)
-	end)
+    end)
 
 	for _,plr in ipairs(Players:GetPlayers()) do
 		if plr ~= player then
@@ -1009,7 +1010,9 @@ local function ProccessMap(child)
 	print("Map found: " .. child.Name)
 
 	local conn = nil
+	-- Reset AllCoins here, but ensure global reference is used
 	AllCoins = {}
+	
 	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
 		if not coin or coin:GetAttribute("Collected") then return end
 
@@ -1025,8 +1028,9 @@ local function ProccessMap(child)
 		coin.Transparency = 1
 	end)
 
+    -- RAM OPTIMIZATION: Reduced busy wait frequency from wait(0) to wait(1)
 	while child.CoinContainer and child.CoinContainer.Parent == child do
-		task.wait(0)
+		task.wait(1)
 	end
 
 	if conn then conn:Disconnect() end
@@ -1768,10 +1772,11 @@ local function Start_Farm()
 			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
-            -- OPTIMIZATION: Clear Memory Tables
+            -- OPTIMIZATION: Clear Memory Tables & Force Garbage Collection
 			visited = {} 
             CoinsFolder:ClearAllChildren()
             FailFarmCount = 0 -- [[ NEW: Reset per round ]]
+            collectgarbage("collect") -- Force RAM cleanup on new round
 		end
 
 		ClearMap()
