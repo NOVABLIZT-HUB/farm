@@ -38,7 +38,7 @@ local Default_Config = {
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
-            ["Minutes"] = 0, -- Sends the x minutes for 
+            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
             ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -63,7 +63,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.7 Stuck Logic Update" .. "\n"
+local Version = "v2.4.5 Original + RAM Fix" .. "\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -256,11 +256,7 @@ WalkingPlatform.CanCollide = true
 WalkingPlatform.Parent = Workspace
 
 -- Initialize Platform Height variable (Default Safe Height - 8)
-local currentPlatformY = 0
-
-if HumanoidRootPart then
-    currentPlatformY = HumanoidRootPart.Position.Y - 5
-end
+local currentPlatformY = 142 
 
 -- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
@@ -270,8 +266,7 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- Removed Initial Sky Teleport
--- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
@@ -444,11 +439,11 @@ RevealUsernameButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- rconsolecreate("DEBUG")
+consolecreate("DEBUG")
 local function debug_print(...)
 	last_print = ...
 	if string.find(..., "Status:") or string.find(..., "Collected") then
-		-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
+		consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
 	end
 end
 
@@ -945,7 +940,8 @@ local function updatePlayerInfo()
             -- [[ AUTO SHUTDOWN FIX: Compare ACTUAL EARNED COINS ]]
             local coinsEarned = totalCoins - StartedCoins
 	        if coinsEarned < (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks) then
-                 print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
+             
+                print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
 					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
 					if SmartServerHop then
@@ -961,7 +957,8 @@ local function updatePlayerInfo()
 	end
 
 	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
-	     if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
+	   
+        if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
 	        -- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
 			if SmartServerHop then
 				SmartServerHop(true)
@@ -1063,7 +1060,7 @@ local function GetActualCoins()
 	local d = require(Modules.ProfileData)
     if iseEventActive then
         return d.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
-     else
+    else
         return d.Materials.Owned["Coins"] or 0
     end
 end
@@ -1113,6 +1110,7 @@ local function TeleportToCoin(coin)
 		end
 	until (tick() - startTime) > 1 
     
+ 
     -- Record coins AFTER collection
     local coinsAfter = GetActualCoins()
 
@@ -1547,6 +1545,7 @@ local function GetTargetServers()
             -- Lưu vào danh sách tổng hợp (để dùng backup)
 			table.insert(allValidServers, server.id)
 
+         
             -- Lưu vào danh sách ưu tiên (để dùng chính)
             if server.playing >= 3 and server.playing <= 4 then
 			    table.insert(priorityServers, server.id)
@@ -1626,7 +1625,8 @@ SmartServerHop = function(forceAnyBackup)
         table.remove(ServerHopData.BackupIds, randomIndex)
 
         local hopSuccess, hopError = pcall(function()
-              TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+     
+         TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
         end)
 
         if hopSuccess then return true end
@@ -1637,7 +1637,8 @@ SmartServerHop = function(forceAnyBackup)
          debug_print("Last Resort: Random Hop API.")
          local PlaceId = game.PlaceId
          local Api = "https://games.roblox.com/v1/games/"
-          local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+     
+         local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
          local function ListServers(cursor)
              local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
              return HttpService:JSONDecode(Raw)
@@ -1657,82 +1658,58 @@ repeat
     return false
 end
 
--- [[ HỆ THỐNG TỰ ĐỘNG REJOIN NẾU KẸT (STUCK DETECTION) ]]
+-- [[ REMOVED: DetectOtherPlayersTeleport Logic ]] --
+
+-- [[ NEW: STUCK DETECTION / AUTO REJOIN LOGIC ]]
 task.spawn(function()
-    -- Wait for UI loading
-    repeat task.wait(0.5) until StatusText and StatusText.Parent
-    task.wait(2)
-
-    -- [[ CONFIGURATION FROM USER REQUEST ]]
-    local StuckConfig = {
-        Timeout = 10,      -- Seconds to wait before rejoining
-        Distance = 5,      -- Radius in studs. If you move less than this, you are "stuck".
-        CheckInterval = 1  -- How often to check (seconds)
-    }
-
-    print("Stuck Monitor Started: Will rejoin if stuck for " .. StuckConfig.Timeout .. " seconds while alive in a round.")
-
-    local lastPos = nil
-    local lastTime = tick()
-
-    while task.wait(StuckConfig.CheckInterval) do
-        -- 1. Check Character Existence
-        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then 
-            lastTime = tick() -- Reset timer if spawning/dead
-            continue 
-        end
-        
-        local roundTime = RoundTimerPart:GetAttribute("Time")
-        
-        -- 2. Check if player is ALIVE in the current round
-        -- We invoke the server to get real data to ensure we don't rejoin if we are just spectating
-        local isParticipating = false
-        local success, rData = pcall(function()
-                return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-        end)
-        
-        if success and rData and rData[player.Name] and not rData[player.Name]["Dead"] then
-            isParticipating = true
-        end
-        
-        -- 3. Main Logic
-        -- Only monitor if: Round is Active (Time > -1) AND Player is Alive
-        if roundTime and roundTime > -1 and isParticipating then
-            local currentPos = player.Character.HumanoidRootPart.Position
+    local Stuck_LastPosition = Vector3.new(0, 0, 0)
+    local Stuck_Timer = tick()
+    local TeleportService = game:GetService("TeleportService")
+    
+    while task.wait(1) do
+        local success, err = pcall(function()
+            local RoundTimerPart = Workspace:FindFirstChild("RoundTimerPart")
             
-            if not lastPos then
-                lastPos = currentPos
-                lastTime = tick()
-            else
-                local dist = (currentPos - lastPos).Magnitude
-                
-                if dist > StuckConfig.Distance then
-                    -- Player moved successfully, reset timer
-                    lastPos = currentPos
-                    lastTime = tick()
-                else
-                    -- Player has NOT moved enough
-                    local timeStuck = tick() - lastTime
+            -- CHECK 1: Match must be active (Time != -1)
+            local isMatchActive = false
+            if RoundTimerPart and RoundTimerPart:GetAttribute("Time") and RoundTimerPart:GetAttribute("Time") ~= -1 then
+                isMatchActive = true
+            end
+
+            -- CHECK 2: Player must be alive
+            local isAlive = false
+            if RoundData and RoundData[player.Name] and not RoundData[player.Name]["Dead"] then
+                isAlive = true
+            end
+            
+            -- If In Match AND Alive -> Check Movement
+            if isMatchActive and isAlive then
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local currentPos = player.Character.HumanoidRootPart.Position
+                    local dist = (currentPos - Stuck_LastPosition).Magnitude
                     
-                    if timeStuck > StuckConfig.Timeout then
-                        warn("Stuck detected! (" .. math.floor(timeStuck) .. "s). Rejoining server...")
-                        if StatusText then StatusText.Text = "Status: Stuck detected (" .. math.floor(timeStuck) .. "s). Rejoining..." end
-                        
-                        -- Execute Rejoin
-                        TeleportService:TeleportToPlaceInstance(PlaceId, game.JobId, player)
-                        
-                        -- Pause to prevent crash/spam while teleporting
-                        task.wait(20) 
+                    if dist > 3 then -- [[ CHANGED FROM 1 TO 3 ]]
+                        -- Player Moved
+                        Stuck_Timer = tick()
+                        Stuck_LastPosition = currentPos
+                    else
+                        -- Player Not Moving
+                        if (tick() - Stuck_Timer) >= 10 then
+                            print("PLAYER STUCK FOR 10 SECONDS IN MATCH - REJOINING SAME SERVER...")
+                            -- Rejoin same server
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+                            task.wait(10) -- Wait to prevent spam while teleporting
+                        end
                     end
                 end
+            else
+                -- Reset timer if not in match or dead (so it doesn't trigger immediately when round starts)
+                Stuck_Timer = tick()
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    Stuck_LastPosition = player.Character.HumanoidRootPart.Position
+                end
             end
-        else
-            -- If in Lobby, Intermission, or Dead, strictly reset the timer so we don't rejoin
-            lastTime = tick()
-            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                lastPos = player.Character.HumanoidRootPart.Position
-            end
-        end
+        end)
     end
 end)
 
@@ -1761,12 +1738,13 @@ local function Start_Farm()
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
-                    -- [[ REMOVED SKY TELEPORT ]]
-                    -- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-                    
-                    -- [[ PLATFORM SNAP UPDATE: Keep it under player ]]
-                    currentPlatformY = HumanoidRootPart.Position.Y - 5 
-                    WalkingPlatform.CFrame = CFrame.new(HumanoidRootPart.Position.X, currentPlatformY, HumanoidRootPart.Position.Z)
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
+                    -- UPDATED: Keep player in safe sky position, platform will follow
+        
+             HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    -- [[ PLATFORM SNAP UPDATE ]]
+                    currentPlatformY = 142 -- 150 - 8
+                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
@@ -1779,8 +1757,8 @@ local function Start_Farm()
 				HumanoidRootPart.Anchored = false
 				-- debug_print("Unanchored HumanoidRootPart.")
 				for i = 1, 3 do
-                    -- [[ REMOVED SKY TELEPORT IN LOOP ]]
-					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
+                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					-- debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
 					task.wait(0.1)
 				end
@@ -1818,8 +1796,7 @@ local function Start_Farm()
 					debug_print("Player respawned!")
 					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-                        -- [[ REMOVED SKY TELEPORT ]]
-						-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) -- SafetyPart.CFrame + Vector3.new(0, 3, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1850,8 +1827,7 @@ local function Start_Farm()
 					debug_print("Player respawned after 'Full' reset!")
 					-- SafetyPart.Position = Vector3.new(0, 100, 0)
 					for i = 1, 3 do
-                        -- [[ REMOVED SKY TELEPORT ]]
-						-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 						task.wait(0.1)
 					end
 					continue
@@ -1880,7 +1856,8 @@ local function Start_Farm()
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
                 if FailFarmCount >= 10 then
-                     debug_print("10x Fail Farm (Round). Hopping...")
+    
+                 debug_print("10x Fail Farm (Round). Hopping...")
                     -- ForceBackup = true (Hop anywhere if fails)
                     SmartServerHop(true)
                 end
@@ -1903,8 +1880,7 @@ local function Start_Farm()
 				debug_print("Player respawned!")
 				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-                    -- [[ REMOVED SKY TELEPORT ]]
-					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
@@ -1933,8 +1909,7 @@ local function Start_Farm()
 				debug_print("Player respawned after 'Full' reset!")
 				-- SafetyPart.Position = Vector3.new(0, 100, 0)
 				for i = 1, 3 do
-                    -- [[ REMOVED SKY TELEPORT ]]
-					-- HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 					task.wait(0.1)
 				end
 				continue
@@ -1947,11 +1922,13 @@ local function Start_Farm()
 			else
 				local success = TeleportToCoin(chainCoin)
                 
-                 -- [[ LOGIC: 10x FAIL FARM CHECK ]]
+       
+                -- [[ LOGIC: 10x FAIL FARM CHECK ]]
                 if success then
                     -- FailFarmCount = 0 -- REMOVED
                     visited[chainCoin] = true
-                    chainCount = 1
+                   
+ chainCount = 1
                     debug_print("Collected coin")
                     
                     for i = 2, 5 do
@@ -1960,53 +1937,68 @@ local function Start_Farm()
                             break -- Bag full, stop chain
                         end
 
-                        local nextCoin = RandomWaterfallWait(
+        
+                 local nextCoin = RandomWaterfallWait(
                             50, 0.5, 0.5,
                             50, 0.2, 0.4,
-                            50, 0.3, 0.6,
+                     
+       50, 0.3, 0.6,
                             50, 0.2, 0.4
                         )
 
                         if not nextCoin then
-                              break
+          
+                  break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
-                             if chainSuccess then
+                          
+   if chainSuccess then
                                 -- FailFarmCount = 0 -- REMOVED
                                 visited[nextCoin] = true
-                                chainCount = chainCount + 1
+                         
+        chainCount = chainCount + 1
                                 debug_print("Collected coin")
                                 
-                                 -- [FIX] Check if bag became full after collection
+                        
+         -- [FIX] Check if bag became full after collection
                                 if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
                                     break 
+       
                                  end
                             else
                                 -- [FIX] If fail, double check if it's because bag is full
-                                 local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+    
+                             local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
                                 if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
-                                      -- Not a failure, just full bag
+                             
+         -- Not a failure, just full bag
                                      break 
                                 else
-                                     FailFarmCount = FailFarmCount + 1
+                
+                     FailFarmCount = FailFarmCount + 1
                                     if FailFarmCount >= 10 then
-                                         debug_print("10x Fail Farm (Round). Hopping...")
+                                    
+     debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break -- Exit loop to hop
+       
                                      end
                                 end
                             end
-                         end
+           
+             end
                     end
 
                     if chainCount > 0 then
                         task.wait(0.5)
-                     end
+                   
+ end
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
                     if FailFarmCount >= 10 then
-                         debug_print("10x Fail Farm (Round). Hopping...")
+    
+                     debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
