@@ -1961,10 +1961,10 @@ local function Start_Farm()
                         end
 
                         local nextCoin = RandomWaterfallWait(
-                            50, 0.5, 0.5,
-                            50, 0.2, 0.4,
-                            50, 0.3, 0.6,
-                            50, 0.2, 0.4
+                            50, 0, 0,
+                            50, 0, 0,
+                            50, 0, 0,
+                            50, 0, 0
                         )
 
                         if not nextCoin then
