@@ -2055,3 +2055,4 @@ while true do
 
 	lastPing = tick()
 end
+setfflag("NextGenReplicatorEnabledWrite4", "true")
