@@ -11,7 +11,7 @@ local Default_Config = {
 	["CPU Saver"] = false,
 
 	["Auto Open"] = {
-		["Enabled"] = false,
+		["Enabled"] = true,
 		["Crate"] = "",
 	},
 
