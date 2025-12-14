@@ -38,7 +38,7 @@ local Default_Config = {
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,  -- 1 = hop, 2 = close
-            ["Minutes"] = 60, -- Sends the x minutes for checking Coins shit
+            ["Minutes"] = 60, -- Sends the x minutes for 
             ["MinCoins"] = 600, -- Min Coins needed to have after x minutes
 			["Every Minutes"] = 0 -- Every x minutes force
         },
@@ -250,7 +250,7 @@ CoinsFolder.Parent = Workspace
 -- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
 local WalkingPlatform = Instance.new("Part")
 WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(50, 1, 50) -- [[ CHANGED FROM 5x5 TO 50x50 ]] --
+WalkingPlatform.Size = Vector3.new(5, 1, 5) -- [[ CHANGED TO 5x5 AS REQUESTED ]] --
 WalkingPlatform.Anchored = true
 WalkingPlatform.Transparency = 1 -- Invisible
 WalkingPlatform.CanCollide = true
@@ -516,30 +516,36 @@ local function CPUSaversIGMA()
 		end
 	end
 
+  
     -- [[ RAM OPTIMIZATION: PERIODIC CLEANER INSTEAD OF EVENT LISTENERS ]]
     -- Previous version used ChildAdded with task.wait which spawned 1000s of threads on map load
     task.spawn(function()
         while task.wait(3) do -- Clean every 3 seconds
             pcall(function()
                 for _, child in ipairs(Workspace:GetChildren()) do
-                    if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
+                  
+   if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
                         child:Destroy()
                         continue
                     end
-                    
+                  
+   
                     -- Protect Important Things
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") then
                         continue
-                    end
+               
+     end
 
                     -- Destroy Map Parts
                     if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
                         -- Check if it contains humanoid (Player)
-                        if child:FindFirstChild("Humanoid") then
+                
+         if child:FindFirstChild("Humanoid") then
                             continue
                         end
                          pcall(function() child:Destroy() end)
-                    end
+           
+         end
                 end
             end)
         end
@@ -1080,6 +1086,7 @@ local function TeleportToCoin(coin)
 		return false -- Already collected or invalid
 	end
 
+  
     -- Record coins BEFORE collection
     local coinsBefore = GetActualCoins()
 
@@ -1097,6 +1104,7 @@ local function TeleportToCoin(coin)
 		local lookAtPos = pos + (directionUnit * 5)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
         -- [[ PLATFORM SNAP UPDATE ]] --
+     
         currentPlatformY = pos.Y - 8
         WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 	end
@@ -1122,6 +1130,7 @@ local function TeleportToCoin(coin)
     if coinsAfter > coinsBefore then
         return true -- Success: We got the coin
     else
+  
         return false -- Fail: Coin gone but we didn't get it (Someone else took it)
     end
 end
@@ -1641,7 +1650,7 @@ SmartServerHop = function(forceAnyBackup)
          debug_print("Last Resort: Random Hop API.")
          local PlaceId = game.PlaceId
          local Api = "https://games.roblox.com/v1/games/"
-     
+    
          local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
          local function ListServers(cursor)
              local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
@@ -1681,7 +1690,8 @@ task.spawn(function()
             end
 
             -- CHECK 2: Player must be alive
-            local isAlive = false
+         
+   local isAlive = false
             if RoundData and RoundData[player.Name] and not RoundData[player.Name]["Dead"] then
                 isAlive = true
             end
@@ -1692,27 +1702,32 @@ task.spawn(function()
                     local currentPos = player.Character.HumanoidRootPart.Position
                     local dist = (currentPos - Stuck_LastPosition).Magnitude
                     
-                    if dist > 3 then -- [[ CHANGED FROM 1 TO 3 ]]
+         
+            if dist > 3 then -- [[ CHANGED FROM 1 TO 3 ]]
                         -- Player Moved
                         Stuck_Timer = tick()
                         Stuck_LastPosition = currentPos
                     else
                         -- Player Not Moving
                         if (tick() - Stuck_Timer) >= 10 then
-                            print("PLAYER STUCK FOR 10 SECONDS IN MATCH - REJOINING SAME SERVER...")
+                      
+       print("PLAYER STUCK FOR 10 SECONDS IN MATCH - REJOINING SAME SERVER...")
                             -- Rejoin same server
                             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
-                            task.wait(10) -- Wait to prevent spam while teleporting
+                       
+      task.wait(10) -- Wait to prevent spam while teleporting
                         end
                     end
                 end
             else
-                -- Reset timer if not in match or dead (so it doesn't trigger immediately when round starts)
+                
+ -- Reset timer if not in match or dead (so it doesn't trigger immediately when round starts)
                 Stuck_Timer = tick()
                 if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                     Stuck_LastPosition = player.Character.HumanoidRootPart.Position
                 end
-            end
+        
+     end
         end)
     end
 end)
@@ -1745,6 +1760,7 @@ local function Start_Farm()
 					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
                     -- UPDATED: Keep player in safe sky position, platform will follow
         
+ 
              HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
                     -- [[ PLATFORM SNAP UPDATE ]]
                     currentPlatformY = 142 -- 150 - 8
@@ -1862,6 +1878,7 @@ local function Start_Farm()
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
                 if FailFarmCount >= 10 then
     
+ 
                  debug_print("10x Fail Farm (Round). Hopping...")
                     -- ForceBackup = true (Hop anywhere if fails)
                     SmartServerHop(true)
@@ -1928,6 +1945,7 @@ local function Start_Farm()
 				local success = TeleportToCoin(chainCoin)
                 
        
+ 
                 -- [[ LOGIC: 10x FAIL FARM CHECK ]]
                 if success then
                     -- FailFarmCount = 0 -- REMOVED
@@ -1942,66 +1960,81 @@ local function Start_Farm()
                             break -- Bag full, stop chain
                         end
 
+ 
         
                  local nextCoin = RandomWaterfallWait(
                             50, 0.5, 0.5,
                             50, 0.2, 0.4,
-                            50, 0.3, 0.6,
+             
+                50, 0.3, 0.6,
                             50, 0.2, 0.4
                         )
 
                         if not nextCoin then
+  
           
                   break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
-                          
+                   
+        
    if chainSuccess then
                                 -- FailFarmCount = 0 -- REMOVED
                                 visited[nextCoin] = true
-                         
+                 
+         
         chainCount = chainCount + 1
                                 debug_print("Collected coin")
                                 
-                        
+               
+         
          -- [FIX] Check if bag became full after collection
                                 if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
-                                    break 
+                                  
+   break 
        
                                  end
                             else
-                                -- [FIX] If fail, double check if it's because bag is full
+                             
+    -- [FIX] If fail, double check if it's because bag is full
     
                              local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
                                 if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
-                             
+          
+                    
          -- Not a failure, just full bag
                                      break 
-                                else
+                            
+     else
                 
                      FailFarmCount = FailFarmCount + 1
                                     if FailFarmCount >= 10 then
-                                    
+               
+                      
      debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break -- Exit loop to hop
        
-                                     end
+        
+                              end
                                 end
                             end
            
+ 
              end
                     end
 
                     if chainCount > 0 then
                         task.wait(0.5)
                    
+ 
  end
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
                     if FailFarmCount >= 10 then
     
+ 
                      debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
