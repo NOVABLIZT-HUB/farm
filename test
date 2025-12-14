@@ -1263,7 +1263,7 @@ local function GetTargetServers()
 	local allValidServers = {}
     local cursor = nil
     local pagesScanned = 0
-    local maxPages = 10 -- Scan up to 10 pages (approx 1000 servers)
+    local maxPages = 20 -- Scan up to 20 pages (approx 2000 servers)
 	
 	debug_print("Đang quét sâu danh sách servers (".. maxPages .." trang)...")
 	
@@ -1737,6 +1737,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-	setfflag("NextGenReplicatorEnabledWrite4", "true")
+
 	lastPing = tick()
 end
