@@ -6,7 +6,7 @@ end
 _G.Start = true
 
 local Default_Config = {
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -200,7 +200,7 @@ local Modules = ReplicatedStorage:WaitForChild("Modules")
 local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
 
 local LevelModule = require(Modules.LevelModule)
-local EventInfoService = require(SharedServices.EventInfoService)
+local EventInfoService = require(SharedServices.EventInfoService1)
 
 
 local GodlyList = {}
