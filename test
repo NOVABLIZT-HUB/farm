@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1771,6 +1771,11 @@ local function Start_Farm()
 			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("Status: New round active. Safe platform reached!")
 			
+            -- [[ NEW: Set FFlag after reaching safety platform ]]
+            pcall(function()
+                setfflag("NextGenReplicatorEnabledWrite4", "true")
+            end)
+
 			isFirstCoinOfRound = true
             -- OPTIMIZATION: Clear Memory Tables & Force Garbage Collection
 			visited = {} 
@@ -2048,6 +2053,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-	setfflag("NextGenReplicatorEnabledWrite4", "true")
+
 	lastPing = tick()
 end
