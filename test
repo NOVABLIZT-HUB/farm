@@ -29,6 +29,11 @@ local Default_Config = {
 		["Auto Do Battle Pass"] = true,
 	},
 
+    -- [[ NEW CONFIG OPTION ]]
+    ["ServerHop"] = {
+        ["SortOrder"] = "Asc", -- "Asc" = Server Cũ/Ít người (Thường dùng), "Desc" = Server Mới/Đông hơn
+    },
+
 	["Misc"] = {
 		["FARM_MURDERER_SHERIF_WINS"] = true,
 		["STOP_MURDERER_AFTER_KILLS"] = 20,
@@ -91,7 +96,8 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
-local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
+-- Removing static definition, now dynamic in GetTargetServers
+-- local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
 
 local headers = {
 	["Content-Type"] = "application/json",
@@ -107,7 +113,7 @@ local AllCoins = {}
 
 -- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
-    PriorityIds = {}, -- Stores 3-4 player servers
+    -- REMOVED PriorityIds
     BackupIds = {},   -- Stores ALL valid servers (<12 players)
 	LastFetchTime = 0,
 	HopCount = 0,
@@ -1260,6 +1266,10 @@ local function GetTargetServers()
 	local success, servers = pcall(function()
 		local response
 		
+        -- [[ CHANGED TO USE DYNAMIC CONFIG ]]
+        local sort = cfg["ServerHop"]["SortOrder"] or "Asc"
+        local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=" .. sort .. "&limit=100&excludeFullGames=true"
+
 		if game.HttpGet then
 			response = game:HttpGet(_servers)
 		elseif HttpService.GetAsync then
@@ -1294,15 +1304,14 @@ local function GetTargetServers()
 
 	for _, server in ipairs(servers) do
 		if server.id ~= currentJobId and server.playing < 12 then
+            -- [[ LOGIC CHANGE: EVERYTHING IS BACKUP/VALID NOW. NO PRIORITY. ]]
 			table.insert(allValidServers, server.id)
-
-            if server.playing >= 3 and server.playing <= 4 then
-			    table.insert(priorityServers, server.id)
-            end
+            
+            -- REMOVED PRIORITY LOGIC (3-4 Players)
 		end
 	end
 	
-	debug_print("Tìm thấy " .. #allValidServers .. " server hợp lệ (<12) và " .. #priorityServers .. " server ưu tiên (3-4)")
+	debug_print("Tìm thấy " .. #allValidServers .. " server hợp lệ (<12). Đã tắt ưu tiên 3-4 người.")
 	return priorityServers, allValidServers
 end
 
@@ -1310,9 +1319,9 @@ end
 local function FetchTargetJobIds()
 	local currentTime = tick()
 	
-	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime or (#ServerHopData.PriorityIds == 0 and #ServerHopData.BackupIds == 0) then
+	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime or (#ServerHopData.BackupIds == 0) then
         debug_print("Server list older than 5 mins or empty. Forcing refresh.")
-        ServerHopData.PriorityIds = {} 
+        -- ServerHopData.PriorityIds = {} -- REMOVED
         ServerHopData.BackupIds = {}
     else
         return true
@@ -1325,7 +1334,7 @@ local function FetchTargetJobIds()
 		return false
 	end
 	
-	ServerHopData.PriorityIds = prio
+	-- ServerHopData.PriorityIds = prio -- REMOVED
     ServerHopData.BackupIds = backup
 	
 	ServerHopData.LastFetchTime = currentTime
@@ -1337,25 +1346,13 @@ end
 SmartServerHop = function(forceAnyBackup)
 	FetchTargetJobIds()
 	
-	-- 1. Priority: Try 3-4 player servers first
-    if #ServerHopData.PriorityIds > 0 then
-         local jobId = ServerHopData.PriorityIds[1]
-         debug_print("Đang hop đến server ƯU TIÊN (3-4 players): " .. jobId)
-         if StatusText then StatusText.Text = "Status: Hopping to Priority Server..." end
-         
-         table.remove(ServerHopData.PriorityIds, 1)
-
-         local hopSuccess, hopError = pcall(function()
-            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
-         end)
-         
-         if hopSuccess then return true end
-    end
-
-    -- 2. Backup: If forceAnyBackup and no priority servers left, use backup
-    if forceAnyBackup and #ServerHopData.BackupIds > 0 then
-        debug_print("3x Fail Farm: Hết server ưu tiên. Dùng Random Backup từ list đã lưu.")
-        if StatusText then StatusText.Text = "Status: Switching to Cached Backup Server..." end
+	-- [[ LOGIC CHANGE: REMOVED PRIORITY HOP STEP ]]
+    -- Now directly hops to RANDOM server from valid list (BackupIds)
+    
+    -- Main Hop: Random from valid list
+    if #ServerHopData.BackupIds > 0 then
+        debug_print("Đang hop đến server Random (từ danh sách <12 người)...")
+        if StatusText then StatusText.Text = "Status: Hopping to Random Server..." end
 
         local randomIndex = math.random(1, #ServerHopData.BackupIds)
         local jobId = ServerHopData.BackupIds[randomIndex]
@@ -1369,7 +1366,7 @@ SmartServerHop = function(forceAnyBackup)
         if hopSuccess then return true end
     end
 
-    -- 3. Last Resort: Random Hop API
+    -- Last Resort: Random Hop API
     if forceAnyBackup then
          debug_print("Last Resort: Random Hop API.")
          local PlaceId = game.PlaceId
@@ -1731,5 +1728,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
+
 	lastPing = tick()
 end
