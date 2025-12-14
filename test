@@ -1737,6 +1737,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-	setfflag("NextGenReplicatorEnabledWrite4", "true")
+
 	lastPing = tick()
 end
