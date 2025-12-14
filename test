@@ -260,8 +260,8 @@ WalkingPlatform.Transparency = 1 -- Invisible
 WalkingPlatform.CanCollide = true
 WalkingPlatform.Parent = Workspace
 
--- Initialize Platform Height variable (Default Safe Height - 8)
-local currentPlatformY = 142 
+-- Initialize Platform Height variable (Default Safe Height - 2)
+local currentPlatformY = 148 
 
 -- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
@@ -883,8 +883,8 @@ local function TeleportToCoin(coin)
 	local currentPos = HumanoidRootPart.Position
 	local directionVector = (pos - currentPos)
 
-    -- [[ PLATFORM SNAP UPDATE: ALWAYS -8 ]] --
-    currentPlatformY = pos.Y - 8
+    -- [[ PLATFORM SNAP UPDATE: ALWAYS -2 ]] --
+    currentPlatformY = pos.Y - 2
     WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 
 	if directionVector.Magnitude < 0.1 then
@@ -1477,8 +1477,8 @@ local function Start_Farm()
 				if HumanoidRootPart then
                     -- UPDATED: Keep player in safe sky position, platform will follow
                     HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-                    -- [[ PLATFORM SNAP UPDATE: 150 - 8 = 142 ]]
-                    currentPlatformY = 142 
+                    -- [[ PLATFORM SNAP UPDATE: 150 - 2 = 148 ]]
+                    currentPlatformY = 148 
                     WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
@@ -1737,6 +1737,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-
+	setfflag("NextGenReplicatorEnabledWrite4", "true")
 	lastPing = tick()
 end
