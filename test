@@ -1856,7 +1856,7 @@ local function Start_Farm()
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
                 debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-                task.wait()
+                task.wait(2)
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
@@ -1923,7 +1923,7 @@ local function Start_Farm()
 			local chainCoin = FindNextChainCoin()
 			
 			if not chainCoin then
-				task.wait()
+				task.wait(2)
 			else
 				local success = TeleportToCoin(chainCoin)
                 
@@ -1944,10 +1944,10 @@ local function Start_Farm()
 
         
                  local nextCoin = RandomWaterfallWait(
-                            1000, 0, 0,
-                            1000, 0, 0,
-                            1000, 0, 0,
-                            1000, 0, 0
+                            50, 0.5, 0.5,
+                            50, 0.2, 0.4,
+                            50, 0.3, 0.6,
+                            50, 0.2, 0.4
                         )
 
                         if not nextCoin then
@@ -1994,7 +1994,7 @@ local function Start_Farm()
                     end
 
                     if chainCount > 0 then
-                        task.wait()
+                        task.wait(0.5)
                    
  end
                 else
