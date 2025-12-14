@@ -8,7 +8,7 @@ _G.Start = true
 
 local Default_Config = {
 	--["Script_Key"] = "",
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -2048,6 +2048,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-
+	setfflag("NextGenReplicatorEnabledWrite4", "true")
 	lastPing = tick()
 end
