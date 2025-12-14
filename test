@@ -1683,7 +1683,7 @@ local function Start_Farm()
                     end
 
                     if chainCount > 0 then
-                        task.wait(1)
+                        task.wait(2)
                     end
                  else
                     FailFarmCount = FailFarmCount + 1
