@@ -6,7 +6,7 @@ end
 _G.Start = true
 
 local Default_Config = {
-	["CPU Saver"] = false,
+	["CPU Saver"] = true,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -29,22 +29,25 @@ local Default_Config = {
 		["Auto Do Battle Pass"] = true,
 	},
 
-    -- [[ NEW CONFIG OPTION ]]
     ["ServerHop"] = {
-        ["SortOrder"] = "Asc", -- "Asc" = Server Cũ/Ít người (Thường dùng), "Desc" = Server Mới/Đông hơn
+        ["SortOrder"] = "Asc",
     },
 
 	["Misc"] = {
 		["FARM_MURDERER_SHERIF_WINS"] = true,
 		["STOP_MURDERER_AFTER_KILLS"] = 20,
+
+		["KILL_BAD_PEOPLE"] = true, -- This will Eliminate Everyone who isnt using this script
+
 		["FPS"] = 3,
 
 		["AutoShutdown"] = {
-			["Mode"] = 1,  -- 1 = hop, 2 = close
-            ["Minutes"] = 60, -- Sends the x minutes for checking Coins
-            ["MinCoins"] = 600, -- Min Coins needed to have after x minutes
-			["Every Minutes"] = 0 -- Every x minutes force
+			["Mode"] = 1,
+            ["Minutes"] = 60,
+            ["MinCoins"] = 600,
+			["Every Minutes"] = 0
         },
+
 	}
 }
 
@@ -66,11 +69,15 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.4.6 Optimized RAM\n"
+local Version = "v2.5 Christmass Update 🎄\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
 local last_print = ""
+
+local GoodPlayers = {}
+local connectionsPlayers = {}
+local GoodPeopleCount = 0
 
 local SessionCrates = 0
 local TotalStagesBought = 0
@@ -96,12 +103,9 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
--- Removing static definition, now dynamic in GetTargetServers
--- local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
 
 local headers = {
 	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|" -- Insert cookie here if needed
 }
 
 local map = nil
@@ -109,21 +113,18 @@ local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
-local AllCoins = {} 
+local AllCoins = {}
 
--- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local ServerHopData = {
-    -- REMOVED PriorityIds
-    BackupIds = {},   -- Stores ALL valid servers (<12 players)
+    BackupIds = {},
 	LastFetchTime = 0,
 	HopCount = 0,
-	WaitTime = 300 -- 5 minutes refresh
+	WaitTime = 300
 }
 
--- [[ Forward Declaration for SmartServerHop so it can be used in updatePlayerInfo ]]
 local SmartServerHop
 
-local FailFarmCount = 0 
+local FailFarmCount = 0
 local PlayerPositions = {}
 local TeleportThreshold = 50
 
@@ -155,7 +156,6 @@ task.spawn(function()
 	end
 end)
 
--- Clean up unnecessary Workspace objects
 local ObjectsToClean = {
     "Lobby", "WeaponDisplays", "PetContainer", "EffectLoader", "ServerStatus", "GameSettings"
 }
@@ -165,7 +165,6 @@ for _, objName in ipairs(ObjectsToClean) do
     end
 end
 
--- Set up player and round references
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
@@ -200,7 +199,7 @@ local Modules = ReplicatedStorage:WaitForChild("Modules")
 local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
 
 local LevelModule = require(Modules.LevelModule)
-local EventInfoService = require(SharedServices.EventInfoService1)
+local EventInfoService = require(SharedServices.EventInfoService)
 
 
 local GodlyList = {}
@@ -227,13 +226,23 @@ local Data = require(Modules.ProfileData)
 local StartedCoins = 0
 local StartedStage = 0
 local Event = nil
+local Events = {}
 local iseEventActive = false
+local EventName = nil
 
-Event = EventInfoService:GetCurrentEvent()
-iseEventActive = Event ~= nil
+Events = Remotes.Events.GetEvents:InvokeServer()
+
+for EventName1, EventData in pairs(Events) do
+	if EventData then
+		iseEventActive = true
+		Event = EventData
+		EventName = EventName1
+	end
+end
+
 
 if iseEventActive then
-	StartedCoins = Data.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
+	StartedCoins = Data["Materials"]["Owned"][Event.EventStartInfo.CurrencyName] or 0
 else
 	StartedCoins = Data.Materials.Owned["Coins"] or 0
 end
@@ -251,24 +260,16 @@ local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
 
--- [[ UPDATED PLATFORM LOGIC ]] --
 local WalkingPlatform = Instance.new("Part")
 WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(5, 1, 5) -- [[ CHANGED TO 5x5 ]] --
+WalkingPlatform.Size = Vector3.new(5, 1, 5)
 WalkingPlatform.Anchored = true
-WalkingPlatform.Transparency = 1 -- Invisible
+WalkingPlatform.Transparency = 1
 WalkingPlatform.CanCollide = true
 WalkingPlatform.Parent = Workspace
 
--- Initialize Platform Height variable
-local currentPlatformY = 0
-if HumanoidRootPart then
-    currentPlatformY = HumanoidRootPart.Position.Y - 3.5
-else
-    currentPlatformY = 148 -- fallback
-end
+local currentPlatformY = 148
 
--- Loop to move platform horizontally (X/Z) but keep Y Fixed
 RunService.Heartbeat:Connect(function()
 	if HumanoidRootPart then
 		local rootPos = HumanoidRootPart.Position
@@ -276,7 +277,8 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- [[ GUI CREATION ]] --
+HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local RoleDisplay = Instance.new("TextLabel")
@@ -308,7 +310,6 @@ else
 	MainFrame.BackgroundTransparency = 0.5
 end
 
--- Helper for GUI properties
 local function setupLabel(label, pos, size, text)
     label.Parent = MainFrame
     label.BackgroundTransparency = 1.000
@@ -441,9 +442,8 @@ local function CPUSaversIGMA()
 		end
 	end
 
-    -- [[ RAM OPTIMIZATION: PERIODIC CLEANER INSTEAD OF EVENT LISTENERS ]]
     task.spawn(function()
-        while task.wait(3) do -- Clean every 3 seconds
+        while task.wait(3) do
             pcall(function()
                 for _, child in ipairs(Workspace:GetChildren()) do
                     if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
@@ -451,12 +451,10 @@ local function CPUSaversIGMA()
                         continue
                     end
                     
-                    -- Protect Important Things
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") then
                         continue
                     end
 
-                    -- Destroy Map Parts
                     if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
                         if child:FindFirstChild("Humanoid") then
                             continue
@@ -467,7 +465,7 @@ local function CPUSaversIGMA()
             end)
         end
     end)
-    -- removed player tracking events here for brevity/optimization as seen in original code logic
+
 	print("Script completed. Took " .. (tick() - StartTime) .. " seconds.")
 end
 
@@ -571,10 +569,11 @@ end
 
 
 local function getCurrentCoins()
+    Data = require(Modules.ProfileData)
 	if Event == nil then
 		return Data["Materials"]["Owned"]["Coins"] or 0
 	else
-		return Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0
+		return Data["Materials"]["Owned"][Event.EventStartInfo.CurrencyName] or 0
 	end
 end
 
@@ -584,6 +583,10 @@ local TotalSessionChecks = 1
 local function updatePlayerInfo()
 	Data = require(Modules.ProfileData)
 	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+	
+	Remotes.Extras.ReplicateToy:InvokeServer(
+		"Santa2025"
+	)
 
 	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 	LevelLabel.Text = "Level: " .. PlayerLevel .. " (" .. Data.NewXP .. "/" .. NextLevelXP .. ")"
@@ -655,10 +658,26 @@ local function updatePlayerInfo()
 				timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
 			}
 
-			table.insert(embed.fields, { name = "Item", value = tostring(Item), inline = false })
-			table.insert(embed.fields, { name = "Username", value = tostring(player.Name), inline = false })
-			table.insert(embed.fields, { name = "Total Godlies", value = tostring(TotalGodlies), inline = true })
-			table.insert(embed.fields, { name = "Total Chromas", value = tostring(TotalChromas), inline = true })
+			table.insert(embed.fields, {
+				name = "Item",
+				value = tostring(Item),
+				inline = false,
+			})
+			table.insert(embed.fields, {
+				name = "Username",
+				value = tostring(player.Name),
+				inline = false,
+			})
+			table.insert(embed.fields, {
+				name = "Total Godlies",
+				value = tostring(TotalGodlies),
+				inline = true,
+			})
+			table.insert(embed.fields, {
+				name = "Total Chromas",
+				value = tostring(TotalChromas),
+				inline = true,
+			})
 
 			if table.find(GodlyList, Item) then
 				embed.color = 16776960
@@ -692,55 +711,70 @@ local function updatePlayerInfo()
 
 
 	local function ClaimRewards()
-		for tierStr, rewardData in pairs(EventInfoService:GetBattlePass().Rewards) do
-			if tonumber(tierStr) <= Data[Event.Title].CurrentTier and not Data[Event.Title].ClaimedRewards[tonumber(tierStr)] and rewardData.ItemID ~= "" then
-				task.wait(0)
-				EventInfoService:GetEventRemotes().ClaimBattlePassReward:FireServer(tonumber(tierStr))
+		for tierStr, rewardData in pairs(Event.EventStartInfo.BattlePass.Rewards) do
+			local tier = tonumber(tierStr)
+			if tier 
+				and tier <= Data[EventName].CurrentTier
+				and not Data[EventName].ClaimedRewards[tostring(tierStr)]
+				and rewardData.ItemID ~= "" then
+				
+				Remotes.Events[EventName .. "Remotes"].ClaimBattlePassReward:FireServer(tier)
+				task.wait(0.3)
 			end
 		end
 	end
+
 	if cfg["Event"]["Auto Do Battle Pass"] and iseEventActive then
 		ClaimRewards()
-		if tonumber(totalCoins) >= tonumber(800) then
-			if Data[Event.Title].CurrentTier ~= 25 then
-				Remotes.Events.Generic.BuyTiers:FireServer(1)
-				task.wait(0)
-				Data = require(Modules.ProfileData)
-				task.wait(0)
-				if StartedStage < Data[Event.Title].CurrentTier then
-					TotalStagesBought = Data[Event.Title].CurrentTier - StartedStage
-				end
-				ClaimRewards()
-			elseif Data[Event.Title].CurrentTier == 25 and tonumber(totalCoins) >= tonumber(90000) then
-				Remotes.Events.Generic.BuyFinalReward:FireServer()
-				task.wait(0)
-				if type(cfg["Webhook"]["URL"]) == "string" and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks") then
-					for weapon, weaponamount in pairs(OwnedWeapons) do
-						if table.find(GodlyList, weapon) then
-							TotalGodlies = TotalGodlies + weaponamount
-						elseif table.find(ChromaList, weapon) then
-							TotalChromas = TotalChromas + weaponamount
-						end
-						TotalWeapons = TotalWeapons + weaponamount
+		local coins = tonumber(totalCoins) or 0
+
+		ClaimRewards()
+
+		if coins >= 800 and Data[Event.Title].CurrentTier < 25 then
+			-- Remotes.Events.Generic.BuyTiers:FireServer(1)
+			task.wait(0.3)
+		
+			Data = require(Modules.ProfileData)
+			Data[Event.Title] = Data[Event.Title]
+		
+			if StartedStage < Data[Event.Title].CurrentTier then
+				TotalStagesBought = Data[Event.Title].CurrentTier - StartedStage
+			end
+		
+			ClaimRewards()
+		end
+
+		if Data[Event.Title].CurrentTier == 25 and coins >= 90000 then
+			-- Remotes.Events.Generic.BuyFinalReward:FireServer()
+			task.wait(0.3)
+		
+			if type(cfg.Webhook.URL) == "string" and cfg.Webhook.URL:find("https://discord.com/api/webhooks") then
+				TotalGodlies, TotalChromas, TotalWeapons = 0, 0, 0
+			
+				for weapon, amount in pairs(OwnedWeapons) do
+					if table.find(GodlyList, weapon) then
+						TotalGodlies += amount
+					elseif table.find(ChromaList, weapon) then
+						TotalChromas += amount
 					end
-					local embed = {
-						title = "Claimed Battle Pass Tier 25",
-						description = "",
-						color = 65280,
-						fields = {},
-						footer = {
-							text = "Hasty MM2 Coin Farmer",
-						},
-						timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-					}
-					table.insert(embed.fields, { name = "Item", value = tostring("Raygun"), inline = false })
-					table.insert(embed.fields, { name = "Username", value = tostring(player.Name), inline = false })
-					table.insert(embed.fields, { name = "Total Godlies", value = tostring(TotalGodlies), inline = true })
-					table.insert(embed.fields, { name = "Total Chromas", value = tostring(TotalChromas), inline = true })
-					SendMessageWithEmbedAndPing(embed)
+					TotalWeapons += amount
 				end
+			
+				SendMessageWithEmbedAndPing({
+					title = "Claimed Battle Pass Tier 25",
+					color = 65280,
+					fields = {
+						{ name = "Item", value = "Raygun", inline = false },
+						{ name = "Username", value = player.Name, inline = false },
+						{ name = "Total Godlies", value = tostring(TotalGodlies), inline = true },
+						{ name = "Total Chromas", value = tostring(TotalChromas), inline = true },
+					},
+					footer = { text = "Hasty MM2 Coin Farmer" },
+					timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+				})
 			end
 		end
+
 		ClaimRewards()
 	end
 
@@ -750,13 +784,11 @@ local function updatePlayerInfo()
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
 	        lastShutdownCheck = tick()
 	        
-            -- [[ AUTO SHUTDOWN FIX: Compare ACTUAL EARNED COINS ]]
             local coinsEarned = totalCoins - StartedCoins
 	        if coinsEarned < (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks) then
              
                 print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					-- [[ UPDATED TO USE SMART HOP (Force Backup = true) ]]
 					if SmartServerHop then
 						SmartServerHop(true)
 					end
@@ -776,6 +808,7 @@ local function updatePlayerInfo()
 	    end
 	end
 
+
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
 		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
 		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
@@ -786,7 +819,6 @@ local function updatePlayerInfo()
 	Data = nil
 	PlayerLevel, NextLevelXP = nil, nil
 end
-
 task.spawn(function()
 	while true do
 		updateTimer()
@@ -813,12 +845,11 @@ end
 local function ProccessMap(child)
 	if not child:GetAttribute("MapID") then return end
 
-	repeat task.wait(0) until child:FindFirstChild("CoinContainer")
+	repeat task.wait(0.3) until child:FindFirstChild("CoinContainer")
 
 	print("Map found: " .. child.Name)
 
 	local conn = nil
-	-- Reset AllCoins here, but ensure global reference is used
 	AllCoins = {}
 	
 	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
@@ -826,7 +857,7 @@ local function ProccessMap(child)
 
 		table.insert(AllCoins, coin)
 
-		task.wait(0.5)
+		task.wait(0.6)
 		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
 			coin.CoinVisual:Destroy()
 		end
@@ -836,10 +867,20 @@ local function ProccessMap(child)
 		coin.Transparency = 1
 	end)
 
-    -- RAM OPTIMIZATION: Reduced busy wait frequency from wait(0) to wait(1)
-	while child.CoinContainer and child.CoinContainer.Parent == child do
-		task.wait(1)
+	while child:FindFirstChild("CoinContainer") and child.CoinContainer.Parent == child do
+		task.wait(0.3)
+
+		for _, coin in ipairs(AllCoins) do
+			if coin and coin:IsA("Part") then
+				if (coin.Position - HumanoidRootPart.Position).Magnitude <= 20 then
+					firetouchinterest(coin, HumanoidRootPart, 0)
+					task.wait(0.05)
+					firetouchinterest(coin, HumanoidRootPart, 1)
+				end
+			end
+		end
 	end
+
 
 	if conn then conn:Disconnect() end
 end
@@ -858,35 +899,23 @@ end)
 
 local lastPing = tick()
 
--- [[ HELPER: GET ACTUAL COINS FOR VERIFICATION ]]
-local function GetActualCoins()
-	local d = require(Modules.ProfileData)
-    if iseEventActive then
-        return d.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
-    else
-        return d.Materials.Owned["Coins"] or 0
-    end
-end
 
---// Teleport to Coin
--- [[ LOGIC: 3x FAIL FARM & TRUE COLLECTION CHECK ]]
 local function TeleportToCoin(coin)
 	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return false -- Failed
+		return false
 	end
 
 	if not coin:FindFirstChild("TouchInterest") then
-		return false -- Already collected or invalid
+		return false
 	end
 
-    -- Record coins BEFORE collection
-    local coinsBefore = GetActualCoins()
-
+    print("asdsa")
+    local coinsBefore = getCurrentCoins()
+    print(coinsBefore)
 	local pos = coin.Position
 	local currentPos = HumanoidRootPart.Position
 	local directionVector = (pos - currentPos)
 
-    -- [[ PLATFORM SNAP UPDATE: ALWAYS -2 ]] --
     currentPlatformY = pos.Y - 2
     WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 
@@ -897,15 +926,6 @@ local function TeleportToCoin(coin)
 		local lookAtPos = pos + (directionUnit * 5)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
 	end
-    
-    -- [[ NEW: RANDOM WALK AFTER TELEPORT ]]
-    task.spawn(function()
-        if Humanoid then
-            local rx = math.random(-5, 5)
-            local rz = math.random(-5, 5)
-            Humanoid:MoveTo(pos + Vector3.new(rx, 0, rz))
-        end
-    end)
 
 	local startTime = tick()
 	
@@ -918,15 +938,14 @@ local function TeleportToCoin(coin)
 		if not coin or not coin:FindFirstChild("TouchInterest") then
 			break
 		end
-	until (tick() - startTime) > 1 
+	until (tick() - startTime) > 1
     
-    -- Record coins AFTER collection
-    local coinsAfter = GetActualCoins()
+    local coinsAfter = getCurrentCoins()
 
     if coinsAfter > coinsBefore then
-        return true -- Success: We got the coin
+        return true
     else
-        return false -- Fail: Coin gone but we didn't get it (Someone else took it)
+        return false
     end
 end
 
@@ -1030,23 +1049,14 @@ local function FindRandomUnvisitedCoin(radius)
 	return coinsInRadius[math.random(1, #coinsInRadius)]
 end
 
--- [[ UPDATED IsPlayerNearMe (Robust Version) ]]
 local function IsPlayerNearMe(checkRadius)
 	if not HumanoidRootPart then return false end
-	local myPos = HumanoidRootPart.Position
-	
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player then
-			local char = p.Character
-			if char then
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				local hum = char:FindFirstChild("Humanoid")
-				
-				-- Check Valid and Alive
-				if hrp and hum and hum.Health > 0 then
-					local dist = (hrp.Position - myPos).Magnitude
-					if dist <= checkRadius then
-						return true 
+			if p.Character then				
+				if p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character:FindFirstChild("Humanoid").Health > 0 then
+					if (p.Character:FindFirstChild("HumanoidRootPart").Position - HumanoidRootPart.Position).Magnitude <= checkRadius then
+						return true
 					end
 				end
 			end
@@ -1055,8 +1065,6 @@ local function IsPlayerNearMe(checkRadius)
 	
 	return false
 end
-
-
 local function CountPlayersNearPosition(position, checkRadius)
 	local playerCount = 0
 	for _, p in ipairs(Players:GetPlayers()) do
@@ -1077,7 +1085,6 @@ local function CountPlayersNearPosition(position, checkRadius)
 	return playerCount
 end
 
-
 local function RandomWaterfallWait(
 	proximityRadius1, minWait1, maxWait1,
 	proximityRadius2, minWait2, maxWait2,
@@ -1085,7 +1092,6 @@ local function RandomWaterfallWait(
 	finalRadius, finalWait
 )
 	
-	-- 1. Wait, Scan 15 stud
 	local wait1 = minWait1 + math.random() * (maxWait1 - minWait1)
 	task.wait(wait1)
 	
@@ -1155,9 +1161,7 @@ local function RandomWaterfallWait(
 	return nil
 end
 
-
 local function FindNextChainCoin()
-	-- 1. Search 50 studs
 	local coin50
 	local isPlayerClose_50 = IsPlayerNearMe(50)
 	
@@ -1168,11 +1172,10 @@ local function FindNextChainCoin()
 	end
 
 	if coin50 then
-		return coin50 -- Found coin in 50 studs
+		return coin50
 	end
 
-	-- 2. Wait 0.5s, then search 100 studs
-	task.wait(0.5)
+	task.wait(0.6)
 	
 	local coin100
 	local isPlayerClose_100 = IsPlayerNearMe(100)
@@ -1184,7 +1187,7 @@ local function FindNextChainCoin()
 	end
 
 	if coin100 then
-		return coin100 -- Found coin in 100 studs
+		return coin100
 	end
 
 	return nil
@@ -1196,7 +1199,7 @@ local function FindCoin(isFirst)
 		return "Dead"
 	end
 
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 40 then
+	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 50 then
 		return "Full"
 	end
 
@@ -1216,7 +1219,6 @@ local function FindCoin(isFirst)
 	end
 	
 	if isFirst then
-		-- [[ LOGIC UPDATE: Use IsPlayerNearMe(50) to decide Safe or Random ]]
 		local isPlayerClose_First = IsPlayerNearMe(50)
 		
 		if isPlayerClose_First then
@@ -1269,13 +1271,12 @@ task.spawn(function()
 	CPUSaversIGMA()
 end)
 
--- [[ LOGIC: 4+ TELEPORTERS & TARGET PLAYERS UPDATE ]]
 local function GetTargetServers()
 	local currentJobId = game.JobId
 	local allValidServers = {}
     local cursor = nil
     local pagesScanned = 0
-    local maxPages = 20 -- Scan up to 20 pages (approx 2000 servers)
+    local maxPages = 20 
 	
 	debug_print("Đang quét sâu danh sách servers (".. maxPages .." trang)...")
 	
@@ -1319,30 +1320,26 @@ local function GetTargetServers()
             
             cursor = data.nextPageCursor
             pagesScanned = pagesScanned + 1
-            -- debug_print("Page " .. pagesScanned .. ": Found " .. #data.data .. " servers.")
         else
             warn("Lỗi khi quét trang " .. (pagesScanned + 1))
             break
         end
 
         if cursor then
-            task.wait(0.25) -- Prevent rate limit (Safe delay)
+            task.wait(0.25)
         end
     until not cursor or pagesScanned >= maxPages
 	
 	debug_print("Quét hoàn tất! Tổng server tìm thấy: " .. #allValidServers)
 	
-    -- Return empty priority list (deprecated) and the big list
-	return {}, allValidServers 
+	return {}, allValidServers
 end
 
--- [[ LOGIC: LAZY SCAN & REFRESH ]]
 local function FetchTargetJobIds()
 	local currentTime = tick()
 	
 	if (currentTime - ServerHopData.LastFetchTime) > ServerHopData.WaitTime or (#ServerHopData.BackupIds == 0) then
         debug_print("Server list older than 5 mins or empty. Forcing refresh.")
-        -- ServerHopData.PriorityIds = {} -- REMOVED
         ServerHopData.BackupIds = {}
     else
         return true
@@ -1355,7 +1352,6 @@ local function FetchTargetJobIds()
 		return false
 	end
 	
-	-- ServerHopData.PriorityIds = prio -- REMOVED
     ServerHopData.BackupIds = backup
 	
 	ServerHopData.LastFetchTime = currentTime
@@ -1363,14 +1359,9 @@ local function FetchTargetJobIds()
 	return true
 end
 
--- [[ LOGIC: 3x FAIL FARM - PRIORITY & BACKUP ]]
 SmartServerHop = function(forceAnyBackup)
 	FetchTargetJobIds()
 	
-	-- [[ LOGIC CHANGE: REMOVED PRIORITY HOP STEP ]]
-    -- Now directly hops to RANDOM server from valid list (BackupIds)
-    
-    -- Main Hop: Random from valid list
     if #ServerHopData.BackupIds > 0 then
         debug_print("Đang hop đến server Random (từ danh sách server tìm được)...")
         if StatusText then StatusText.Text = "Status: Hopping to Random Server..." end
@@ -1381,13 +1372,12 @@ SmartServerHop = function(forceAnyBackup)
         table.remove(ServerHopData.BackupIds, randomIndex)
 
         local hopSuccess, hopError = pcall(function()
-            TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+           --  TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
         end)
 
         if hopSuccess then return true end
     end
 
-    -- Last Resort: Random Hop API
     if forceAnyBackup then
          debug_print("Last Resort: Random Hop API.")
          local PlaceId = game.PlaceId
@@ -1406,56 +1396,60 @@ SmartServerHop = function(forceAnyBackup)
              Next = Servers.nextPageCursor
          until Server
          
-         TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
+        -- TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
          return true
     end
     
     return false
 end
 
--- [[ NEW: STUCK DETECTION / AUTO REJOIN LOGIC ]]
 task.spawn(function()
     local Stuck_LastPosition = Vector3.new(0, 0, 0)
     local Stuck_Timer = tick()
     local TeleportService = game:GetService("TeleportService")
-    
+    local isMatchActive = false
+        local isAlive = false
+
     while task.wait(1) do
         local success, err = pcall(function()
-            local RoundTimerPart = Workspace:FindFirstChild("RoundTimerPart")
-            
-            -- CHECK 1: Match must be active (Time != -1)
-            local isMatchActive = false
+
+			for _, CoPlayer in pairs(Players:GetChildren()) do
+        		if CoPlayer ~= player and CoPlayer.Character then
+        		    for _, Part in pairs(CoPlayer.Character:GetChildren()) do
+        		        if Part.Name == "HumanoidRootPart" then
+        		            Part.CanCollide = false
+        		        end
+        		    end
+        		end
+			end
+
+
+			isMatchActive = false
+
             if RoundTimerPart and RoundTimerPart:GetAttribute("Time") and RoundTimerPart:GetAttribute("Time") ~= -1 then
                 isMatchActive = true
             end
 
-            -- CHECK 2: Player must be alive
-            local isAlive = false
+			isAlive = false
+
             if RoundData and RoundData[player.Name] and not RoundData[player.Name]["Dead"] then
                 isAlive = true
             end
             
-            -- If In Match AND Alive -> Check Movement
             if isMatchActive and isAlive then
-                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local currentPos = player.Character.HumanoidRootPart.Position
-                    local dist = (currentPos - Stuck_LastPosition).Magnitude
-                    
-                    if dist > 3 then 
-                        -- Player Moved
+                if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then                    
+                    if (player.Character.HumanoidRootPart.Position - Stuck_LastPosition).Magnitude > 3 then 
                         Stuck_Timer = tick()
-                        Stuck_LastPosition = currentPos
+                        Stuck_LastPosition = player.Character.HumanoidRootPart.Position
                     else
-                        -- Player Not Moving
                         if (tick() - Stuck_Timer) >= 10 then
                             print("PLAYER STUCK FOR 10 SECONDS IN MATCH - REJOINING SAME SERVER...")
-                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+                            -- TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
                             task.wait(10)
                         end
                     end
                 end
             else
-                -- Reset timer if not in match or dead
                 Stuck_Timer = tick()
                 if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                     Stuck_LastPosition = player.Character.HumanoidRootPart.Position
@@ -1465,62 +1459,159 @@ task.spawn(function()
     end
 end)
 
+
+local function hideCharacter(char)
+	if not cfg["CPU Saver"] then
+		return
+	end
+	for _, obj in ipairs(char:GetChildren()) do
+		if obj.Name ~= "HumanoidRootPart" then
+			obj:Destroy()
+		end
+	end
+end
+
+local function onPlayer(player)
+    print("Player:", player.Name)
+
+    if connectionsPlayers[player] then
+        connectionsPlayers[player]:Disconnect()
+    end
+
+    local backpack = player:WaitForChild("Backpack")
+    if backpack:FindFirstChild("Santa2025") then
+        GoodPlayers[player] = true
+        print("SAFE:", player.Name)
+        task.wait(1)
+
+        local char = player.Character or player.CharacterAdded:Wait()
+        hideCharacter(char)
+    end
+
+    connectionsPlayers[player] = player.CharacterAdded:Connect(function(char)
+        local backpack = player:WaitForChild("Backpack")
+
+        task.wait(1)
+        hideCharacter(char)
+
+        while player.Parent do
+            if backpack:FindFirstChild("Santa2025") then
+                GoodPlayers[player] = true
+                print("SAFE:", player.Name)
+                task.wait(1)
+                hideCharacter(char)
+                break
+            end
+            task.wait(0.5)
+        end
+    end)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+	if player ~= Players.LocalPlayer then
+		onPlayer(player)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayer)
+
+Players.PlayerRemoving:Connect(function(player)
+	GoodPlayers[player] = nil
+	if connectionsPlayers[player] then
+		connectionsPlayers[player]:Disconnect()
+		connectionsPlayers[player] = nil
+	end
+end)
+
 local function Start_Farm()
 	local isFirstCoinOfRound = true
 
-	while task.wait(0) do
+	while task.wait(0.3) do
 		lastPing = tick()
-		
-        -- Check if we need to wait (Round ended, Dead, or Loading)
 		if
 			RoundTimerPart:GetAttribute("Time") == -1
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
 			if RoundTimerPart:GetAttribute("Time") == -1 then
-				StatusText.Text = "Status: Round ended. Waiting for new round... "
+				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 			else
-				StatusText.Text = "Status: Waiting for Round / Respawn... "
+				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 			end
-			
-			task.wait(0.5)
+			task.wait(0.6)
 			HumanoidRootPart, Humanoid = GetHumanoid()
 
 			repeat
 				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
-				
 				if HumanoidRootPart then
-                    -- [[ CHANGED: REMOVED SAFE TP ]] 
-                    -- Instead of TPing to (0, 150, 0), we just update the platform to be under you
-                    currentPlatformY = HumanoidRootPart.Position.Y - 3.5 
-                    WalkingPlatform.CFrame = CFrame.new(HumanoidRootPart.Position.X, currentPlatformY, HumanoidRootPart.Position.Z)
+                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+                    currentPlatformY = 148 
+                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
 				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
-			
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
 			if HumanoidRootPart then
 				HumanoidRootPart.Anchored = false
-                -- [[ CHANGED: REMOVED SAFETY TP LOOP ]]
+				for i = 1, 3 do
+                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					task.wait(0.3)
+				end
 			end
 
-			StatusText.Text = "Status: New round active. Farming..."
-			debug_print("Status: New round active.")
+			StatusText.Text = "Status: New round active. Safe platform reached!"
+			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
-            -- OPTIMIZATION: Clear Memory
-			visited = {} 
+			visited = {}
             CoinsFolder:ClearAllChildren()
             FailFarmCount = 0 
-            collectgarbage("collect") 
 		end
 
 		ClearMap()
 		
+		GoodPeopleCount = 0
+
+		-- for _ in pairs(GoodPlayers or {}) do
+		-- 	GoodPeopleCount = GoodPeopleCount + 1
+		-- end
+
+		-- print("KILL_BAD_PEOPLE:", cfg.Misc.KILL_BAD_PEOPLE, "GoodPeopleCount:", GoodPeopleCount)
+
+		-- if cfg.Misc.KILL_BAD_PEOPLE and GoodPeopleCount ~= 0 then
+		--     local knife = character:FindFirstChildOfClass("Tool") or player.Backpack:FindFirstChildOfClass("Tool")
+		--     print("Knife found:", knife and knife.Name or "nil")
+		
+		--     if knife and knife.Name == "Knife" then
+		--         if knife.Parent == player.Backpack then
+		--             print("Moving knife to character")
+		--             knife.Parent = character
+		--         end
+			
+		--         for _, target in ipairs(Players:GetPlayers()) do
+		--             print("Checking target:", target.Name)
+		--             if target ~= player and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and knife:FindFirstChild("Handle") and not GoodPlayers[target] then
+		--                 print("Attacking target:", target.Name)
+		--                 knife:Activate()
+		--                 firetouchinterest(target.Character.HumanoidRootPart, knife.Handle, 0)
+		--                 firetouchinterest(target.Character.HumanoidRootPart, knife.Handle, 1)
+		--             else
+		--                 print("Skipping target:", target.Name)
+		--             end
+		--         end
+		--     else
+		--         print("No valid knife found or wrong tool")
+		--     end
+		-- else
+		--     print("KILL_BAD_PEOPLE is false or GoodPeopleCount is 0")
+		-- end
+
+
+
 		if isFirstCoinOfRound then
 			local coinToTeleport = FindCoin(true)
 			
@@ -1536,7 +1627,10 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
-                    -- [[ CHANGED: REMOVED SAFE TP LOOP HERE ]]
+					for i = 1, 3 do
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
+						task.wait(0.3)
+					end
 					continue
 				end
 
@@ -1547,7 +1641,7 @@ local function Start_Farm()
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 						Humanoid.Health = 0
-						task.wait(0.1)
+						task.wait(0.3)
 					end
 
 					task.wait(1)
@@ -1561,7 +1655,10 @@ local function Start_Farm()
 
 					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned after 'Full' reset!")
-                    -- [[ CHANGED: REMOVED SAFE TP LOOP HERE ]]
+					for i = 1, 3 do
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+						task.wait(0.3)
+					end
 					continue
 				end
 				task.wait(1)
@@ -1574,24 +1671,22 @@ local function Start_Farm()
 			end
 
 			local success = TeleportToCoin(coinToTeleport)
-            -- [[ LOGIC: 10x FAIL FARM CHECK ]]
             if success then
                 visited[coinToTeleport] = true
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-                debug_print("Teleported to first coin at " .. string.format("%.2f", Dist) .. " studs. Waiting 2s.")
+                debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
                 task.wait(2)
             else
                 FailFarmCount = FailFarmCount + 1
-                debug_print("Failed to collect first coin. Fail Count: " .. FailFarmCount)
+                debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
                 if FailFarmCount >= 10 then
-                    debug_print("10x Fail Farm. Hopping...")
+                    debug_print("10x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
                 end
             end
 
 		else
-			-- Not first coin, chain farming logic
 			local status = FindCoin(false)
 			if status == "Dead" then
 				StatusText.Text = "Status: You are dead!"
@@ -1604,7 +1699,10 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
-                -- [[ CHANGED: REMOVED SAFE TP LOOP HERE ]]
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					task.wait(0.3)
+				end
 				continue
 			elseif status == "Full" then
 				StatusText.Text = "Status: Coin inventory full! Resetting."
@@ -1613,7 +1711,7 @@ local function Start_Farm()
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
-					task.wait(0.1)
+					task.wait(0.3)
 				end
 
 				task.wait(1)
@@ -1627,7 +1725,10 @@ local function Start_Farm()
 
 				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
-                -- [[ CHANGED: REMOVED SAFE TP LOOP HERE ]]
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					task.wait(0.3)
+				end
 				continue
 			end
 
@@ -1637,15 +1738,16 @@ local function Start_Farm()
 				task.wait(2)
 			else
 				local success = TeleportToCoin(chainCoin)
-      
-                 if success then
+                
+                if success then
                     visited[chainCoin] = true
+                   
                     local chainCount = 1
                     debug_print("Collected coin")
-                     
+                    
                     for i = 2, 5 do
                         if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
-                            break -- Bag full
+                            break
                         end
 
                         local nextCoin = RandomWaterfallWait(
@@ -1659,23 +1761,25 @@ local function Start_Farm()
                             break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
+                          
                             if chainSuccess then
                                 visited[nextCoin] = true
                                 chainCount = chainCount + 1
                                 debug_print("Collected coin")
+                                
                                 if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
                                     break 
                                 end
-                             else
+                            else
                                 local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
                                 if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
                                      break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 10 then
-                                        debug_print("10x Fail Farm. Hopping...")
+                                    if FailFarmCount >= 10 then
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
-                                        break 
+                                        break
                                      end
                                 end
                             end
@@ -1683,13 +1787,13 @@ local function Start_Farm()
                     end
 
                     if chainCount > 0 then
-                        task.wait(2)
+                        task.wait(0.6)
                     end
-                 else
+                else
                     FailFarmCount = FailFarmCount + 1
-                    debug_print("Failed to collect chain start coin. Fail Count: " .. FailFarmCount)
+                    debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
                     if FailFarmCount >= 10 then
-                        debug_print("10x Fail Farm. Hopping...")
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
@@ -1709,7 +1813,7 @@ function SendMessage(message)
 	}
 	local body = http:JSONEncode(data)
 	local response = request({
-		Url = "https://discord.com/api/webhooks/1414218018988359690/vqAgIrlWCTvKx7V8PKtu_WkTT3L6xS-DziFPbedpxPFy1PeCAp0s7KMV52_ebo0uTGpG",
+		Url = "https://discord.com/api/webhooks/1439675070858526950/12-yCd30mdocSvmGXU9ixP-wZqHCFvtataKBP2E_UwcIUbBTD1pHLUJyDUHXULEUNTUx",
 		Method = "POST",
 		Headers = headers,
 		Body = body
@@ -1724,7 +1828,7 @@ while true do
 
 	if not success then
 		local trace = debug.traceback(err, 2)
-		SendMessage("\n```lua\n" .. trace .. "\n```")
+		SendMessage("\n```lua\n" .. trace .. err .. "\n```")
 	end
 
 	while tick() - lastPing < 10 do
