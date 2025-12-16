@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.9 (Old Logic Restored)"
+local Version = "v3.0 (Fixed Logic)"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -208,7 +208,7 @@ for _, BoxData in pairs(require(Sync.MysteryBox)) do
 	end
 end
 
-local RoundData = Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+local RoundData = nil -- We remove reliance on this for farming, only for display
 local Data = require(Modules.ProfileData)
 
 local StartedCoins = 0
@@ -570,7 +570,11 @@ local TotalSessionChecks = 1
 
 local function updatePlayerInfo()
 	Data = require(Modules.ProfileData)
-	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+    -- We do use RoundData here for display, but safe wrap it
+    local success, rd = pcall(function() 
+        return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+    end)
+    if success then RoundData = rd end
 	
 	Remotes.Extras.ReplicateToy:InvokeServer(
 		"Santa2025"
@@ -812,7 +816,9 @@ task.spawn(function()
 		updatePlayerInfo()
 		task.wait(.5)
 		task.spawn(function()
-			RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+            pcall(function()
+			    RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+            end)
 		end)
 		task.wait(.5)
 	end
@@ -892,47 +898,32 @@ local function TeleportToCoin(coin)
 		return false
 	end
 
-	if not coin:FindFirstChild("TouchInterest") then
+	-- 1. Get Coins Before
+	local coinsBefore = getCurrentCoins()
+	
+	-- 2. Teleport
+	local pos = coin.Position
+	currentPlatformY = pos.Y - 2
+	WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
+	HumanoidRootPart.CFrame = CFrame.new(pos)
+
+	-- 3. Touch
+	firetouchinterest(coin, HumanoidRootPart, 0)
+	task.wait(0.1)
+	firetouchinterest(coin, HumanoidRootPart, 1)
+	
+	-- 4. Wait briefly for server registration
+	task.wait(0.3) 
+	
+	-- 5. Get Coins After
+	local coinsAfter = getCurrentCoins()
+
+	-- Only return true if our bag actually went up
+	if coinsAfter > coinsBefore then
+		return true
+	else
 		return false
 	end
-
-    local coinsBefore = getCurrentCoins()
-    local pos = coin.Position
-	local currentPos = HumanoidRootPart.Position
-	local directionVector = (pos - currentPos)
-
-    currentPlatformY = pos.Y - 2
-    WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
-
-	if directionVector.Magnitude < 0.1 then
-		HumanoidRootPart.CFrame = CFrame.new(pos)
-	else
-		local directionUnit = directionVector.Unit
-		local lookAtPos = pos + (directionUnit * 5)
-		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
-	end
-
-	local startTime = tick()
-	
-	-- OLD LOGIC: Wait and check if coins increased 
-	repeat
-		firetouchinterest(coin, HumanoidRootPart, 0)
-		task.wait(0.3) -- Old slower wait
-		firetouchinterest(coin, HumanoidRootPart, 1)
-		task.wait(0.3) -- Old slower wait
-		
-		if not coin or not coin:FindFirstChild("TouchInterest") then
-			break
-		end
-	until (tick() - startTime) > 1 
-    
-    local coinsAfter = getCurrentCoins()
-
-    if coinsAfter > coinsBefore then
-        return true
-    else
-        return false
-    end
 end
 
 local function FindBestCoin(searchRadius, neighborRadius)
@@ -1181,13 +1172,8 @@ end
 
 
 local function FindCoin(isFirst)
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
-		return "Dead"
-	end
-
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 50 then
-		return "Full"
-	end
+    -- REMOVED: RoundData checks that might cause stuck states (Dead/Full)
+    -- We rely on Humanoid health and failed teleport counts instead.
 
 	if not HumanoidRootPart or not AllCoins then
 		return nil
@@ -1511,25 +1497,22 @@ end)
 
 local function Start_Farm()
 	local isFirstCoinOfRound = true
-    local NoCoinFoundCount = 0 -- Watchdog variable
+    local NoCoinFoundCount = 0 
 
 	while task.wait(0.3) do
 		lastPing = tick()
-		if
-			RoundTimerPart:GetAttribute("Time") == -1
-			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
-			or (RoundData and not RoundData[player.Name])
-		then
-			if RoundTimerPart:GetAttribute("Time") == -1 then
-				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
-			else
-				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
-			end
-			task.wait(0.6)
-			HumanoidRootPart, Humanoid = GetHumanoid()
-
+		
+		-- [[ STUCK FIX: RELY ONLY ON TIMER PART, NOT ROUNDDATA ]]
+		if RoundTimerPart:GetAttribute("Time") == -1 then
+            
+            -- FIX: Clear coins BEFORE waiting, so we don't delete new coins that spawn
+            visited = {}
+            CoinsFolder:ClearAllChildren()
+            
+			StatusText.Text = "Status: Waiting for new round..."
+			
+			-- Wait for the physical timer to start (Indicating match start)
 			repeat
-				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 				HumanoidRootPart, Humanoid = GetHumanoid()
 				if HumanoidRootPart then
                     HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1538,7 +1521,8 @@ local function Start_Farm()
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
-				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
+			
+			-- Round has started physically. Give it a second to load map.
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1550,18 +1534,23 @@ local function Start_Farm()
 				end
 			end
 
-			StatusText.Text = "Status: New round active. Safe platform reached!"
-			debug_print("Status: New round active. Safe platform reached!")
+			StatusText.Text = "Status: Round Started. Farming..."
+			debug_print("Status: Round Started.")
 			
 			isFirstCoinOfRound = true
-			visited = {}
-            CoinsFolder:ClearAllChildren()
+			-- visited and CoinsFolder were cleared above, do NOT clear here.
             FailFarmCount = 0 
             NoCoinFoundCount = 0
+            
+            -- Force a fresh data pull so we don't use old data
+            task.spawn(function()
+                pcall(function()
+				    RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+                end)
+			end)
 		end
 
 		ClearMap()
-		
 		GoodPeopleCount = 0
 
 		if isFirstCoinOfRound then
@@ -1569,61 +1558,33 @@ local function Start_Farm()
 			
 			if type(coinToTeleport) == "string" then
                 if coinToTeleport == "NoCoins" then
-                     -- Watchdog logic for stuck "NoCoins"
                      NoCoinFoundCount = NoCoinFoundCount + 1
-                     if NoCoinFoundCount > 10 then -- Approx 20 seconds
-                        debug_print("Stuck on NoCoins for too long. Clearing visited list.")
+                     -- [[ MODIFIED: 3 SECOND RESET (10 checks * 0.3s) ]]
+                     if NoCoinFoundCount > 10 then 
+                        debug_print("NoCoins found for 3s. Clearing visited list.")
                         visited = {}
                         NoCoinFoundCount = 0
                      end
                 end
 
+				-- Check death only if data is present, otherwise assume alive to prevent stuck
 				if coinToTeleport == "Dead" then
 					StatusText.Text = "Status: You are dead!"
-					repeat
-						StatusText.Text = "Status: Respawning..."
-						task.wait(1)
-						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-						HumanoidRootPart, Humanoid = GetHumanoid()
-					until HumanoidRootPart
-
-					StatusText.Text = "Status: Respawned!"
-					debug_print("Player respawned!")
-					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
-						task.wait(0.3)
-					end
+					task.wait(1)
 					continue
 				end
 
 				if coinToTeleport == "Full" then
-					StatusText.Text = "Status: Coin inventory full! Resetting."
-					debug_print("Coin inventory full! Forcing reset...")
-					
+					StatusText.Text = "Status: Bag Full! Resetting."
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 						Humanoid.Health = 0
 						task.wait(0.3)
 					end
-
-					task.wait(1)
-					
-					repeat
-						StatusText.Text = "Status: Respawning..."
-						task.wait(1)
-						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-						HumanoidRootPart, Humanoid = GetHumanoid()
-					until HumanoidRootPart
-
-					StatusText.Text = "Status: Respawned!"
-					debug_print("Player respawned after 'Full' reset!")
-					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-						task.wait(0.3)
-					end
+					task.wait(3) -- Wait for respawn
 					continue
 				end
-				task.wait(1)
+				task.wait(0.3)
 				continue
 			end
 
@@ -1636,135 +1597,59 @@ local function Start_Farm()
             if success then
                 visited[coinToTeleport] = true
                 isFirstCoinOfRound = false
-                local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-                debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 2 seconds.")
-                task.wait(2)
+                debug_print("First coin collected.")
             else
                 FailFarmCount = FailFarmCount + 1
-                -- Important: If failed, we do NOT add to visited, so we try again or find another.
-                debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 20 then
-                    debug_print("10x Fail Farm (Round). Hopping...")
+                debug_print("Failed first coin. FailCount: " .. FailFarmCount)
+                if FailFarmCount >= 10 then
                     SmartServerHop(true)
                 end
             end
 
 		else
+			-- Standard Farming Logic
 			local status = FindCoin(false)
             if status == "NoCoins" then
                  NoCoinFoundCount = NoCoinFoundCount + 1
+                 -- [[ MODIFIED: 3 SECOND RESET ]]
                  if NoCoinFoundCount > 10 then 
-                    debug_print("Stuck on NoCoins for too long. Clearing visited list.")
+                    debug_print("NoCoins found for 3s. Clearing visited list.")
                     visited = {}
                     NoCoinFoundCount = 0
                  end
             end
 
 			if status == "Dead" then
-				StatusText.Text = "Status: You are dead!"
-				repeat
-					StatusText.Text = "Status: Respawning..."
-					task.wait(1)
-					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-					HumanoidRootPart, Humanoid = GetHumanoid()
-				until HumanoidRootPart
-
-				StatusText.Text = "Status: Respawned!"
-				debug_print("Player respawned!")
-				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					task.wait(0.3)
-				end
+				StatusText.Text = "Status: Dead."
+				task.wait(1)
 				continue
 			elseif status == "Full" then
-				StatusText.Text = "Status: Coin inventory full! Resetting."
-				debug_print("Coin inventory full! Forcing reset...")
-				
+				StatusText.Text = "Status: Bag Full! Resetting."
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
 					task.wait(0.3)
 				end
-
-				task.wait(1)
-				
-				repeat
-					StatusText.Text = "Status: Respawning..."
-					task.wait(1)
-					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-					HumanoidRootPart, Humanoid = GetHumanoid()
-				until HumanoidRootPart
-
-				StatusText.Text = "Status: Respawned!"
-				debug_print("Player respawned after 'Full' reset!")
-				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					task.wait(0.3)
-				end
+				task.wait(3)
 				continue
 			end
 
 			local chainCoin = FindNextChainCoin()
 			
 			if not chainCoin then
-				task.wait(2)
+				task.wait(0.5)
 			else
 				local success = TeleportToCoin(chainCoin)
                 
                 if success then
-                    visited[chainCoin] = true
-                    local chainCount = 1
-                    debug_print("Collected coin")
-                    
-                    for i = 2, 5 do
-                        if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
-                            break
-                        end
-
-                        local nextCoin = RandomWaterfallWait(
-                            50, 0.5, 0.5,
-                            50, 0.2, 0.4,
-                            50, 0.3, 0.6,
-                            50, 0.2, 0.4
-                        )
-
-                        if not nextCoin then
-                            break
-                        else
-                            local chainSuccess = TeleportToCoin(nextCoin)
-                            if chainSuccess then
-                                visited[nextCoin] = true
-                                chainCount = chainCount + 1
-                                debug_print("Collected coin")
-                                if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 40 then
-                                    break 
-                                end
-                            else
-                                local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-                                if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
-                                      break 
-                                else
-                                    FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 20 then
-                                        debug_print("10x Fail Farm (Round). Hopping...")
-                                        SmartServerHop(true)
-                                        break
-                                      end
-                                end
-                            end
-                        end
-                    end
-
-                    if chainCount > 0 then
-                        task.wait(0.5)
-                    end
+                     visited[chainCoin] = true
+                     debug_print("Collected coin.")
+                     FailFarmCount = 0 -- Reset fail count on success
                 else
-                    FailFarmCount = FailFarmCount + 1
-                    debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 20 then
-                         debug_print("10x Fail Farm (Round). Hopping...")
+                     FailFarmCount = FailFarmCount + 1
+                     if FailFarmCount >= 10 then
                         SmartServerHop(true)
-                    end
+                     end
                 end
 			end
 		end
