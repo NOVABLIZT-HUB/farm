@@ -1791,7 +1791,7 @@ local function Start_Farm()
                     end
 
                     if chainCount > 0 then
-                        task.wait(0.6)
+                        task.wait(0.5)
                     end
                 else
                     FailFarmCount = FailFarmCount + 1
@@ -1838,6 +1838,6 @@ while true do
 	while tick() - lastPing < 10 do
 		task.wait(5)
 	end
-
+	setfflag("NextGenReplicatorEnabledWrite4", "true")
 	lastPing = tick()
 end
