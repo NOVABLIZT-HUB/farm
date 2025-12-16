@@ -6,7 +6,7 @@ end
 _G.Start = true
 
 local Default_Config = {
-	["CPU Saver"] = true,
+	["CPU Saver"] = false,
 
 	["Auto Open"] = {
 		["Enabled"] = false,
@@ -1532,18 +1532,15 @@ local function Start_Farm()
 
 	while task.wait(0.3) do
 		lastPing = tick()
-		
-		-- FIX: changed '== -1' to '<= 0' to catch the cutscene phase (Time 0)
-		-- This prevents it from thinking the round is active during the "Winner" screen
 		if
-			RoundTimerPart:GetAttribute("Time") <= 0
+			RoundTimerPart:GetAttribute("Time") == -1
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
-			if RoundTimerPart:GetAttribute("Time") <= 0 then
-				StatusText.Text = "Status: Round ended. Waiting for new round..."
+			if RoundTimerPart:GetAttribute("Time") == -1 then
+				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
 			else
-				StatusText.Text = "Status: Died/Waiting for Round to End..."
+				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
 			end
 			task.wait(0.6)
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1557,10 +1554,8 @@ local function Start_Farm()
                     WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
 				end
 				task.wait(1)
-			-- FIX: Wait until time is greater than 0 (Round actually started)
-			until RoundTimerPart:GetAttribute("Time") > 0
-				and (RoundData and RoundData[player.Name] and not RoundData[player.Name]["Dead"])
-			
+			until RoundTimerPart:GetAttribute("Time") ~= -1
+				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1582,46 +1577,94 @@ local function Start_Farm()
 		end
 
 		ClearMap()
+		
 		GoodPeopleCount = 0
+
+		-- for _ in pairs(GoodPlayers or {}) do
+		-- 	GoodPeopleCount = GoodPeopleCount + 1
+		-- end
+
+		-- print("KILL_BAD_PEOPLE:", cfg.Misc.KILL_BAD_PEOPLE, "GoodPeopleCount:", GoodPeopleCount)
+
+		-- if cfg.Misc.KILL_BAD_PEOPLE and GoodPeopleCount ~= 0 then
+		--     local knife = character:FindFirstChildOfClass("Tool") or player.Backpack:FindFirstChildOfClass("Tool")
+		--     print("Knife found:", knife and knife.Name or "nil")
+		
+		--     if knife and knife.Name == "Knife" then
+		--         if knife.Parent == player.Backpack then
+		--             print("Moving knife to character")
+		--             knife.Parent = character
+		--         end
+			
+		--         for _, target in ipairs(Players:GetPlayers()) do
+		--             print("Checking target:", target.Name)
+		--             if target ~= player and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and knife:FindFirstChild("Handle") and not GoodPlayers[target] then
+		--                 print("Attacking target:", target.Name)
+		--                 knife:Activate()
+		--                 firetouchinterest(target.Character.HumanoidRootPart, knife.Handle, 0)
+		--                 firetouchinterest(target.Character.HumanoidRootPart, knife.Handle, 1)
+		--             else
+		--                 print("Skipping target:", target.Name)
+		--             end
+		--         end
+		--     else
+		--         print("No valid knife found or wrong tool")
+		--     end
+		-- else
+		--     print("KILL_BAD_PEOPLE is false or GoodPeopleCount is 0")
+		-- end
+
+
 
 		if isFirstCoinOfRound then
 			local coinToTeleport = FindCoin(true)
 			
 			if type(coinToTeleport) == "string" then
 				if coinToTeleport == "Dead" then
-					StatusText.Text = "Status: You died! Waiting for round end..."
-					
-                    if HumanoidRootPart then
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					end
-                    
-                    -- Wait for round to hit 0 or -1
+					StatusText.Text = "Status: You are dead!"
 					repeat
+						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
-					until RoundTimerPart:GetAttribute("Time") <= 0
-					
-					StatusText.Text = "Status: Round Ended."
+						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+						HumanoidRootPart, Humanoid = GetHumanoid()
+					until HumanoidRootPart
+
+					StatusText.Text = "Status: Respawned!"
+					debug_print("Player respawned!")
+					for i = 1, 3 do
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
+						task.wait(0.3)
+					end
 					continue
 				end
 
 				if coinToTeleport == "Full" then
 					StatusText.Text = "Status: Coin inventory full! Resetting."
+					debug_print("Coin inventory full! Forcing reset...")
+					
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 						Humanoid.Health = 0
 						task.wait(0.3)
 					end
+
 					task.wait(1)
+					
+					repeat
+						StatusText.Text = "Status: Respawning..."
+						task.wait(1)
+						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+						HumanoidRootPart, Humanoid = GetHumanoid()
+					until HumanoidRootPart
+
+					StatusText.Text = "Status: Respawned!"
+					debug_print("Player respawned after 'Full' reset!")
+					for i = 1, 3 do
+						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+						task.wait(0.3)
+					end
 					continue
 				end
-
-                -- FIX: If no coins found, update status so it doesn't look stuck
-                if coinToTeleport == "NoCoins" then
-                     StatusText.Text = "Status: Waiting for Map/Coins..."
-                     task.wait(0.5)
-                     continue
-                end
-
 				task.wait(1)
 				continue
 			end
@@ -1636,11 +1679,13 @@ local function Start_Farm()
                 visited[coinToTeleport] = true
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-                debug_print("Teleported to first coin. Dist: " .. string.format("%.2f", Dist))
+                debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
                 task.wait(2)
             else
                 FailFarmCount = FailFarmCount + 1
+                debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
                 if FailFarmCount >= 10 then
+                    debug_print("10x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
                 end
             end
@@ -1648,26 +1693,47 @@ local function Start_Farm()
 		else
 			local status = FindCoin(false)
 			if status == "Dead" then
-				StatusText.Text = "Status: You died! Waiting for round end..."
-				if HumanoidRootPart then
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-				end
+				StatusText.Text = "Status: You are dead!"
 				repeat
+					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
-				until RoundTimerPart:GetAttribute("Time") <= 0
-				StatusText.Text = "Status: Round Ended."
+					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+					HumanoidRootPart, Humanoid = GetHumanoid()
+				until HumanoidRootPart
+
+				StatusText.Text = "Status: Respawned!"
+				debug_print("Player respawned!")
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					task.wait(0.3)
+				end
 				continue
 			elseif status == "Full" then
 				StatusText.Text = "Status: Coin inventory full! Resetting."
+				debug_print("Coin inventory full! Forcing reset...")
+				
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
 					Humanoid.Health = 0
 					task.wait(0.3)
 				end
+
 				task.wait(1)
+				
+				repeat
+					StatusText.Text = "Status: Respawning..."
+					task.wait(1)
+					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+					HumanoidRootPart, Humanoid = GetHumanoid()
+				until HumanoidRootPart
+
+				StatusText.Text = "Status: Respawned!"
+				debug_print("Player respawned after 'Full' reset!")
+				for i = 1, 3 do
+					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
+					task.wait(0.3)
+				end
 				continue
-            elseif status == "NoCoins" then
-                 StatusText.Text = "Status: Waiting for more coins..."
 			end
 
 			local chainCoin = FindNextChainCoin()
@@ -1679,6 +1745,7 @@ local function Start_Farm()
                 
                 if success then
                     visited[chainCoin] = true
+                   
                     local chainCount = 1
                     debug_print("Collected coin")
                     
@@ -1698,6 +1765,7 @@ local function Start_Farm()
                             break
                         else
                             local chainSuccess = TeleportToCoin(nextCoin)
+                          
                             if chainSuccess then
                                 visited[nextCoin] = true
                                 chainCount = chainCount + 1
@@ -1709,13 +1777,14 @@ local function Start_Farm()
                             else
                                 local currentData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
                                 if currentData and currentData[player.Name] and currentData[player.Name]["Coins"] >= 40 then
-                                    break 
+                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 20 then
+                                    if FailFarmCount >= 10 then
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break
-                                    end
+                                     end
                                 end
                             end
                         end
@@ -1726,7 +1795,9 @@ local function Start_Farm()
                     end
                 else
                     FailFarmCount = FailFarmCount + 1
-                    if FailFarmCount >= 20 then
+                    debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
+                    if FailFarmCount >= 10 then
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
