@@ -1712,7 +1712,7 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 10 then
+                                    if FailFarmCount >= 20 then
                                         SmartServerHop(true)
                                         break
                                     end
@@ -1726,7 +1726,7 @@ local function Start_Farm()
                     end
                 else
                     FailFarmCount = FailFarmCount + 1
-                    if FailFarmCount >= 10 then
+                    if FailFarmCount >= 20 then
                         SmartServerHop(true)
                     end
                 end
