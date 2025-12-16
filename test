@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.5 Christmass Update 🎄\n"
+local Version = "v2.5 Christmass Update 🎄 (Hop Fix)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -103,6 +103,8 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
+-- *** CONFIG ID GAME CHÍNH ĐỂ QUÉT VÀ HOP ***
+local TargetPlaceId = 142823291 
 
 local headers = {
 	["Content-Type"] = "application/json",
@@ -1278,12 +1280,13 @@ local function GetTargetServers()
     local pagesScanned = 0
     local maxPages = 20 
 	
-	debug_print("Đang quét sâu danh sách servers (".. maxPages .." trang)...")
+	debug_print("Đang quét sâu danh sách servers (".. maxPages .." trang) cho ID: " .. TargetPlaceId)
 	
     repeat
         local success, data = pcall(function()
             local sort = cfg["ServerHop"]["SortOrder"] or "Asc"
-            local url = Api .. PlaceId .. "/servers/Public?sortOrder=" .. sort .. "&limit=100&excludeFullGames=true"
+            -- MODIFIED: Use TargetPlaceId instead of PlaceId
+            local url = Api .. TargetPlaceId .. "/servers/Public?sortOrder=" .. sort .. "&limit=100&excludeFullGames=true"
             
             if cursor then
                 url = url .. "&cursor=" .. cursor
@@ -1372,7 +1375,8 @@ SmartServerHop = function(forceAnyBackup)
         table.remove(ServerHopData.BackupIds, randomIndex)
 
         local hopSuccess, hopError = pcall(function()
-           --  TeleportService:TeleportToPlaceInstance(PlaceId, jobId, player)
+            -- MODIFIED: Use TargetPlaceId
+             TeleportService:TeleportToPlaceInstance(TargetPlaceId, jobId, player)
         end)
 
         if hopSuccess then return true end
@@ -1380,10 +1384,9 @@ SmartServerHop = function(forceAnyBackup)
 
     if forceAnyBackup then
          debug_print("Last Resort: Random Hop API.")
-         local PlaceId = game.PlaceId
-         local Api = "https://games.roblox.com/v1/games/"
-     
-         local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+         
+         -- MODIFIED: Use TargetPlaceId
+         local _servers = Api..TargetPlaceId.."/servers/Public?sortOrder=Desc&limit=100"
          local function ListServers(cursor)
              local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
              return HttpService:JSONDecode(Raw)
@@ -1396,7 +1399,8 @@ SmartServerHop = function(forceAnyBackup)
              Next = Servers.nextPageCursor
          until Server
          
-        -- TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, player)
+         -- MODIFIED: Use TargetPlaceId
+         TeleportService:TeleportToPlaceInstance(TargetPlaceId, Server.id, player)
          return true
     end
     
