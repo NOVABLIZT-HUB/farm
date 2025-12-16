@@ -1,1719 +1,838 @@
-if _G.Start then
-	print("Script is already running.")
-	return
-end
-
-_G.Start = true
--- getgenv().Config = {}
-
-local Default_Config = {
-	--["Script_Key"] = "",
-	["CPU Saver"] = true,
-
-	["Auto Open"] = {
-		["Enabled"] = false,
-		["Crate"] = "",
-	},
-
-	["Webhook"] = {
-		["URL"] = "",
-		["UserID"] = "",
-		["Only Good Webhook"] = false,
-	},
-
-	["Other"] = {
-		["Auto Prestige"] = true,
-		["Auto Restart on Update"] = false,
-		["Auto Craft"] = false, -- not implemented yet
-	},
-
-	
-	["Event"] = {
-		["Auto Do Battle Pass"] = true,
-	},
-
-	["Misc"] = {
-		["FARM_MURDERER_SHERIF_WINS"] = true,
-		["STOP_MURDERER_AFTER_KILLS"] = 20,
-		["FPS"] = 3,
-
-		["AutoShutdown"] = {
-			["Mode"] = 1,  -- 1 = hop, 2 = close
-
-            ["Minutes"] = 0, -- Sends the x minutes for checking Coins shit
-            ["MinCoins"] = 0, -- Min Coins needed to have after x minutes
-
-			["Every Minutes"] = 0 -- Every x minutes force
-        },
-
-	}
-}
-
-local function mergeConfig(default, user)
-	if type(default) ~= "table" then
-		return user
-	end
-	user = user or {}
-	for k, v in pairs(default) do
-		if type(v) == "table" then
-			user[k] = mergeConfig(v, user[k])
-		elseif user[k] == nil then
-			user[k] = v
-		end
-	end
-	return user
-end
-
-local cfg = (getgenv and getgenv().Config) or _G.Config or {}
-cfg = mergeConfig(Default_Config, cfg)
-
-local Version = "v2.4.5 Original + RAM Fix" .. "\n"
-local NewestVersion
-local usernameRevealed = false
-local ChromaAnimation = false
-local last_print = ""
-
-local SessionCrates = 0
-local TotalStagesBought = 0
-local TotalWeapons = 0
-local TotalGodlies, TotalChromas = 0, 0
-
-local TotalRoundswithout30coinsplus = 0
-
-local CoreGui = game:GetService("CoreGui")
-local TeleportService = game:GetService("TeleportService")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local Terrain = Workspace:WaitForChild("Terrain")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SoundService = game:GetService("SoundService")
-local PhysicsService = game:GetService("PhysicsService")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
-local TweenService = game:GetService("TweenService")
-local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
-
-local Api = "https://games.roblox.com/v1/games/"
-local PlaceId = game.PlaceId
-local _servers = Api .. PlaceId .. "/servers/Public?sortOrder=Asc&limit=100&excludeFullGames=true"
-
-local headers = {
-	["Content-Type"] = "application/json",
-	["Cookie"] = ".ROBLOSECURITY=_|WARNING:-DO-NOT-SHARE-THIS.--Sharing-this-will-allow-someone-to-log-in-as-you-and-to-steal-your-ROBUX-and-items.|_CAEaAhAB.83AC569F43419E1C1D7906A03D3CFB5F86D9345E5EB159BE89FEB143297BEBCDAAD6EF9709ADEDB1F7408D13FC48AAC7F38A3A78D8B4EF507DA98433311161481B56EAE24EDD3F64EEE4E31AFB04A5282E70A5CDF78BDD8C29A30796FE06DFCA038B7ACA54E09D0A398D4A7AF9D0805F7AC44B3B6C0504202BC8A741E9A7D388B8B75F235E3588ED922D7425764D3E6AD996F2C9D9047B024550B1DF3BC322184823784E14B76FEFCD6A18C05DEA35CB372A6BE2F0A21A6BB6F6CE4ED370CA775CED029A2B608B4392B26DB996C6E83D8636CE06466EFA371D1E4E7C8F4AE2EDD8FD2D24B11316858DFB789F3CDFA7ADEB9976368E73031CDCEF395C034E8A5348CB26AC90EFDFD60064255486EE0D26842F937271AD65FC867031F7EF30A955EACAD07785E1272E6A7D579FCD94F2F3FEBD9B0425AF9ACBD85E786C4404DCDD77005157DF7F150C6B7A71185E01B0326065B4DCDAF8D375C1586CD8C995597614C09ACF28BD8B80B450FA2656E1152C4FD99758CFA45CEA0E856D8AC589E0FC8F77352DFF67FC4AAF1F859614E5FB48FB13C8E33CCF5CAD85D49DC36EDFEE79501DE77329CB9155B5A27BF4C333CBE413BE3E1BC0D0C8C97CC3C2B68EB59A4F7CE7BA1CED3B179FC2EC844E0F03337094DDC7B80B7996E398E643952BCC1BBE17A2136F7EBDF680D157D647E96F68B0F813B5BB293F60D1C0281B9F60C15F866B777E250BA4AB621711845799B773A8921C13F542CAAC45E5EC427AF5E91CC791ECE23D7205603F480F40059D7612C25F3C387966A194CC3D8AF2FCA0D6DADD6E2E5B4C234D65AF76DCC66F5AB129F2F2C92390005AF4B41E4F717F2FC141BECCAECD90F630CD2B46BACD35BADD72635CE50D9C56524F3F080E7C91169CCAD27B9F30BB3B5A961DF4928DA852FD8F56533ECE9936306CC543F34BCB6B38499AD72F02B57BA1BCF31773A696115EF6C7669615E17FF62DBCA96A6A4F20FA5E2C81DCFE445F4CF5A58A8841ADA7BB000E48570BEA4D0ED2736C0ACDFD1291FC25308E7107359C229DA706F67ADBC45C6F595CB55BCE7BA0FB83A16517FC88DDCBFCC8AC667BF9EDF11EB72F652177BC5CE26C46083F0CE4A4F391C00F0FD81E371E4560BC8769E5B3EEBBCCD06A7341AD0AEAD712597DC55774C433FB523D2FF8553EB9F4347F411BBE6090B9096D9844C20638D02B476BF9CBC5B18F692A1D0E199B04394373D6FA7A75F76834C43676EADE134DF9A0DFEE617B449861DEF793CC2178CF" -- dein Roblox Cookie hier einfÃ¼gen
-}
-
-local map = nil
--- REMOVED: local AllCoins = {} (Fix 1: Xóa bảng thừa thãi)
-local knife = nil
-local gun = nil
-local GoodPeople = {}
-local visited = {}
-
-
-repeat
-	task.wait()
-until game:IsLoaded()
-	and game.Players.LocalPlayer.Character
-	and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-	and Workspace:FindFirstChild("Lobby")
-
-if cfg["CPU Saver"] then
-	task.spawn(function()
-		while task.wait(5) do
-			setfpscap(cfg["Misc"]["FPS"])
-		end
-	end)
-end
-
-task.spawn(function()
-	if cfg["Other"]["Auto Restart on Update"] then
-		NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
-		while task.wait(600) do
-			NewestVersion = game:HttpGet("https://raw.githubusercontent.com/Paule1248/mm2/refs/heads/main/version")
-			if NewestVersion ~= Version then
-				
-			end
-		end
-	end
-end)
-
-
--- Clean up unnecessary Workspace objects
-Workspace:WaitForChild("Lobby"):Destroy()
-Workspace:WaitForChild("WeaponDisplays"):Destroy()
-Workspace:WaitForChild("PetContainer"):Destroy()
-Workspace:WaitForChild("EffectLoader"):Destroy()
-Workspace:WaitForChild("ServerStatus"):Destroy()
-Workspace:WaitForChild("GameSettings"):Destroy()
-
--- Set up player and round references
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local HumanoidRootPart = character:WaitForChild("HumanoidRootPart")
-local Humanoid = character:WaitForChild("Humanoid")
-local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local Database = ReplicatedStorage:WaitForChild("Database")
-local Sync = Database:WaitForChild("Sync")
-
-
-task.spawn(function()
-	local GC = getconnections or get_signal_cons
-
-	if GC then
-		for i, v in pairs(GC(player.Idled)) do
-			if v.Disable then
-				v:Disable()
-			elseif v.Disconnect then
-				v:Disconnect()
-			end
-		end
-	end
-
-	player.Idled:Connect(function()
-		VirtualUser:CaptureController()
-		VirtualUser:ClickButton2(Vector2.new())
-	end)
-
-end)
-
-
--- Set up Modules
-local Modules = ReplicatedStorage:WaitForChild("Modules")
-local SharedServices = ReplicatedStorage:WaitForChild("SharedServices")
-
-local LevelModule = require(Modules.LevelModule)
-local EventInfoService = require(SharedServices.EventInfoService)
-
-
--- Populate Godly and Chroma item lists
-local GodlyList = {}
-local ChromaList = {}
-
-for _, BoxData in pairs(require(Sync.MysteryBox)) do
-	if not BoxData.Godly then
-		for _, Item in pairs(BoxData.GodlyTable) do
-			table.insert(GodlyList, Item)
-		end
-	elseif type(BoxData.Godly) == "string" then
-		table.insert(GodlyList, BoxData.Godly)
-	end
-	if BoxData.ChromaTable then
-		for _, Item in pairs(BoxData.ChromaTable) do
-			table.insert(ChromaList, Item)
-		end
-	end
-end
-
-local RoundData = Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-local Data = require(Modules.ProfileData)
-local LastRoundData = nil
-
-local StartedCoins = 0
-local StartedStage = 0
-local Event = nil
-
-
-StartedCoins = Data.Materials.Owned[EventInfoService.GetEventCurrency()] or 0
-Event = EventInfoService:GetCurrentEvent()
-StartedStage = Data[Event.Title].CurrentTier
-
-
-
-local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
-local OwnedWeapons = Data["Weapons"]["Owned"]
-local totalCoins = StartedCoins
-
-local CoinsFolder = Instance.new("Folder")
-CoinsFolder.Name = "CoinsFolder"
-CoinsFolder.Parent = Workspace
-
--- [[ UPDATED PLATFORM LOGIC - FALL 8 STUDS ]] --
-local WalkingPlatform = Instance.new("Part")
-WalkingPlatform.Name = "WalkingPlatform"
-WalkingPlatform.Size = Vector3.new(5, 1, 5) -- 5x5 Size
-WalkingPlatform.Anchored = true
-WalkingPlatform.Transparency = 1 -- Invisible
-WalkingPlatform.CanCollide = true
-WalkingPlatform.Parent = Workspace
-
--- Initialize Platform Height variable (Default Safe Height - 8)
-local currentPlatformY = 142 
-
--- Loop to move platform horizontally (X/Z) but keep Y Fixed
-RunService.Heartbeat:Connect(function()
-	if HumanoidRootPart then
-		local rootPos = HumanoidRootPart.Position
-		
-		-- LOGIC: 
-		-- 1. Platform X/Z always tracks Player.
-		-- 2. Platform Y stays at `currentPlatformY` (which is set only on TP).
-		--    This forces the player to fall to the platform level if they are higher.
-		
-		WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
-	end
-end)
-
--- Initial Teleport to safety height
-HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-
---UI
-local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local RoleDisplay = Instance.new("TextLabel")
-local PrestigeLabel = Instance.new("TextLabel")
-local LevelLabel = Instance.new("TextLabel")
-local Title = Instance.new("TextLabel")
-local TimerLabel = Instance.new("TextLabel")
-local RevealUsernameButton = Instance.new("TextButton")
-local Logo = Instance.new("ImageButton")
-local StatusText = Instance.new("TextLabel")
-local TotalGodlyLabel = Instance.new("TextLabel")
-local TotalWeaponsLabel = Instance.new("TextLabel")
-local TotalChromasLabel = Instance.new("TextLabel")
-local CurrentCoinsLabel = Instance.new("TextLabel")
-local RoundCoinsLabel = Instance.new("TextLabel")
-local SessionCoinsLabel = Instance.new("TextLabel")
-local VersionLabel = Instance.new("TextLabel")
-
-ScreenGui.Parent = CoreGui
-ScreenGui.IgnoreGuiInset = true
-
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
-MainFrame.Size = UDim2.new(1, 0, 1, 0)
-
-if cfg["CPU Saver"] then
-	MainFrame.BackgroundTransparency = 0
-else
-	MainFrame.BackgroundTransparency = 0.5
-end
-
-RoleDisplay.Parent = MainFrame
-RoleDisplay.BackgroundTransparency = 1.000
-RoleDisplay.Position = UDim2.new(0.39165011, 0, 0.172029704, 0)
-RoleDisplay.Size = UDim2.new(0.200000018, 0, 0.100000001, 0)
-RoleDisplay.Font = Enum.Font.FredokaOne
-RoleDisplay.Text = "Role: Innocent (Placeholder)"
-RoleDisplay.TextColor3 = Color3.fromRGB(255, 255, 255)
-RoleDisplay.TextScaled = true
-
-PrestigeLabel.Parent = MainFrame
-PrestigeLabel.BackgroundTransparency = 1.000
-PrestigeLabel.Position = UDim2.new(0.390987396, 0, 0.376237631, 0)
-PrestigeLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
-PrestigeLabel.Font = Enum.Font.FredokaOne
-PrestigeLabel.Text = "Prestige: 0"
-PrestigeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-PrestigeLabel.TextScaled = true
-
-LevelLabel.Parent = MainFrame
-LevelLabel.BackgroundTransparency = 1.000
-LevelLabel.Position = UDim2.new(0.39165011, 0, 0.27722773, 0)
-LevelLabel.Size = UDim2.new(0.25, 0, 0.0962871313, 0)
-LevelLabel.Font = Enum.Font.FredokaOne
-LevelLabel.Text = "Level: 0"
-LevelLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-LevelLabel.TextScaled = true
-
-Title.Parent = MainFrame
-Title.BackgroundTransparency = 1.000
-Title.Position = UDim2.new(0.274353892, 0, 0.0284653474, 0)
-Title.Size = UDim2.new(0.450629562, 0, 0.128712878, 0)
-Title.Font = Enum.Font.FredokaOne
-Title.Text = "Hasty MM2 Coin Farmer"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextScaled = true
-
-TimerLabel.Parent = MainFrame
-TimerLabel.BackgroundTransparency = 1.000
-TimerLabel.Position = UDim2.new(0.25, 0, 0.8, 0)
-TimerLabel.Size = UDim2.new(0.6, 0, 0.15, 0)
-TimerLabel.Font = Enum.Font.FredokaOne
-TimerLabel.Text = "Time Farming: 00:00:00"
-TimerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TimerLabel.TextScaled = true
-
-RevealUsernameButton.Parent = MainFrame
-RevealUsernameButton.BackgroundTransparency = 1.000
-RevealUsernameButton.Position = UDim2.new(0.258805811, 0, 0.756079197, 0)
-RevealUsernameButton.Size = UDim2.new(0.465871423, 0, 0.074257426, 0)
-RevealUsernameButton.Font = Enum.Font.FredokaOne
-RevealUsernameButton.Text = "Reveal Username"
-RevealUsernameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-RevealUsernameButton.TextScaled = true
-
-Logo.Parent = MainFrame
-Logo.Size = UDim2.new(0, 100, 0, 100)
-Logo.Image = "rbxassetid://72063995210355"
-
-StatusText.Parent = MainFrame
-StatusText.BackgroundTransparency = 1.000
-StatusText.Position = UDim2.new(0.259112, 0, 0.560643554, 0)
-StatusText.Size = UDim2.new(0.465871423, 0, 0.126237631, 0)
-StatusText.Font = Enum.Font.FredokaOne
-StatusText.Text = "Status: Loading"
-StatusText.TextColor3 = Color3.fromRGB(255, 255, 255)
-StatusText.TextScaled = true
-
-TotalGodlyLabel.Parent = MainFrame
-TotalGodlyLabel.BackgroundTransparency = 1.000
-TotalGodlyLabel.Position = UDim2.new(0.0240000002, 100, 0.27722773, 0)
-TotalGodlyLabel.Size = UDim2.new(0.200000033, 0, 0.0962871313, 0)
-TotalGodlyLabel.Font = Enum.Font.FredokaOne
-TotalGodlyLabel.Text = "Godly: 0"
-TotalGodlyLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TotalGodlyLabel.TextScaled = true
-
-TotalWeaponsLabel.Parent = MainFrame
-TotalWeaponsLabel.BackgroundTransparency = 1.000
-TotalWeaponsLabel.Position = UDim2.new(0.0240000002, 100, 0.376237631, 0)
-TotalWeaponsLabel.Size = UDim2.new(0.200000018, 0, 0.0960000008, 0)
-TotalWeaponsLabel.Font = Enum.Font.FredokaOne
-TotalWeaponsLabel.Text = "Total: 0"
-TotalWeaponsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TotalWeaponsLabel.TextScaled = true
-
-TotalChromasLabel.Parent = MainFrame
-TotalChromasLabel.BackgroundTransparency = 1.000
-TotalChromasLabel.Position = UDim2.new(0.0240000002, 100, 0.172029704, 0)
-TotalChromasLabel.Size = UDim2.new(0.200000018, 0, 0.100000001, 0)
-TotalChromasLabel.Font = Enum.Font.FredokaOne
-TotalChromasLabel.Text = "Chromas: 0"
-TotalChromasLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TotalChromasLabel.TextScaled = true
-
-CurrentCoinsLabel.Parent = MainFrame
-CurrentCoinsLabel.BackgroundTransparency = 1.000
-CurrentCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.16707921, 0)
-CurrentCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
-CurrentCoinsLabel.Font = Enum.Font.FredokaOne
-CurrentCoinsLabel.Text = "Current Coins: 0"
-CurrentCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-CurrentCoinsLabel.TextScaled = true
-
-RoundCoinsLabel.Parent = MainFrame
-RoundCoinsLabel.BackgroundTransparency = 1.000
-RoundCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.375, 0)
-RoundCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
-RoundCoinsLabel.Font = Enum.Font.FredokaOne
-RoundCoinsLabel.Text = "Round Coins: 0"
-RoundCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-RoundCoinsLabel.TextScaled = true
-
-SessionCoinsLabel.Parent = MainFrame
-SessionCoinsLabel.BackgroundTransparency = 1.000
-SessionCoinsLabel.Position = UDim2.new(0.665341198, 0, 0.272277236, 0)
-SessionCoinsLabel.Size = UDim2.new(0.281510949, 0, 0.100000001, 0)
-SessionCoinsLabel.Font = Enum.Font.FredokaOne
-SessionCoinsLabel.Text = "Session Coins: 0"
-SessionCoinsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-SessionCoinsLabel.TextScaled = true
-
-VersionLabel.Parent = MainFrame
-VersionLabel.BackgroundTransparency = 1.0
-VersionLabel.Position = UDim2.new(0.85, 0, 0.95, 0)
-VersionLabel.Size = UDim2.new(0.15, 0, 0.05, 0)
-VersionLabel.Font = Enum.Font.SourceSansBold
-VersionLabel.Text = Version
-VersionLabel.TextColor3 = Color3.new(1, 1, 1)
-VersionLabel.TextScaled = true
-
-RevealUsernameButton.MouseButton1Click:Connect(function()
-	if not usernameRevealed then
-		RevealUsernameButton.Text = "Username: " .. player.Name
-		usernameRevealed = true
-	else
-		RevealUsernameButton.Text = "Reveal Username"
-		usernameRevealed = false
-	end
-end)
-
-consolecreate("DEBUG")
-local function debug_print(...)
-	last_print = ...
-	-- Optimization: Disabled spammy prints
-	-- print("[" .. player.Name .. "] " .. ...)
-	-- consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
-	
-	-- Only print important messages or throttle them
-	if string.find(..., "Status:") or string.find(..., "Collected") then
-		consoleprint("[" .. player.Name .. "] " .. ... .. "\n")
-	end
-end
-
-local lastStatus = ""
-local function SetStatus(text)
-	if lastStatus ~= text then
-		lastStatus = text
-		StatusText.Text = "Status: " .. text
-	end
-end
-
-local function CPUSaversIGMA()
-	if not cfg["CPU Saver"] then
-		return
-	end
-
-	local StartTime = tick()
-
-	Terrain.WaterReflectance = 0
-	Terrain.WaterTransparency = 1
-	Terrain.WaterWaveSize = 0
-	Terrain.WaterWaveSpeed = 0
-
-	Lighting.Brightness = 0
-	Lighting.GlobalShadows = false
-	Lighting.FogStart = 0
-	Lighting.FogEnd = math.huge
-	Lighting.ClockTime = 12
-	Lighting.Ambient = Color3.new(1, 1, 1)
-	Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
-	Lighting.ExposureCompensation = 0
-	Lighting.ShadowSoftness = 0
-
-	if sethiddenproperty then
-		sethiddenproperty(Lighting, "Technology", Enum.Technology.Compatibility)
-		sethiddenproperty(Terrain, "Decoration", false)
-		sethiddenproperty(Workspace, "StreamingEnabled", true)
-		sethiddenproperty(Workspace, "StreamingPauseMode", Enum.StreamingPauseMode.ClientPhysicsPause)
-		sethiddenproperty(Players, "CharacterAutoLoads", false)
-	else
-		warn("sethiddenproperty not available.")
-	end
-
-	SoundService.RespectFilteringEnabled = true
-	SoundService:SetListener(Enum.ListenerType.Camera)
-	SoundService.AmbientReverb = Enum.ReverbType.NoReverb
-
-	game:SetAttribute("DataModelMeshStreaming", false)
-	ReplicatedStorage:SetAttribute("ReplicateInstanceDestroy", false)
-
-	RunService:Set3dRenderingEnabled(false)
-	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-
-	player.PlayerGui:Destroy()
-	player.PlayerScripts:Destroy()
-
-	local success, err = pcall(function()
-		RunService:UnbindFromRenderStep("Humanoid")
-		RunService:UnbindFromRenderStep("Animation")
-	end)
-
-	local Services_To_Clear = {
-		game:GetService("Stats"),
-		Lighting,
-		CoreGui,
-		game:GetService("RobloxReplicatedStorage")
-	}
-
-	for _, Service in ipairs(Services_To_Clear) do
-		for _, package in ipairs(Service:GetChildren()) do
-			if package == ScreenGui then
-				continue
-			end
-			pcall(function()
-				package:Destroy()
-			end)
-		end
-	end
-
-    -- [[ DELETE ALL MAP LOGIC ]]
-	local function WorkspaceCleanerABitIDK(child)
-		task.wait(0.5)
-		if child.Name == "ThrowingKnife" or child.Name == "Firefly" or child.Name == "Footsteps" then
-			child:Destroy()
-			return
-		end
-		if child:FindFirstChild("HumanoidRootPart") then
-			character = player.Character or player.CharacterAdded:Wait()
-		end
-		
-        -- Protect Important Things
-        if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name then
-            return
-        end
-
-        -- Destroy Map Parts
-		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-             -- Keep CoinContainers if found inside map (handled by ProcessMap usually, but if we delete map, container goes too)
-             -- Assuming coins are extracted to CoinsFolder by ProccessMap which runs on ChildAdded
-             -- We delay destroy slightly to let scripts grab coins if needed, or just nuke it
-             pcall(function() child:Destroy() end)
-		end
-	end
-
-	for _,child in Workspace:GetChildren() do
-		WorkspaceCleanerABitIDK(child)
-	end
-	Workspace.ChildAdded:Connect(function(child)
-		WorkspaceCleanerABitIDK(child)
-	end)
-
-	for _,plr in ipairs(Players:GetPlayers()) do
-		if plr ~= player then
-			if plr:FindFirstChild("Backpack") and plr.Backpack:FindFirstChild("AlienPlushie") then
-				GoodPeople[plr.Name] = true
-			end
-
-			plr.ChildAdded:Connect(function(c)
-				if c.Name == "Backpack" then
-					c.ChildAdded:Connect(function(i)
-						if i.Name == "AlienPlushie" then
-							GoodPeople[plr.Name] = true
-						end
-					end)
-					c.ChildRemoved:Connect(function(i)
-						if i.Name == "AlienPlushie" then
-							GoodPeople[plr.Name] = nil
-						end
-					end)
-				end
-			end)
-
-			local bp = plr:FindFirstChild("Backpack")
-			if bp then
-				bp.ChildAdded:Connect(function(i)
-					if i.Name == "AlienPlushie" then
-						GoodPeople[plr.Name] = true
-					end
-				end)
-				bp.ChildRemoved:Connect(function(i)
-					if i.Name == "AlienPlushie" then
-						GoodPeople[plr.Name] = nil
-					end
-				end)
-			end
-		end
-	end
-
-	Players.PlayerAdded:Connect(function(plr)
-		if plr ~= player then
-			plr.ChildAdded:Connect(function(c)
-				if c.Name == "Backpack" then
-					c.ChildAdded:Connect(function(i)
-						if i.Name == "AlienPlushie" then
-							GoodPeople[plr.Name] = true
-						end
-					end)
-					c.ChildRemoved:Connect(function(i)
-						if i.Name == "AlienPlushie" then
-							GoodPeople[plr.Name] = nil
-						end
-					end)
-				end
-			end)
-
-			local bp = plr:FindFirstChild("Backpack")
-			if bp then
-				bp.ChildAdded:Connect(function(i)
-					if i.Name == "AlienPlushie" then
-						GoodPeople[plr.Name] = true
-						-- debug_print("")
-					end
-				end)
-				bp.ChildRemoved:Connect(function(i)
-					if i.Name == "AlienPlushie" then
-						GoodPeople[plr.Name] = nil
-					end
-				end)
-			end
-		end
-	end)
-	
-	-- OPTIMIZATION: Fix Memory Leak in GoodPeople table
-	Players.PlayerRemoving:Connect(function(plr)
-		if GoodPeople[plr.Name] then
-			GoodPeople[plr.Name] = nil
-		end
-	end)
-
-	print("Script completed. Took " .. (tick() - StartTime) .. " seconds.")
-end
-
-local function SendMessageEMBED(url, embed)
-	local data = {
-		["embeds"] = {
-			{
-				["title"] = embed.title,
-				["description"] = embed.description,
-				["color"] = embed.color,
-				["fields"] = embed.fields,
-				["timestamp"] = embed.timestamp,
-				["footer"] = {
-					["text"] = embed.footer.text,
-				},
-			},
-		},
-	}
-	request({
-		Url = url,
-		Method = "POST",
-		Headers = headers,
-		Body = HttpService:JSONEncode(data),
-	})
-end
-
-local function SendMessageWithEmbedAndPing(embed)
-	local data = {
-		["content"] = "<@" .. cfg["Webhook"]["UserID"] .. ">",
-		["embeds"] = {
-			{
-				["title"] = embed.title,
-				["description"] = embed.description,
-				["color"] = embed.color,
-				["fields"] = embed.fields,
-				["footer"] = {
-					["text"] = embed.footer.text,
-				},
-			},
-		},
-	}
-	request({
-		Url = cfg["Webhook"]["URL"],
-		Method = "POST",
-		Headers = headers,
-		Body = HttpService:JSONEncode(data),
-	})
-end
-
-
-local tries = 0
-local ready = false
-local StartHumanoid = tick()
-local GetHumanoidConn = nil
-
-local function GetHumanoid()
-	character = player.Character
-	tries = 0
-
-	while tries < 60 do
-		character = character or player.Character
-		if character then
-			HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-			Humanoid = character:FindFirstChild("Humanoid")
-			if HumanoidRootPart and Humanoid then
-				return HumanoidRootPart, Humanoid
-			end
-		end
-
-		ready = false
-		GetHumanoidConn = player.CharacterAdded:Connect(function(c)
-			character = c
-			ready = true
-		end)
-
-		StartHumanoid = tick()
-		while not ready and tick() - StartHumanoid < 1 do
-			wait(0.05)
-
-		end
-
-		GetHumanoidConn:Disconnect()
-		GetHumanoidConn = nil
-
-		tries = tries + 1
-		task.wait()
-	end
-
-	return nil, nil
-end
-
-local startTime = os.time()
-local function updateTimer()
-	TimerLabel.Text = string.format(
-		"Time Farming: %02d:%02d:%02d",
-		math.floor((os.time() - startTime) / 3600),
-		math.floor(((os.time() - startTime) % 3600) / 60),
-		(os.time() - startTime) % 60
-	)
-end
-
-
-local function getCurrentCoins()
-	return Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0
-end
-
-local lastShutdownCheck = tick()
-local TotalSessionChecks = 1
-
-local function updatePlayerInfo()
-	Data = require(Modules.ProfileData)
-	RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-
-	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
-	LevelLabel.Text = "Level: " .. PlayerLevel .. " (" .. Data.NewXP .. "/" .. NextLevelXP .. ")"
-	PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
-
-	totalCoins = getCurrentCoins()
-	CurrentCoinsLabel.Text = "Current Coins: " .. totalCoins
-
-
-	OwnedWeapons = Data["Weapons"]["Owned"] or {}
-
-	TotalWeapons = 0
-	TotalGodlies, TotalChromas = 0, 0
-
-	for weapon, weaponamount in pairs(Data["Weapons"]["Owned"] or {}) do
-		if table.find(GodlyList, weapon) then
-			TotalGodlies = TotalGodlies + weaponamount
-		elseif table.find(ChromaList, weapon) then
-			TotalChromas = TotalChromas + weaponamount
-		end
-		TotalWeapons = TotalWeapons + weaponamount
-	end
-
-	TotalChromasLabel.Text = "Chromas: " .. tostring(TotalChromas)
-	TotalGodlyLabel.Text = "Godly: " .. tostring(TotalGodlies)
-	TotalWeaponsLabel.Text = "Total: " .. tostring(TotalWeapons)
-
-	if TotalChromas >= 1 and not ChromaAnimation then
-		ChromaAnimation = true
-		task.spawn(function()
-			while ChromaAnimation do
-				for i = 0, 1, 0.01 do
-					MainFrame.BackgroundColor3 = Color3.fromHSV(i, 1, 1)
-					task.wait()
-				end
-			end
-		end)
-	end
-
-	if cfg["Auto Open"]["Enabled"] and tonumber(Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0) >= 800 then
-		print("NIGGER")
-		local Item = ReplicatedStorage.Remotes.Shop.OpenCrate:InvokeServer(cfg["Auto Open"]["Crate"], "MysteryBox", "Candies2025")
-
-		SessionCrates = SessionCrates + 1
-		if
-			Item
-			and type(cfg["Webhook"]["URL"]) == "string"
-			and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks")
-		then
-			debug_print("Crate opened. Item received: " .. (Item or "Unknown"))
-			Data = require(Modules.ProfileData)
-			local OwnedWeapons = Data["Weapons"]["Owned"] or {}
-
-			TotalWeapons = #OwnedWeapons
-			TotalGodlies, TotalChromas = 0, 0
-			for weapon, weaponamount in pairs(Data["Weapons"]["Owned"] or {}) do
-				if table.find(GodlyList, weapon) then
-					TotalGodlies = TotalGodlies + weaponamount
-				elseif table.find(ChromaList, weapon) then
-					TotalChromas = TotalChromas + weaponamount
-				end
-			end
-			local embed = {
-				title = "",
-				description = "",
-				color = 65280,
-				fields = {},
-				footer = {
-					text = "Hasty MM2 Coin Farmer",
-				},
-				timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-			}
-
-			table.insert(embed.fields, {
-				name = "Item",
-				value = tostring(Item),
-				inline = false,
-			})
-			table.insert(embed.fields, {
-				name = "Username",
-				value = tostring(player.Name),
-				inline = false,
-			})
-			table.insert(embed.fields, {
-				name = "Total Godlies",
-				value = tostring(TotalGodlies),
-				inline = true,
-			})
-			table.insert(embed.fields, {
-				name = "Total Chromas",
-				value = tostring(TotalChromas),
-				inline = true,
-			})
-
-			if table.find(GodlyList, Item) then
-				embed.color = 16776960
-				embed.title = "Crate Opened with a Godly Item"
-				embed.description = "Congratulations! You received a rare Godly Item."
-				SendMessageWithEmbedAndPing(embed)
-			elseif table.find(ChromaList, Item) then
-				embed.color = 16711935
-				embed.title = "Crate Opened with a Chroma Item"
-				embed.description = "Nice! You received an exclusive Chroma Item."
-				SendMessageWithEmbedAndPing(embed)
-			else
-				if not cfg["Webhook"]["Only Good Webhook"] then
-					embed.title = "Crate Opened with an Ordinary Item"
-					embed.description = "You received a normal item."
-					embed.color = 65280
-					SendMessageEMBED(cfg["Webhook"]["URL"], embed)
-				end
-			end
-			embed = nil
-			Item = nil
-		end
-	end
-
-	if cfg["Other"]["Auto Prestige"] then
-		if PlayerLevel == 100 and player:GetAttribute("Prestige") < 10 then
-			Remotes.Inventory.Prestige:FireServer()
-			PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
-		end
-	end
-
-
-	local function ClaimRewards()
-		for tierStr, rewardData in pairs(EventInfoService:GetBattlePass().Rewards) do
-			local tier = tonumber(tierStr)
-			local isClaimed = Data[Event.Title].ClaimedRewards[tierStr]
-			local isUnlocked = tier <= Data[Event.Title].CurrentTier
-			local hasItem = rewardData.ItemID ~= ""
-			
-			if isUnlocked and not isClaimed and hasItem then
-				task.wait()
-				EventInfoService:GetEventRemotes().ClaimBattlePassReward:FireServer(tonumber(tierStr))
-			end
-		end
-	end
-	ClaimRewards()
-	if cfg["Event"]["Auto Do Battle Pass"] then
-		if tonumber(totalCoins) >= tonumber(800) then
-			if Data[Event.Title].CurrentTier ~= 25 then
-				Remotes.Events.Generic.BuyTiers:FireServer(1)
-				task.wait()
-				Data = require(Modules.ProfileData)
-				task.wait()
-				if StartedStage < Data[Event.Title].CurrentTier then
-					TotalStagesBought = Data[Event.Title].CurrentTier - StartedStage
-				end
-				ClaimRewards()
-			elseif Data[Event.Title].CurrentTier == 25 and tonumber(totalCoins) >= tonumber(90000) then
-				Remotes.Events.Generic.BuyFinalReward:FireServer()
-				task.wait()
-				if type(cfg["Webhook"]["URL"]) == "string" and string.find(cfg["Webhook"]["URL"], "https://discord.com/api/webhooks") then
-					for weapon, weaponamount in pairs(OwnedWeapons) do
-						if table.find(GodlyList, weapon) then
-							TotalGodlies = TotalGodlies + weaponamount
-						elseif table.find(ChromaList, weapon) then
-							TotalChromas = TotalChromas + weaponamount
-						end
-						TotalWeapons = TotalWeapons + weaponamount
-					end
-					local embed = {
-						title = "Claimed Battle Pass Tier 25",
-						description = "",
-						color = 65280,
-						fields = {},
-						footer = {
-							text = "Hasty MM2 Coin Farmer",
-						},
-						timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-					}
-					table.insert(embed.fields, {
-						name = "Item",
-						value = tostring("Raygun"),
-						inline = false,
-					})
-					table.insert(embed.fields, {
-						name = "Username",
-						value = tostring(player.Name),
-						inline = false,
-					})
-					table.insert(embed.fields, {
-						name = "Total Godlies",
-						value = tostring(TotalGodlies),
-						inline = true,
-					})
-					table.insert(embed.fields, {
-						name = "Total Chromas",
-						value = tostring(TotalChromas),
-						inline = true,
-					})
-					SendMessageWithEmbedAndPing(embed)
-				end
-			end
-		end
-		ClaimRewards()
-	end
-
-	SessionCoinsLabel.Text = "Session Coins: " .. totalCoins - StartedCoins + (SessionCrates * 1000) + (TotalStagesBought * 800)
-	
-	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
-	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
-	        lastShutdownCheck = tick()
-	        TotalSessionChecks = TotalSessionChecks + 1
-	        if totalCoins <= cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks then
-	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
-					loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
-				else
-					game:Shutdown()
-				end
-	        end
-	    end
-	end
-
-	if cfg["Misc"]["AutoShutdown"]["Every Minutes"] ~= 0 then
-	    if os.time() - startTime >= cfg["Misc"]["AutoShutdown"]["Every Minutes"] * 60 then
-	        loadstring(game:HttpGet("https://raw.githubusercontent.com/Paule1248/Open-Source/refs/heads/main/Utils/Serverhop%20Low"))()
-	    end
-	end
-
-
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
-		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
-		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
-	else
-		RoleDisplay.Text = "Role: No Round"
-		RoundCoinsLabel.Text = "Round Coins: 0"
-	end
-	Data = nil
-	PlayerLevel, NextLevelXP = nil, nil
-end
-
-task.spawn(function()
-	while true do
-		updateTimer()
-		updatePlayerInfo()
-		task.wait(.5)
-		task.spawn(function()
-			RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-		end)
-		task.wait(.5)
-	end
-end)
-
-
-local function ClearMap()
-	if map then
-		for _, child in ipairs(map:GetChildren()) do
-			if child:IsA("Model") and child.Name ~= "CoinContainer" then
-				child:Destroy()
-			end
-		end
-	end
-end
-
-local function ProccessMap(child)
-	if not child:GetAttribute("MapID") then return end
-
-	repeat task.wait() until child:FindFirstChild("CoinContainer")
-
-	print("Map found: " .. child.Name)
-
-	local conn = nil
-	AllCoins = {}
-	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
-		if not coin or coin:GetAttribute("Collected") then return end
-
-		table.insert(AllCoins, coin)
-
-		task.wait(0.5)
-		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
-			coin.CoinVisual:Destroy()
-		end
-
-		coin.Parent = CoinsFolder
-		coin:SetAttribute("Collected", false)
-		coin.Transparency = 1
-	end)
-
-	while child.CoinContainer and child.CoinContainer.Parent == child do
-		task.wait()
-	end
-
-	if conn then conn:Disconnect() end
-end
-
-
-local function calculateTime(distance)
-	local t = 0.024 * distance + 0.2
-	if t < 2.5 then
-		t = 2
-	end
-	return t
-end
-
-task.spawn(function()
-	for _, child in ipairs(Workspace:GetChildren()) do
-		ProccessMap(child)
-	end
-end)
-
-
-
-local MapMove_handler = Workspace.ChildAdded:Connect(function(child)
-	ProccessMap(child)
-end)
-
-local lastPing = tick()
-
---// Teleport to Coin
-local function TeleportToCoin(coin)
-	if not HumanoidRootPart or not Humanoid or not coin or not coin.Position then
-		return
-	end
-
-	if not coin:FindFirstChild("TouchInterest") then
-		-- debug_print("Coin " .. (coin.Name or "unknown") .. " already collected (pre-teleport).")
-		return
-	end
-
-	local pos = coin.Position
-	local currentPos = HumanoidRootPart.Position
-	local directionVector = (pos - currentPos)
-
-	if directionVector.Magnitude < 0.1 then
-		HumanoidRootPart.CFrame = CFrame.new(pos)
-        -- [[ PLATFORM SNAP UPDATE ]] --
-        currentPlatformY = pos.Y - 8
-        WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
-	else
-		local directionUnit = directionVector.Unit
-		local lookAtPos = pos + (directionUnit * 5)
-		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
-        -- [[ PLATFORM SNAP UPDATE ]] --
-        currentPlatformY = pos.Y - 8
-        WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
-	end
-
-	local startTime = tick()
-	
-			repeat
-				firetouchinterest(coin, HumanoidRootPart, 0)
-				task.wait()
-				firetouchinterest(coin, HumanoidRootPart, 1)
-				task.wait()
-		
-		if not coin or not coin:FindFirstChild("TouchInterest") then
-			break
-		end
-	until (tick() - startTime) > 1 
-    end
-
--- FIND COIN FUNCTIONS
-local function FindBestCoin(searchRadius, neighborRadius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local coinsInRadius = {}
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist <= searchRadius then
-			table.insert(coinsInRadius, coin)
-		end
-	end
-
-	if #coinsInRadius == 0 then
-		return nil
-	end
-
-	local bestCoin = nil
-	local maxNeighbors = -1
-
-	for _, coin in ipairs(coinsInRadius) do
-		local neighborCount = 0
-		for _, otherCoin in ipairs(allValidCoins) do
-			if coin ~= otherCoin then
-				local dist = (coin.Position - otherCoin.Position).Magnitude
-				if dist <= neighborRadius then
-					neighborCount = neighborCount + 1
-				end
-			end
-		end
-
-		if neighborCount > maxNeighbors then
-			maxNeighbors = neighborCount
-			bestCoin = coin
-		end
-	end
-
-	return bestCoin
-end
-
-local function FindNearestUnvisitedCoin(radius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local nearestCoin = nil
-	local minDistance = radius + 0.1
-
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist < minDistance then
-			minDistance = dist
-			nearestCoin = coin
-		end
-	end
-
-	return nearestCoin
-end
-
-local function FindRandomUnvisitedCoin(radius)
-	if not HumanoidRootPart then return nil end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then return nil end
-
-	local coinsInRadius = {}
-	for _, coin in ipairs(allValidCoins) do
-		local dist = (coin.Position - HumanoidRootPart.Position).Magnitude
-		if dist <= radius then
-			table.insert(coinsInRadius, coin)
-		end
-	end
-
-	if #coinsInRadius == 0 then
-		return nil
-	end
-
-	return coinsInRadius[math.random(1, #coinsInRadius)]
-end
-
-local function IsPlayerNearMe(checkRadius)
-	if not HumanoidRootPart then return false end
-	
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player then
-			local char = p.Character
-			if char then
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				local hum = char:FindFirstChild("Humanoid")
-				if hrp and hum and hum.Health > 0 then
-					local dist = (HumanoidRootPart.Position - hrp.Position).Magnitude
-					if dist < checkRadius then
-						return true 
-					end
-				end
-			end
-		end
-	end
-	
-	return false
-end
-
-
-local function CountPlayersNearPosition(position, checkRadius)
-	local playerCount = 0
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= player then
-			local char = p.Character
-			if char then
-				local hrp = char:FindFirstChild("HumanoidRootPart")
-				local hum = char:FindFirstChild("Humanoid")
-				if hrp and hum and hum.Health > 0 then
-					local dist = (position - hrp.Position).Magnitude
-					if dist < checkRadius then
-						playerCount = playerCount + 1
-					end
-				end
-			end
-		end
-	end
-	return playerCount
-end
-
-
-local function RandomWaterfallWait(
-	proximityRadius1, minWait1, maxWait1,
-	proximityRadius2, minWait2, maxWait2,
-	proximityRadius3, minWait3, maxWait3,
-	finalRadius, finalWait
-)
-	
-	-- 1. Chờ, Quét 15 stud
-	local wait1 = minWait1 + math.random() * (maxWait1 - minWait1)
-	-- debug_print("Waiting " .. string.format("%.2f", wait1) .. "s, then scanning " .. proximityRadius1 .. " stud...")
-	task.wait(wait1)
-	
-	local coin15
-	local isPlayerClose_P1 = IsPlayerNearMe(proximityRadius1)
-	
-	if isPlayerClose_P1 then
-		-- debug_print("Player is close (15)! Finding RANDOM coin in " .. proximityRadius1 .. " stud.")
-		coin15 = FindRandomUnvisitedCoin(proximityRadius1)
-	else
-		-- debug_print("Player is not close (15). Finding NEAREST coin in " .. proximityRadius1 .. " stud.")
-		coin15 = FindNearestUnvisitedCoin(proximityRadius1)
-	end
-
-	if coin15 then
-		return coin15 -- P1
-	end
-
-	-- 2. Chờ, Quét 25 stud
-	local wait2 = minWait2 + math.random() * (maxWait2 - minWait2)
-	-- debug_print("No coin in " .. proximityRadius1 .. " stud. Waiting " .. string.format("%.2f", wait2) .. "s, then scanning " .. proximityRadius2 .. " stud...")
-	task.wait(wait2)
-	
-	local coin25
-	local isPlayerClose_P2 = IsPlayerNearMe(proximityRadius2)
-	
-	if isPlayerClose_P2 then
-		-- debug_print("Player is close (25)! Finding RANDOM coin in " .. proximityRadius2 .. " stud.")
-		coin25 = FindRandomUnvisitedCoin(proximityRadius2)
-	else
-		-- debug_print("Player is not close (25). Finding NEAREST coin in " .. proximityRadius2 .. " stud.")
-		coin25 = FindNearestUnvisitedCoin(proximityRadius2)
-	end
-
-	if coin25 then
-		return coin25 -- P2
-	end
-
-	-- 3. Chờ, Quét 35 stud
-	local wait3 = minWait3 + math.random() * (maxWait3 - minWait3)
-	-- debug_print("No coin in " .. proximityRadius2 .. " stud. Waiting " .. string.format("%.2f", wait3) .. "s, then scanning " .. proximityRadius3 .. " stud...")
-	task.wait(wait3)
-	
-	local coin35
-	local isPlayerClose_P3 = IsPlayerNearMe(proximityRadius3)
-	
-	if isPlayerClose_P3 then
-		-- debug_print("Player is close (35)! Finding RANDOM coin in " .. proximityRadius3 .. " stud.")
-		coin35 = FindRandomUnvisitedCoin(proximityRadius3)
-	else
-		-- debug_print("Player is not close (35). Finding NEAREST coin in " .. proximityRadius3 .. " stud.")
-		coin35 = FindNearestUnvisitedCoin(proximityRadius3)
-	end
-
-	if coin35 then
-		return coin35 -- P3
-	end
-
-	-- 4. Chờ 0.5s, Quét 50 stud
-	-- debug_print("No coin in " .. proximityRadius3 .. " stud. Waiting " .. finalWait .. "s, then scanning " .. finalRadius .. " stud...")
-	task.wait(finalWait)
-	
-	local coin50
-	local isPlayerClose_P4 = IsPlayerNearMe(finalRadius)
-	
-	if isPlayerClose_P4 then
-		-- debug_print("Player is close (50)! Finding RANDOM coin in " .. finalRadius .. " stud.")
-		coin50 = FindRandomUnvisitedCoin(finalRadius)
-	else
-		-- debug_print("Player is not close (50). Finding BEST coin in " .. finalRadius .. " stud.")
-		coin50 = FindBestCoin(finalRadius, 40)
-	end
-
-	if coin50 then
-		return coin50 -- P4
-	end
-
-	-- debug_print("No neighbor coin found in 15, 25, 35, or 50 studs. Chain broken.")
-	return nil
-end
-
-
-local function FindNextChainCoin()
-	-- debug_print("Finding next chain coin...")
-
-	-- 1. Search 50 studs
-	-- debug_print("Scanning 50 studs...")
-	local coin50
-	local isPlayerClose_50 = IsPlayerNearMe(50)
-	
-	if isPlayerClose_50 then
-		-- debug_print("Player is close (50)! Finding RANDOM coin in 50 stud.")
-		coin50 = FindRandomUnvisitedCoin(50)
-	else
-		-- debug_print("Player is not close (50). Finding NEAREST coin in 50 stud.")
-		coin50 = FindNearestUnvisitedCoin(50)
-	end
-
-	if coin50 then
-		return coin50 -- Found coin in 50 studs
-	end
-
-	-- 2. Wait 0.5s, then search 100 studs
-	-- debug_print("No coin in 50 studs. Waiting 0.5s, then scanning 100 studs...")
-	task.wait(0.5)
-	
-	local coin100
-	local isPlayerClose_100 = IsPlayerNearMe(100)
-	
-	if isPlayerClose_100 then
-		-- debug_print("Player is close (100)! Finding RANDOM coin in 100 stud.")
-		coin100 = FindRandomUnvisitedCoin(100)
-	else
-		-- debug_print("Player is not close (100). Finding BEST coin in 100 stud.")
-		coin100 = FindBestCoin(100, 40)
-	end
-
-	if coin100 then
-		return coin100 -- Found coin in 100 studs
-	end
-
-	-- debug_print("No neighbor coin found in 50 or 100 studs. Chain broken.")
-	return nil
-end
-
-
-local function FindCoin(isFirst)
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] then
-		return "Dead"
-	end
-
-	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] == 40 then
-		return "Full"
-	end
-
-	if not HumanoidRootPart or not AllCoins then
-		return nil
-	end
-
-	local allValidCoins = {}
-	for _, coin in ipairs(CoinsFolder:GetChildren()) do
-		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-			table.insert(allValidCoins, coin)
-		end
-	end
-
-	if #allValidCoins == 0 then
-		-- debug_print("FindCoin: Found 0 total valid coins on map.")
-		return "NoCoins"
-	end
-	
-	if isFirst then
-		-- debug_print("FindCoin (Global): Picking a random coin from " .. #allValidCoins .. " total.")
-		local bestCoin = allValidCoins[math.random(1, #allValidCoins)]
-		return bestCoin
-	else
-		-- debug_print("FindCoin (Chain Start): Finding safest coin within 50 studs...")
-
-		local coinsInRadius = {}
-		for _, coin in ipairs(allValidCoins) do
-			if (coin.Position - HumanoidRootPart.Position).Magnitude <= 50 then
-				table.insert(coinsInRadius, coin)
-			end
-		end
-
-		if #coinsInRadius == 0 then
-			-- debug_print("FindCoin (Chain Start): No coins found within 50 studs.")
-			return "NoCoins"
-		end
-
-		local bestCoin = nil
-		local minPlayerCount = math.huge
-
-		for _, coin in ipairs(coinsInRadius) do
-			local playerCount = CountPlayersNearPosition(coin.Position, 50)
-			
-			if playerCount < minPlayerCount then
-				minPlayerCount = playerCount
-				bestCoin = coin
-			end
-
-			if minPlayerCount == 0 then
-				break
-			end
-		end
-
-		if bestCoin then
-			-- debug_print("FindCoin (Chain Start): Found safest coin with " .. minPlayerCount .. " players nearby.")
-			return bestCoin
-		else
-			-- debug_print("FindCoin (Chain Start): Logic failed, returning NoCoins.")
-			return "NoCoins" 
-		end
-	end
-end
-
-debug_print("Script started.")
-task.spawn(function()
-	CPUSaversIGMA()
-end)
-
-local function Start_Farm()
-	local isFirstCoinOfRound = true
-
-	while task.wait() do
-		lastPing = tick()
-		if
-			RoundTimerPart:GetAttribute("Time") == -1
-			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
-			or (RoundData and not RoundData[player.Name])
-		then
-			-- debug_print("Entered round wait block.")
-			if RoundTimerPart:GetAttribute("Time") == -1 then
-				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
-				-- debug_print("Round ended. Waiting for new round to start...")
-			else
-				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
-				-- debug_print("Waiting for round to end and new round to start...")
-			end
-			task.wait(0.5)
-			HumanoidRootPart, Humanoid = GetHumanoid()
-			-- SafetyPart.Position = Vector3.new(0, 100, 0) -- REMOVED
-			repeat
-				RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-				HumanoidRootPart, Humanoid = GetHumanoid()
-				if HumanoidRootPart then
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame + Vector3.new(0, 3, 0)
-                    -- UPDATED: Keep player in safe sky position, platform will follow
-                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-                    -- [[ PLATFORM SNAP UPDATE ]]
-                    currentPlatformY = 142 -- 150 - 8
-                    WalkingPlatform.CFrame = CFrame.new(0, currentPlatformY, 0)
-				end
-				task.wait(1)
-			until RoundTimerPart:GetAttribute("Time") ~= -1
-				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
-			task.wait(1)
-
-			HumanoidRootPart, Humanoid = GetHumanoid()
-			-- debug_print("After round wait, got HumanoidRootPart: " .. tostring(HumanoidRootPart))
-			if HumanoidRootPart then
-				HumanoidRootPart.Anchored = false
-				-- debug_print("Unanchored HumanoidRootPart.")
-				for i = 1, 3 do
-					-- HumanoidRootPart.CFrame = SafetyPart.CFrame
-                    HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					-- debug_print("Set HumanoidRootPart CFrame to safety platform, iteration " .. tostring(i))
-					task.wait(0.1)
-				end
-			end
-
-			StatusText.Text = "Status: New round active. Safe platform reached!"
-			debug_print("Status: New round active. Safe platform reached!")
-			
-			isFirstCoinOfRound = true
-            -- OPTIMIZATION: Clear Memory Tables
-			visited = {} 
-            CoinsFolder:ClearAllChildren()
-		end
-
-		ClearMap()
-		
-		if isFirstCoinOfRound then
-			-- debug_print("Doing Find Coin (First)...")
-			local coinToTeleport = FindCoin(true)
-			
-			if type(coinToTeletoCoin) == "string" then
-				-- debug_print("FindCoin Response: " .. coinToTeleport)
-				if coinToTeleport == "Dead" then
-					StatusText.Text = "Status: You are dead!"
-					-- debug_print("[DEBUG] Player died, waiting for respawn...")
-					repeat
-						StatusText.Text = "Status: Respawning..."
-						task.wait(1)
-						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-						HumanoidRootPart, Humanoid = GetHumanoid()
-					until HumanoidRootPart
-
-					StatusText.Text = "Status: Respawned!"
-					debug_print("Player respawned!")
-					-- SafetyPart.Position = Vector3.new(0, 100, 0)
-					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) -- SafetyPart.CFrame + Vector3.new(0, 3, 0)
-						task.wait(0.1)
-					end
-					continue
-				end
-
-				if coinToTeleport == "Full" then
-					StatusText.Text = "Status: Coin inventory full! Resetting."
-					debug_print("Coin inventory full! Forcing reset...")
-					
-					local resetStartTime = tick()
-					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
-						Humanoid.Health = 0
-						task.wait(0.1)
-					end
-
-					-- debug_print("Reset command sent. Waiting for respawn logic...")
-					task.wait(1)
-					
-					-- debug_print("[DEBUG] Player died (from 'Full'), waiting for respawn...")
-					repeat
-						StatusText.Text = "Status: Respawning..."
-						task.wait(1)
-						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-						HumanoidRootPart, Humanoid = GetHumanoid()
-					until HumanoidRootPart
-
-					StatusText.Text = "Status: Respawned!"
-					debug_print("Player respawned after 'Full' reset!")
-					-- SafetyPart.Position = Vector3.new(0, 100, 0)
-					for i = 1, 3 do
-						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-						task.wait(0.1)
-					end
-					continue
-				end
-				-- debug_print("No first coin found, waiting 1s...")
-				task.wait(1)
-				continue
-			end
-
-			if not coinToTeleport or not coinToTeleport.Position then
-				-- debug_print("Searching for first coin...")
-				task.wait()
-				continue
-			end
-
-			TeleportToCoin(coinToTeleport)
-			visited[coinToTeleport] = true
-			isFirstCoinOfRound = false
-			local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
-			debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist) .. " studs. Waiting 3 seconds.")
-			task.wait(2)
-
-		else
-			
-			local status = FindCoin(false)
-			if status == "Dead" then
-				StatusText.Text = "Status: You are dead!"
-				-- debug_print("[DEBUG] Player died, waiting for respawn...")
-				repeat
-					StatusText.Text = "Status: Respawning..."
-					task.wait(1)
-					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-					HumanoidRootPart, Humanoid = GetHumanoid()
-				until HumanoidRootPart
-
-				StatusText.Text = "Status: Respawned!"
-				debug_print("Player respawned!")
-				-- SafetyPart.Position = Vector3.new(0, 100, 0)
-				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					task.wait(0.1)
-				end
-				continue
-			elseif status == "Full" then
-				StatusText.Text = "Status: Coin inventory full! Resetting."
-				debug_print("Coin inventory full! Forcing reset...")
-				
-				local resetStartTime = tick()
-				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
-					Humanoid.Health = 0
-					task.wait(0.1)
-				end
-
-				-- debug_print("Reset command sent. Waiting for respawn logic...")
-				task.wait(1)
-				
-				-- debug_print("[DEBUG] Player died (from 'Full' in chain), waiting for respawn...")
-				repeat
-					StatusText.Text = "Status: Respawning..."
-					task.wait(1)
-					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
-					HumanoidRootPart, Humanoid = GetHumanoid()
-				until HumanoidRootPart
-
-				StatusText.Text = "Status: Respawned!"
-				debug_print("Player respawned after 'Full' reset!")
-				-- SafetyPart.Position = Vector3.new(0, 100, 0)
-				for i = 1, 3 do
-					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
-					task.wait(0.1)
-				end
-				continue
-			end
-
-			local chainCoin = FindNextChainCoin()
-			
-			if not chainCoin then
-				-- debug_print("No coin found (50->100 logic). Waiting 2 seconds.")
-				task.wait(2)
-			else
-				TeleportToCoin(chainCoin)
-				visited[chainCoin] = true
-				
-				chainCount = 1
-				debug_print("Collected chain coin #1/5")
-				
-				for i = 2, 5 do
-					local nextCoin = RandomWaterfallWait(
-						50, 0.5, 0.5,
-						50, 0.2, 0.4,
-						50, 0.3, 0.6,
-						50, 0.2, 0.4
-					)
-
-					if not nextCoin then
-						-- debug_print("RandomWaterfallWait returned nil. Chain broken.")
-						break
-					else
-						TeleportToCoin(nextCoin)
-						visited[nextCoin] = true
-						chainCount = chainCount + 1
-						debug_print("Collected chain coin #" .. chainCount .. "/5.")
-					end
-				end
-
-				if chainCount > 0 then
-					debug_print("Chain finished (ended at " .. chainCount .. " coins). Waiting 2 seconds.")
-					task.wait(0.5)
-				end
-			end
-		end
-
-
-		-- debug_print("RoundTime: " .. tostring(RoundTimerPart:GetAttribute("Time")) .. "...")
-	end
-end
-
-
-function SendMessage(message)
-	local http = game:GetService("HttpService")
-	local headers = {
-		["Content-Type"] = "application/json"
-	}
-	local data = {
-		["content"] = message .. last_print .. ", Patch 0",
-	}
-	local body = http:JSONEncode(data)
-	local response = request({
-		Url = "https://discord.com/api/webhooks/1414218018988359690/vqAgIrlWCTvKx7V8PKtu_WkTT3L6xS-DziFPbedpxPFy1PeCAp0s7KMV52_ebo0uTGpG",
-		Method = "POST",
-		Headers = headers,
-		Body = body
-	})
-	print("Sent to Discord")
-end
-
-while true do
-	local success, err = pcall(function()
-		-- LPH_NO_VIRTDOUGHUALIZE(function()
-			Start_Farm()
-		-- end)()
-	end)
-
-	if not success then
-		local trace = debug.traceback(err, 2)
-		SendMessage("\n```lua\n" .. trace .. "\n```")
-	end
-
-	while tick() - lastPing < 10 do
-		task.wait(5)
-	end
-
-	lastPing = tick()
-end
+cf76467b-9d3f-40d0-97eb-17fe07fbcbef
+b048ac34-9723-4531-a72f-3c8cb1820fbb
+7b8c8380-4ffb-4c97-bd7b-36ea14624ed0
+a73a3a31-81a3-4911-ae44-c5a860be868b
+6fe9f589-81ad-4471-afea-b5a0009fbbad
+05a46fe1-9c19-4f70-9036-13f7a083e04e
+8a29b50f-d6b2-4d34-b8fb-697731c62cf4
+988dfea4-cbe6-4fa7-bdc5-7acc904a97f1
+f06a3d02-ea8c-4ed8-91a5-6bbeeee5187e
+e84e090a-a8de-419b-99e9-a51e6232e039
+050869e0-6c17-40ce-ad39-4a5a8463efe1
+f51bf61b-c523-441e-b75d-59a35fd3c3b4
+ea301cff-d93a-4773-bc03-fe387dbb16a5
+75dc761a-f351-4510-8d1c-86ad6e466a27
+f5c8b4ea-872e-4586-a432-94b089a48b69
+3c4ba4ab-bfe4-4780-8195-d7ede40b1cbb
+bd145c6f-a8e5-4e3b-b054-a397aa50b8fe
+3afba431-7654-4a52-af37-f85fb3fbb09a
+198007ac-5d9d-4721-9311-b22fd3bf7f89
+799ff6a8-eee1-4b1a-a01e-4539021366a7
+38dfd119-70b9-4627-8be2-cf1fb038010e
+42c7111a-9350-4c95-8503-650f90627192
+6ea38f8f-8de5-496c-8dcf-daf5609c2124
+d2f7eb15-3c7f-4089-af79-7d1de9d86292
+284a07b3-1072-4c7d-b9ed-3a185a3bca0c
+8c3202a3-afc4-4bba-abf7-ad30d68c5be1
+17cec8aa-3556-4227-83b7-ef642986a605
+9d841730-48f7-451d-8c97-d6ee2ac6ff75
+6d468dca-d69e-4c5c-a2c0-510e13c614ff
+ae498cb2-b521-48fa-8c94-45c677d530ef
+83abc74a-9ae4-4989-be36-ba1a52d48922
+b9da1478-459f-4f1d-a9e6-52bd718328a8
+2704ba87-2015-4b6f-bc1c-e1a4d329af73
+c1953401-509c-498a-83b2-09976e5c42e2
+93c0eeb2-7681-47e2-99f1-a6a0269d5301
+6ec162a8-b6ee-40ef-a4fd-4aa258eb723c
+3da922a4-5e08-40d7-b091-80881ff84e18
+c299a837-ecf9-4e40-8a04-5ba4d44f2d78
+99540d02-a135-4df3-8392-659c523b7bcb
+d5a7e7ec-4539-4a10-8f43-5d8aa340585b
+7e625d0e-0622-4eb8-9386-a12b6dcdb296
+9ee755f0-f65a-419d-918b-2d5c384456ca
+b886f411-10bd-4c7f-8915-0b2cbd31bf29
+479cb5df-7b6f-42f6-8f07-431c190e115a
+8493dc8a-f159-4c3e-9d44-e1ad1d27ac4d
+f574851b-de4f-4262-baac-ee403b5845f0
+6a336610-db3a-4084-b5a3-382c2e7c91d9
+477932fb-0c3b-4e06-b3c1-43e72afed0cd
+b1977211-b5e0-4379-856a-5584872e0a83
+d2311cbd-fc47-4bf7-8ae8-ccb89cd4c252
+628e0917-bfca-4fa9-a630-1e1491f3700e
+19a800f0-8d2d-4f1d-a106-bc10782ce82f
+ba057d1c-ed10-438d-a3d1-c99d594876ed
+dc99f85b-98f5-4e88-81f6-3bfba03426c2
+26e15e5a-4e79-40e1-91e2-84c837d259fd
+a16d8580-69f3-4a7e-9a75-35938b9066aa
+9eabd54c-4a6a-458d-91ea-07fc7a87aa97
+11fa38ca-0285-45b5-9e6d-9fdc523697d1
+d4c7bd87-ea23-4c54-a29a-f5c5158d7d26
+9774a9df-5d09-40ab-bcdb-af987df5b043
+5dbc6ac8-3882-4c36-b286-e99a6bd66fc8
+70242f82-b4dd-4f30-8c53-d12e96cfdac7
+b94ac1ea-67e3-4561-93ce-4758a2ee9a69
+98895562-eccd-4f77-836e-da7071c7c390
+cf161d71-7eb7-4e5a-94b1-58ee706ba484
+6086b006-33fe-4531-92d5-9a62b90448d8
+1bb17f2b-4554-4b75-9255-023461125da3
+b88da5e4-b055-4156-9613-9ce10d6a0401
+82f29422-b8af-4015-94a5-effae3e89ae8
+4c587e73-a9a4-4fb7-acc0-01ecc0ad3668
+f5584564-daba-4226-8dd9-cce37a72e083
+f8d3a202-d6c0-4c72-8bcd-49120bdaa13f
+6fb29d7d-ba3c-4bbb-985f-f3e3ff084dec
+a1710f81-13cb-4935-80be-d22627ca4c68
+04c94aca-79c7-4785-80df-9ed47a4307e6
+0750a734-f2f8-439a-85bd-10441ceeff8b
+63f03937-79b4-4d39-b2fc-71c8a2faeee2
+1708e395-143b-45a0-8dc2-023ecc39d4be
+6c05d2fb-2733-4e98-b8c1-adee2fe4af8d
+dd3aa19a-74db-4b14-a9b1-7948dc9bc31c
+418bdfd2-9323-4d2f-98ca-ed4f35e5302c
+dddad25c-5a84-40b4-8fc0-591aeda2deb9
+65fbfd50-4821-4de0-9581-e40a3ae1fccf
+73c6c003-d13a-451c-8231-c9cbcb9b68e0
+4194a9fe-8628-4adf-b6c1-d36b48fa9cfb
+d3d745e5-d85c-48c7-9c65-2101f988837f
+e569a088-a9f5-4cd7-b111-7a732bf22dc5
+66ad2c44-6ab1-43f2-9dbe-843fb4722d3b
+3253b73b-d6bb-43f1-aaf6-4b9f0e78e10f
+890d06ac-bc2e-40bd-b908-a03a6ad35847
+ae45890e-4104-48e0-97ba-958698b2f0bf
+fa3f8780-cbde-4911-918b-034b6d28dae0
+dab9ad07-385a-4404-8ad2-d033157afe5e
+2b096709-5c42-4373-b2f6-84fe44a34281
+553e6668-7fe4-4216-9d8a-3aaee082354a
+e5fcf759-f2b0-45f4-aa48-1ed24d9fb494
+373c8b95-f948-4171-a146-08d3a3ac3d76
+1090b866-c4d2-4904-8cf8-85af42d9b9e1
+0acc829c-7c53-4121-8511-2e4db92f50e6
+fbea2e9a-958c-4fa9-8963-4beba5a4778a
+b33c2408-6984-40db-9dbe-ae0429f8f57e
+befb60ca-8cda-4b68-8a83-e828848703b3
+8f0856d7-4e7a-49bd-8544-f47e60b58521
+ebde3ce4-4214-4e88-a3d0-7e90d7c6d93d
+7815f2ee-4177-4d90-a497-895d8328dd34
+30af9d37-7061-4b56-a630-f17ac00f92ed
+12709992-0cdc-4ca9-a4ea-df3591e35fb5
+1b47a50c-c6ce-4f05-8019-70463cdc592d
+83fc43dd-707b-4043-8b09-43ae0234b281
+f871f3ef-7da5-405d-82d5-9a707ef01598
+7a75059d-14ab-403b-8827-6e8f16227501
+40fe31b9-37a0-4b18-93f1-5bf8d78bd4c5
+d685933b-6610-4f42-bcc2-be4f18c12af9
+23c72108-243c-4e97-9b0a-957f4cb1d6d9
+8bee58f3-2f6f-4078-a33e-79a24aa106de
+1c2215ec-0f2b-490c-9648-8e9fdf0ffb9f
+803626e5-e442-40ae-9f76-57c4a265ec1c
+5c0e97e1-40bb-4cba-a5a7-12deec1b5b77
+337650f8-ff23-47e7-a330-a68468f8f8b9
+6605aa2f-83bf-4e52-872f-75f5253dee2a
+8a389b56-047d-4f62-b098-20b330d929ed
+ba87c64c-ca97-4756-91e9-bfd45f3169b5
+3da3e19a-550a-435b-af7b-d4ffe9767c99
+fe992cb1-da0e-418d-a77f-7403554c335a
+aeffd2a8-62b7-4e2b-9267-fa40916e833f
+24e128bb-f769-42b5-b63e-717057d24a9e
+feb2faf7-b2d6-422a-8b8f-486fac3a0e34
+37600f41-096e-46e6-8dc3-a6a03ada2775
+1c1f12af-d9d3-495e-9b4b-fba89ebc8b10
+985a32ab-63f8-40df-80d9-2fb47871e0ec
+795cdc35-fd9a-4893-ab81-6e633b60828a
+265c3030-0f42-428b-8c36-439bfc5a2f20
+a0f6faec-0c9c-4e7b-a954-6fa85709b31d
+1852715d-9bcf-41f8-81bc-7291b19cf4a8
+89657d19-1f09-4a3f-a778-cdf26a7e0545
+d2b7dbdb-a7ba-4f68-8902-a45f9ed5e0d2
+91fad729-626d-43f7-9376-e52df4ab8c62
+563249c9-47c7-4bf3-b2e4-9aa8f22ec7d7
+11532162-4493-4613-b7b9-dfc80c374dfa
+c5c74534-d0fb-46fc-9106-648a18408487
+55ad6ac9-0e72-47f9-ac10-191977dd199b
+3fccd528-f417-41cc-bdda-59592d60598d
+daffce11-df82-4290-9d49-5046871abfed
+cb9cdbe7-639d-4397-832a-cded56860e5c
+a3299c78-051d-4a20-b3bb-20a45e28ca9d
+3133fe93-e62a-4204-aae3-568ebbd0efb2
+b62275ba-abbb-4e2c-a53c-62e33d19fc1e
+34a66002-a979-4c6a-a7a1-78ca14346c4d
+d35f6545-4744-40c2-b4b3-725207c43b14
+181ad029-f947-4fd7-b861-639723af485b
+aa921bec-fd46-4612-9434-e5406915eab2
+6cb3ff9e-0ab0-4f77-8728-657379f44e25
+fa9aa72e-6a54-45d8-bd34-b7e4c1f7c148
+01fea997-7217-4d42-83da-c24e04fdeb20
+1aa841e5-c0eb-43c6-b818-3b4d6c404dd0
+bc8269e3-440e-45f4-95eb-e2713ed4429c
+4eb3e3de-2f83-45a3-a461-d5fedec91744
+3d399ff3-eedd-4979-9446-bf76bd8b9fd4
+91da18f7-0e8f-4147-9a7e-978524306098
+a44999b4-09d8-4861-901c-c4dd6f4070c6
+7d173c9b-6a41-409e-bae2-a2b3e6179459
+c57e8c59-a143-4d93-b675-c443c90e5550
+ddb85f04-cc26-4386-a0c3-5e5071141965
+5017cd0f-66b4-4cb9-84b4-523367c52507
+af338956-ba60-40b2-9dd0-aee680e9402f
+af9729c9-9760-4f49-b993-6ea7c631d2e8
+0bd1d910-327a-4516-aa42-3c21dd02a476
+a2b23e7a-60d8-4ebe-b068-a26a3a3bc59e
+cf4fb010-f1e9-4bb1-9a04-91826d854283
+e10cab01-96b5-4bc9-a4f9-c5ef242924ef
+3ca93281-edaf-4991-9807-6bcac548a5a9
+276bc053-ce67-479d-b054-0a78b33e92b6
+dc05631d-37c7-410c-95af-498fbf5dec55
+2b061f51-5f90-48c6-b062-066362446997
+7fd1c664-77fe-4684-8140-64174dc92775
+d70b7aa6-0bad-4531-b498-57ab4ea1ed6d
+088c1ecd-7de8-4a42-b257-57ac32a44403
+d993cc55-44e2-467c-9775-1c2c6cab7b1f
+0b2dcbf1-862a-4da7-a659-ef0ab64789ab
+c681e9a7-ca3f-40a6-96a1-afe7a7918f69
+4fc86cd6-2db5-4d90-9802-9f1a97deafc5
+1feda1d1-7d25-4f9a-a504-3d40e4e32645
+b87b3d83-ef06-4388-9637-398c8e506b9b
+9d32a1d6-21f4-4b1a-822f-0b078bcbaa3a
+809f39eb-a9f6-4d2a-b549-5ec243482614
+b3025e93-eb0d-483d-a341-ecd0720de5b4
+8bf4bf75-9830-44d9-9047-5361e7aa001a
+7fde8a37-cf71-4be4-97ca-a4594bbebeb6
+8ee90581-24f7-4d36-a4d1-32a4af8415e7
+cf9e97c7-f0d7-47d6-b757-c6fbcff0f93a
+596dec46-ec34-4b35-9b33-4a181efc5327
+1dd0ae95-2282-4c2c-a1b5-3b9320eb76d4
+f0982acc-80c3-4abe-b94d-6c768db4d786
+86864742-fe38-4c60-bc5b-ad47d5908e27
+55ec86c8-3680-4f60-a663-aca47fc0531d
+b8367bee-9495-4f3e-93f7-b510838161ad
+b7f5f8dd-f9fd-48f8-adea-2133bd18187f
+a40b39e0-4167-409b-b006-0d53d65bd0ae
+4df98c32-9bd9-481c-aa3b-32a98144a92b
+7e7b60f8-6c41-478d-92d0-1340d533624c
+65710ba5-7eed-4501-b77c-bc91d09a945f
+cd54a436-396b-42db-8fab-6af1e6040ea9
+18cb180b-88ee-4e87-bb31-9a17d9a24e53
+3c3d5b5c-005d-41d8-abbb-2acbaf6eefc0
+ebbdfd58-cc30-4bca-980f-936caf7ac86d
+d6cffb33-80e1-4073-a03a-67014ce4d827
+f038f074-e009-448a-982c-617b97692101
+98784bf5-43f7-42b3-a98a-4dd8e5586912
+2212d549-be6c-495a-872b-80debeb52347
+7b21b123-7de8-4709-92c1-32536d31a166
+7aea37a6-4802-48d3-a64a-740b3c53b422
+1a1c396e-d8a2-4ea1-a12e-09e87a1111df
+07fb9411-9be9-4c6a-9d6f-713e8d1c6121
+be076db4-c04e-4787-b8a1-2755aa4dea7e
+9cc53818-f576-42a1-8fc1-48e9d23d6455
+7da63d7a-9f90-468b-a59b-8d379e6bb576
+1d89b074-d707-4e3c-8e45-ac2407048966
+3930b7c4-4e0b-4425-be8c-d1e85494c244
+2acb34c6-0b22-44b5-ab14-ae5400de5934
+8ac2b0c5-e311-4eea-89af-f3bd8e80c7d4
+38df15e8-a34f-4152-a411-0ba985dfcece
+084b2afb-d921-4c86-a902-3c922e55048b
+f58cd976-f722-441e-b733-b3eba90bab62
+c899d04a-8e4a-40a4-8b01-b018fa2b5646
+860527b3-cc12-4f82-9f0d-05fe646304a1
+547e1687-e9ed-4c19-b0a0-344ef397a8dd
+9c7f3282-39f6-4ba1-a363-1012c01f8f9a
+59d7e43e-4a0c-4458-89f7-b5cedf4389b3
+4c6c0028-98a0-40a8-ba94-c93320192da4
+dbd638b6-166c-4a48-9a2c-8e883b778c93
+e8c69e91-3cfa-4552-bdd7-631bd1290f09
+6ed5ad86-c106-4194-bc93-83e4c813cf67
+407ac529-e8d6-4522-a008-f962fef41552
+110832f2-81af-43cf-8335-d60656d28361
+23ad8748-3230-43b4-82d0-02262b2ff892
+2a57d999-04ac-4099-9c1f-1d3a4e991a34
+99cbfcbb-cfb0-4454-8167-fe320e6b0652
+bff9682f-db29-4678-97a0-33335561b30a
+ed7cd23b-79dd-4965-88d9-0f16d655bd0b
+cfc39f27-85d2-4151-94aa-50f90c246459
+e0ca492e-a3f8-42f5-bf03-9426de68cdda
+114b9ad1-83d9-4a8e-9ed0-dc8cb3f20896
+21b264b9-01ac-4379-b033-12746d4b4ab5
+8a024e30-268a-4dd0-83c8-997514f4bd0b
+c0a13c43-9314-4b9a-a524-07afcbf98a73
+0627c2b0-bd2c-42f8-9aa2-3e53c46ff3fc
+9a3469ea-0eb1-4141-852d-aab784546337
+dfb797e7-f2d9-479e-bcc3-ba2d78e59896
+c9ecbf97-0e84-403c-8b60-66a707676fc1
+1d0a11eb-b906-4b83-a652-10038b0d509b
+89570598-526a-4df4-bce8-5d3f8631398c
+7f296e55-98f2-4a36-900b-fdd17e981e6d
+bac02b3c-5336-4479-8fe0-eaf1ca21cc08
+8fc2a880-5c9f-4d9a-8b2a-07ef53d048c4
+8d90a4f0-aae8-4def-b46d-169c1db89ca0
+14e220b6-bfaf-4b15-b3b7-358851c7fa44
+2fda3359-ec86-42a2-9ab9-2b90cd66c425
+5deba4e1-c0ec-4032-9041-294fda14d3aa
+491f7214-3493-487e-9d45-055a2a11a385
+e26ec77c-58be-4f06-b9bb-dc030c434880
+b24cc0a2-13db-4b27-859f-bd37b3bf9d12
+8fd92627-af46-400c-ab1c-6e9befac6887
+2a1b1293-0dc9-46f7-8459-934d603e9050
+1735bedf-a613-4509-b26b-01f4a36d2e91
+0749638f-3ebd-4866-9852-24873f96e05c
+659a046a-7926-404e-9e63-cf45302a8a0c
+d737e9cb-61a1-45ae-9aef-636fa6cea16c
+26cefa0f-779c-4d75-a288-c51833f71cc3
+8349d708-162d-4fdf-ba0d-08b285bede93
+bd6f1620-f9b4-4039-a0c9-d601d72fc102
+27c5a44e-0a58-49e9-9a5f-08599dae91c4
+f9a45f7d-b29b-45a3-9441-8d3590d688c5
+2d15d55c-1990-4307-b39a-b6291008360f
+9bd9e3b1-0241-4230-ac04-9dad3f9b4ae4
+0e230dcf-9f87-476f-983e-ca87af8a5525
+f1e90f60-b19b-42ba-a105-cd4fa8f8e575
+8a062016-e56f-4b58-8271-b8346812fff3
+72ffe3cb-c4a0-4a61-8e68-b804c24815c8
+43efb06b-e390-4b99-9f52-842d27481fa5
+22910152-e37c-4e69-b681-338104c94c2f
+4c7a9629-1522-4797-9b37-0c2e28fac341
+88700f42-344f-4a41-84a7-de374792ed1e
+f2bbdb7a-d3a1-4383-b92f-5d901f400a4b
+69b4835a-84a8-41a8-91e6-8de66cf14e9a
+9d94c590-482f-4cec-8456-5895dc48623e
+24781a93-f67f-4933-8403-da8d576560de
+1527f597-9951-4045-b650-8727ee057703
+f43ad3ff-238c-4ec4-ab03-a1df11143f86
+03c1d86a-3f40-48b8-8f93-473bb771e730
+ce3a5ede-b6f8-44a4-81f9-6a47dfbb281f
+3b69548d-844f-4fa5-a49f-b241cd0f6408
+6fc2ef61-a6bf-478f-87ee-f47c4cb98d8e
+d10dc4f1-9665-4716-9caa-f047c1cc3055
+c4f4cd1a-855d-4c5e-968e-c0215a60f446
+7742b745-fd91-4c26-95f3-888603fc3869
+8212e09c-4269-4046-877e-f33633eacea1
+e464093a-a739-4c13-a3cb-9e242d64b07b
+4e87e443-0e5d-46ea-8d98-2574fcd8166a
+336bcc53-fcdd-4a13-ab4c-d043177e4511
+f81da30a-dee3-411a-bc42-5798c0cf249c
+644e3dec-1016-45e9-91ae-336b0c5cc7a4
+48281396-eac5-449b-b6b3-cd1f869d6e56
+6ba4cade-781d-43ec-9930-dc3957673ab6
+d14fb8b2-8e9a-4739-b9dd-a97c83c1c336
+305ffb8e-6c38-4517-bbec-e84e23e55544
+65e49db0-6b94-47ef-891d-d6fd1920fdac
+2f62058e-e3df-4349-b503-be444e8fb31b
+45eebbdc-a76b-41cb-8d92-d600c19b8f07
+49861ddf-4f95-4bb8-b666-b23d9cc47085
+a71ccb92-a334-4c1e-8ead-493951a324d2
+3ae4424a-afe8-408a-84d0-fdcd709b300e
+6bc7532d-df4d-47c8-bad9-321133413e4a
+96a52313-57c6-4d3d-b44e-87f991551f9a
+85e8983c-dfe2-4cb3-b4dc-d279ebebcec9
+232a24fa-1e08-4e6e-982a-745adcb1cfea
+286d0c67-19b0-43b9-bc97-952ad222b8d9
+a3ecfaef-c5d6-4560-9092-d3bc3f799df3
+e4aa5b33-fd18-4933-aa79-ad8558218a33
+2fb9878d-e482-4c31-beb9-aad3110b200c
+21579d55-2225-4eeb-843f-1e21ed487764
+1d5aad7a-143a-40ab-8dd0-2c5afa83a10c
+1a6f82a6-8c6a-436e-aea2-3a9a961e3990
+0bd12699-6353-4638-97b9-23bd23d056f7
+c86051fc-63a6-4cd9-a499-52e6c0563a41
+2691a1d3-09c1-4b85-8d86-3831db99670d
+c097d888-f416-43b9-82b7-c0c375a5a929
+bdbbd794-3894-4189-9a22-994a37c36e45
+4519812b-adbf-48cd-b73a-6a6d90dbcc5d
+0fa4e26f-287a-4704-973a-9d08610dee93
+0f6c5d0a-9802-4909-b983-bc8517389b9f
+c4ca4e11-7943-4491-af8c-cf438552751a
+9a6eb5a0-d95d-4e7b-ad2f-46adf5243f8c
+3ef27cd3-2c48-40e6-9ea6-9b32d7d4c501
+23f19cf0-fde6-4bd0-ba2a-fdf67fabca5b
+ba090272-b55b-4840-b5b4-e31e68a57015
+bf8960a9-cee0-469c-b689-2d6c09849c04
+24511cc8-c89b-441e-b108-48f0ba989c6e
+f46c1304-9d77-4bec-850f-1ebfcb8fef18
+b5b9c9ce-4ecd-4bcc-aea2-71058dba6a12
+86bbd81e-d951-4fbf-9bb1-73a2d292798d
+5fcb4d41-a763-411e-a055-63af11f77b0a
+dc45f897-a737-46c4-bdbc-e8895b5b1f5c
+3afe29ec-e5fe-4671-a461-7473c26514b8
+43c61682-4021-4adb-8ac0-0a2a4a276269
+6e07a0d4-ffba-43b8-9e17-9e98051001fd
+4b785611-59b6-4a61-8128-7a379ca77248
+67706a73-7c34-4822-9631-8c768734a755
+2cfcf87e-13db-461f-99a8-d33c808f3234
+f214859a-27ee-4be1-ab3b-890cbb136872
+104f1c95-d497-45d2-bd76-8ea7ec1e4dd3
+06a5be12-3a50-44de-a3d2-62ffe8b0d1ec
+9fdea1e1-1fcd-4182-b843-fe03d5e8df10
+fe7ac13a-c04d-4964-b110-29fc589095f1
+d487eb8c-e8dc-4f4a-935a-e34af0829215
+264afd7c-993c-45ef-a539-0ed8d0fc86e0
+62f9f817-26ec-403d-963c-254ac975d99f
+6d961b88-74c4-44d8-bedd-591a1fb36c41
+695c9d05-384d-4f54-baf8-2bb8176ad133
+ef8b0570-79f7-40d1-8e88-10f332151537
+89fa5fcf-c4da-438d-9c00-b763f450eb0f
+62b87945-f25a-4a77-a34c-0f29845b1a56
+c856337d-9037-4570-827c-ab85f7a9ceb7
+a829fb20-043c-4392-bfce-a3adbcbf6d46
+f9e8cc71-c4cc-4442-9f95-d526c04617b4
+8998b700-7dda-4932-8b76-2a42e82207f5
+7f51e3ea-c0bf-4035-91fe-73e529a0e2d2
+1d0d9f3e-f02e-4739-9321-8d90878149f7
+07e6f135-f1ae-47f4-bc57-5873c07c9856
+b3d726a3-0d32-4b9d-99bd-545bb49c9251
+792ad30f-0de8-4039-bf81-0173b141e795
+bccc1039-215f-4aa0-a958-b48fc09f7296
+b99585e3-ba2f-4d8d-97b5-067541cf38be
+9dced2f4-04c1-4154-8e85-91759e3f477b
+a5aba1a8-98c3-403b-9ec1-1b9f648bc59b
+56d1c305-17e3-49e8-886a-8181d731a960
+a4fce9e6-2a28-4981-a3b1-de69bf59318e
+d95efc71-f6c9-4704-bccb-5d11412c733a
+6cc12ed9-6eea-498b-9a76-9fcd86b3656b
+e2f4f6b3-f112-47af-a930-d276fed62b00
+715002c0-86a9-4a2c-be6a-67bd5dc0f719
+06490985-4911-4067-bca0-bfea97596fa9
+138f217d-47dd-4b04-87f0-07ba87a0cc6b
+3029c6bf-7565-4187-8b6e-fbb60819221e
+2744cb49-4ff9-4334-bfec-06c6f54c6fa9
+5ae94ff0-cddb-4bde-adeb-b6f190513202
+f9cd0008-a39b-4a48-a851-d08cc867f660
+7090472d-8821-4f4c-b371-44f3483fdad2
+6e2343ef-0294-4585-be6a-24d1afd088fd
+bae5505a-499b-4190-bee7-c20d9a377e61
+e4e16bde-efa6-4876-85b4-df8e25fb711a
+0aa6327e-77ff-4568-9660-586cecc0d25c
+07f7ce4b-b161-497d-82b8-ad732963d2ee
+a9c0c6d3-d037-4a24-8070-41c97a7c9aea
+ed5a49e0-18d0-43f8-bee1-8ab06ffe6ba5
+6e3ca571-078a-46a4-ae69-858432791888
+13d53da1-09bf-45a3-b02b-66a4ab80f4ac
+79dd879f-96c3-45a1-b805-44a2422803e3
+d5692376-114a-4a2c-b0c8-a94e13f879d9
+5e7df352-ad7d-47f4-9fab-5f040cba1b52
+6e8fe8a3-171f-414e-995d-b57d1b22d896
+15907568-191c-42cd-9e6f-981e99f7d785
+ad8a1580-3164-4379-b62c-410d58a750d0
+b3290db4-0093-48e3-93fa-a29b7ef9343f
+cf24e386-e8f0-4563-947c-e807da7a9d5f
+f5ee2818-5f57-460f-9685-d73972d293db
+eb89121a-48d3-4868-9ac6-9242c0dcc3df
+639021c0-9605-4439-b98f-9a8f6b7bbf23
+c5ca605b-926d-43f8-a8da-4e395db921b3
+ffe64b56-a0b4-4826-b6e1-64d45502c905
+9596f062-ea43-4a85-9784-e5d04948a426
+9f5b3430-9745-4ccf-b50b-3bb3e26a6386
+11de423c-a3fc-46c9-8435-9e47b277c7a0
+063f9709-d760-4d76-87ce-3bdd4d4ddd5e
+56adf75d-367e-4eeb-a7d3-2265bdd1c066
+35f1985a-2b86-4963-9918-37f3a6ba68c9
+dd33aab7-b0af-4d78-b4cb-f51ebfb11173
+e9f0e589-5891-4876-ae89-9aad9e3b066b
+b2e59911-7de4-4d21-bee2-95a7b77d0c00
+edb43e36-35c7-40f7-8db8-a9bf64f393c8
+83fcc1da-dc81-475f-84b8-f3abdc2be52b
+46f4c04b-6b4f-4fe0-87f7-e68d93d496c7
+e84454fc-b14c-4a5d-ba6b-6dbf5fc517ed
+4b5c0ef9-f5db-4494-bfd2-e6335394c5e6
+00a1b562-517c-42cd-b6f9-636fd0359cbc
+e9590ce4-6525-4ee6-b5a3-00f64d282335
+53daff87-40d6-4334-8457-76edf6f95ca9
+a4b17546-5eea-4b20-adcc-982cf7d6bac5
+00b8d427-a6d3-40d7-ae71-b81b83a05d02
+33f344e4-4580-4e6e-bcf8-574db00ad17e
+7031d63a-be46-4d05-b414-e4fec62fc806
+af0aed78-61d7-4f74-897b-788b3c8daa07
+eb2d79ea-38d1-47f7-b59c-98d55de0db32
+7fc5c125-ec5e-40fe-90a4-03763848c1ec
+87ac0b28-0fb9-4090-b3eb-e91df35c82ec
+af1f8bcc-6d73-4499-a649-30ace27a496d
+f02bdb1a-5375-4fd8-8e0c-d87a794800ea
+24f0f6fb-7972-4872-9f07-47d3944bafc2
+0141d7b3-51b3-4344-8ba7-2dc5f4d09d10
+d8ad70bd-7a3f-467d-953a-4ac5f072a1f0
+5d5547f6-776e-4d0e-9a4a-fef7cbd534ce
+12a40355-aa65-4fec-a2d5-bbc493033477
+e47e51de-127b-4120-b777-19a0650573fd
+c12ae726-6841-46ce-8a82-df9f2cc7cc89
+4fe0f284-d2b3-4d03-999f-5270b21f03d8
+bc8b254d-6c3e-45d0-911b-ab5ccf696fa4
+b4120ea2-d1b8-41e6-9490-0cc07b3cd3fb
+36dba28b-17f1-4e1e-b20f-7a1b341666a7
+3095d205-8e4c-443c-8e62-9938da7f1ecb
+acc067ef-a6ae-4519-8351-bee21571cd41
+6cd39bb2-e275-4fbc-8032-98780b773b58
+7c0383db-247c-46f8-a90b-7a52544fc0ad
+3bd6d5d4-e39c-446f-9ee6-7df9ee84abbc
+9968a758-89d0-4ff3-83f2-bdd4b7ccd93c
+77a1b935-d521-40a2-afb3-828b46d31943
+46cfb079-64c5-448a-ad1c-0b0dc7bd8282
+64809048-ca57-4ebd-bd1b-941167c94faf
+4422fd0e-7b85-4a22-a454-7ddc922be6ca
+42184b84-2768-45bd-9455-aa2b8911d972
+c7623b79-84a0-4ee2-b25d-c30b900b772b
+431b9487-bfee-4c20-9c0a-6631ed330fa6
+2ab4c91d-1621-474d-890d-1f3c301a7947
+33c5fda7-b65c-44c8-b7f6-bcc5cde7ee57
+fc21992e-14b2-4b79-97ed-14e332f42d3e
+033843e8-204e-4cd7-aa5a-7a7e2f74920a
+95140da4-9825-4273-b87e-86a25625870f
+165744c0-cc4f-4a44-9665-9792e0ee5c4f
+83c290c7-3853-47e5-9e67-b4b989722cbf
+56f3f9f9-522b-4adb-b450-15f03d6663cc
+a0b54f2e-37a3-4b4a-9ac7-2482e4298c76
+9d275b24-7eb4-476b-9ef8-b7f6f55bce84
+d0ff4c52-a437-43c0-91da-8181a06a8b56
+177dedfe-7573-4f8c-80cf-2ba7f74ac009
+0d88550c-1bab-45fc-abbe-ca0c467819a0
+32b4e0d4-c627-4f8d-a3fa-19477ac68456
+afdbad1c-68ac-4606-b743-78b61d3720e7
+41d8dd41-fb7c-4dd3-9f59-c13552a67567
+b60a1e8e-fb0a-42da-8f1d-73b09d664f24
+c5d79edc-81cd-4ffe-be2f-89798f3eed0b
+1e3a61a2-f4a1-4505-9315-369574182fe6
+83de7c20-0c65-424a-bb9a-0e9d55ae1753
+bb190b0b-dadd-4927-bf16-929949f076b5
+08c4d2da-61b4-4fb1-b4e9-a70c070e693d
+99d81288-7017-409b-bdc6-3783d2feb5b1
+f69daad3-5829-44d0-b716-f71b1c209f5c
+c9e188f1-5aa0-4187-9e89-1c62075d95c4
+bb43ea5c-de75-4bd2-af12-0e0fa8b07866
+bb75f54e-57c1-4050-8dd6-43d9a1da4310
+3fd8b98c-bba7-40e9-b832-1036531cbb8f
+9cf55a91-a458-4d4e-80a3-01105e4f4ab7
+5967a5c4-9e2d-4c0e-8956-7f037ff139e9
+d3e5d482-a2d0-4ae1-89b8-4cac80b7ae97
+be63a37b-bec7-4e2c-b34e-49b13e4e1d7c
+b49b9a2d-444e-4993-b752-b5f0891a3870
+f509f611-c4f2-4d01-8846-f2f9ae52a5c8
+dab5fb12-faf7-436a-be40-a8deb569b70d
+bc1f566a-7dd5-46af-b5d6-b204d5d673d4
+11b9e490-d687-426c-97b8-cc14b3f7839d
+0479c26d-4188-41c7-bdb2-2e669f2ed5fc
+c5020e48-0878-4b91-99bb-789c96f5f0ed
+8bd66b10-661c-42a2-ac58-f6ba641517ed
+1971b322-91f4-4ce6-abea-6f4ee45194a2
+9e718995-4463-417d-bfab-bdb719e316b1
+5979b416-a822-4cc0-8abb-37359a600ff9
+c494c60a-d95a-4658-be6d-f448acfbe715
+57abeb4e-7908-43c4-ac66-0f42e1cd8c19
+12573e46-4e64-431d-a4f1-0086878824d3
+5ce81930-76e3-4f97-a933-4dc18503a0b7
+ec0406ae-41af-4f70-8fd0-91c3a5d849ef
+2502e8ae-52a2-4317-82be-ddda7b67b942
+3bd3a605-d145-4d71-b425-f2438bd33251
+a7550024-615f-4a54-bf05-50a98140b496
+8b88fcaa-5aab-405a-b62a-e5c8ee322b27
+c18d3215-2d21-4aeb-91f1-9a258f36d625
+8117cb34-aa99-4c9b-8c19-bcb8bbf086c4
+1fb649ed-2f4b-4b8a-b018-dd3fe1bca192
+e88415b0-83e4-40bc-bea4-e5175d4e7407
+c0a5b178-7b5e-4dce-8d9e-eaa5287c23fa
+d2667ae6-d6d3-488e-a28b-32adbb521961
+--- Batch Scan lúc 11:21:13 (800 Servers) ---
+8e731e37-6f7f-4b92-a182-c451ce997369
+ab5b0623-c3b7-40f1-baeb-9fb05bce969e
+d947b7d8-cfbc-4c6f-aa5b-99d76b5f94bf
+f85279ff-8430-43b1-8913-87c6e706e70c
+6f1cbf45-1fec-4a3d-9e34-68f549383f8d
+0becbd2b-42d0-47dd-819b-35c911d85668
+91b8e6cc-ded8-4a07-a8a4-962dcc5acad7
+5b89d3ba-b44c-4b6e-be3d-090d2b35a468
+1cc0a787-ddd2-4d0b-9d80-5c90205a76ec
+f70cdf98-6f52-4dbd-a369-4d38d1a350b6
+959b27af-dc76-4f2f-be48-c6e3bfe65648
+b66c9079-099e-4f4b-bbc2-d946fe1ffc10
+f7aa39a0-1eb2-4a10-a6ed-66c59ef956cd
+e335089b-c9e4-4f34-80bb-fdcb536b1643
+1082290c-358d-4531-adb7-4b83beaa30b1
+f979cc15-b457-4ac4-8d02-e97bf6c3f307
+b73aa706-3f21-4b2a-93e6-afad67e3cb77
+3d2ffa44-fab0-4b10-844a-9b8c33c1e7a4
+1bd0a8a6-88e9-44dc-be90-96aa8027196f
+b707ad23-1e16-474c-bb84-35bc077fb545
+b0abcbe5-4b6f-4cbe-b6b1-0de13852dfaa
+22cf5e45-39d9-4a47-ba03-3092f23519fa
+5141e153-be5c-4617-86ab-60e0aa0b1519
+2e5c9298-61d9-4981-addf-f60b027547a3
+aa7f7e3a-dac8-4d84-919d-86dc148ec604
+563c9837-bb79-4915-8cd4-414e8a873f1c
+4660d222-2435-4c6e-984d-7082a5fdae51
+a6a7301b-0dc5-4800-aa8a-98cf4d5e820d
+4b632c0c-4078-40ac-94ab-35b20e663c8e
+94755539-bee9-4c47-9083-f37e7e592e01
+01f9b0ea-983d-4093-9e8d-945f933928bc
+6b5bff07-d422-4123-affe-2e23dced1d5e
+6b10a8df-9ec5-4189-bc99-a5103a55030c
+39efa60e-42d7-480e-ab29-35de414a63db
+0098507b-c66a-4fa1-984d-b07b8b95d016
+1a1e1444-6828-458e-8e70-3b117b7d1fe8
+e8142bf0-8040-44e2-837d-c2e4095b4369
+e633ecdc-252d-4e7d-8fd4-ef2105a6658b
+28af51b5-45e1-496d-b059-b177b9cc6910
+9744a043-1485-4441-b116-7ba6c89e997d
+134dad04-479f-4adf-8cad-5c1cc035ceec
+115ab41c-92f6-4757-913f-ee53e38c8d36
+57113b29-31d2-4ce9-b5b9-2e1dd086482d
+b9c0437b-f6eb-486e-be07-bb4286d1d877
+df19e42c-664c-4061-a986-4c55effc9d08
+d58c3179-c89f-4c89-a4fa-51b5d36f96f9
+44ca98b7-0eed-4cee-944a-ec4bb422877d
+2ad6a152-b961-4766-8392-a58aada40680
+16110a92-c590-4bad-adbe-d216a19b8d2c
+3323648b-07b4-427a-8a61-636440ba949d
+d881d58b-c9fd-45b4-b4fc-b67bb5a3e31d
+1dfc6994-61fa-41f4-9265-1e57bd5e0ea6
+64bbc190-6975-4cc4-b97e-9a7c98e28922
+c2c09c6b-5a2b-44dd-b114-87dd2cd9da15
+ca15da98-0960-4755-bdc3-f2a7f7fbe2dc
+e740d914-7777-44ab-86f1-fdb343a38ac7
+e372420e-3104-4c41-9a89-3b80a3963856
+6a237216-9c70-4344-8fa3-72b407859bba
+70edc6ec-d43c-44d8-b231-f3d1ae27348a
+18eab5d1-b2f9-48bb-a7da-8f3bc32a79e5
+571a0e84-d6f1-402b-9c05-88c3cb56304c
+e75e01a2-04c3-419e-96f2-576ba4ee2add
+5696e70d-96d9-4825-9d2e-f5e662d2b19d
+45f05495-1bac-4bee-92e6-1060d8802184
+e9b551e1-6c79-4ff5-8ce2-31e55b53c835
+a63c6c67-66e7-4f92-871c-305b2958b155
+fe438ed5-9dec-4dc1-893a-8c5d5601b568
+aad1d320-5970-4c6c-a8ae-89d0ea924fee
+426b4ce0-df61-49ab-96f3-78be6d0537be
+d1264323-c372-4059-91f6-d4fc011f2e35
+75153f1d-bb48-4823-8c73-3c0affab2f35
+d97fafef-2809-4fd1-bd05-0a777258b619
+9d775667-01d5-4496-a609-4f96d9ad001a
+989c4957-4fe1-4e46-91d9-6ba9ec6ac148
+fd34c6e8-d955-49fb-bfdd-c35a6781a10e
+97d6a544-a94a-4b52-9b36-c846f1d08711
+8e6dcc38-0132-4c0b-bbee-795a320b64ae
+e430994d-9526-426c-9d41-9cb812f9cf76
+5f04321d-5d7f-4909-8124-d05df033058e
+3c626cd2-6428-4b60-8500-5eac5290e84c
+76058136-5f6f-4561-9ab0-efcbae1a6dbb
+136fd463-3265-4551-a38d-4d7c33bc343c
+c7976c9e-e2af-4931-858f-0f8b2149d183
+c2f787f2-7fbe-4772-b291-fbaadbc52bfc
+c9ab7c60-8a39-4e8a-8dad-2cc599b33bdd
+ea72a0fd-893c-40f4-aea3-7923b346fab8
+ac4a22ad-c1fa-4398-a989-01e44c88b578
+2b9800e6-2328-44b9-9da2-b3d689eb3aa9
+53c3f1a7-5687-43cc-8d59-bf35fe6aa722
+0566dfbf-537e-4ece-94a4-b666ece7c883
+ad1ee093-14d8-4c44-be26-968036d606f9
+9de4003e-ef14-4ef7-8b02-e2f93b065375
+2a91931a-06e0-478e-890d-81c05ad64071
+14efc082-c953-4483-878d-9bd96ac1d03b
+6b62cde2-a825-4ad1-ae22-37027ed03f43
+a541c4e7-1430-489d-ab5c-68989dc9a39c
+ef340579-3eba-4e55-be6f-1d13e987e355
+b36faa59-f895-416d-8986-bc8b0f8ca69d
+07f1c49e-bed7-4707-afc2-a0a90f348931
+e02d1762-e151-457c-8e91-479143239f7b
+eff377f7-3ef1-464d-96a2-bf45e2f3b4eb
+08232f05-2191-4622-bfcc-2a8cedaba7f7
+dae2103e-920c-44f2-a9d9-1ed4cf4e9da5
+f4ab294f-a463-40df-8eea-2a69ff429327
+92b78378-98a8-40fd-8e7f-6c234bdc2e35
+04922949-e3e3-4168-bd53-8f7d2f2fa679
+191d374f-8f3f-4232-a145-90cae140782a
+55374c41-a3d0-47f9-b3aa-cee9851aace8
+a2e39231-4d71-428c-9613-771784639c2b
+ebf15fba-a09e-4c7f-b91c-7e230e0dff6d
+c865fc69-daf3-444f-bc63-8cf91c0d6bde
+53318982-9b62-446b-88e7-439e3f40afc1
+ad6eadae-b71b-4763-b1c5-fc8246f584af
+19e005ab-e896-41a4-bfca-2381ba11295c
+8b54fd42-5ea2-43b8-b856-ee9317cf1bbe
+07f5a00d-d8d0-458e-869f-afb00e63ca38
+1adafd33-b496-4653-bbbd-c96f5373a86d
+dbe3771d-c92a-4a14-bf23-2b11714b1137
+e5fe5f63-6ab4-4607-8bd7-ccf6e63d30e2
+0ebb10e8-a258-4c87-9d81-2aa819676975
+3115f268-a26a-4bda-9896-ae5bc0e90f20
+c099b235-51e1-468d-9443-3165319c4029
+9788527c-f784-497a-a907-f9e4394f8ae8
+21dafe52-26cf-4948-b9f4-8c5a586be0e2
+e5d0fd4e-9198-405d-aa07-8ad683689cbc
+a905d236-4d15-4764-b439-133af7a168de
+912b92a5-c4f3-4361-a455-f8a9e66ffa18
+cc5cf647-1931-4709-855c-1a03fdbf4cd3
+671a0b7d-ed7a-48fe-9e96-f8fb11ca801f
+46855473-87f6-4b21-8471-522d3c7e5d2e
+973f52b9-49d6-4faa-b494-9b652d5d0399
+d043a6ba-9422-4e52-9fe8-28c737b96df0
+23032ecf-41c0-4cb1-8d55-927ce522b107
+791144c6-04ca-4d4d-afc3-120288027cb4
+4bef13fa-5317-4fe9-9477-31acb615befb
+05f602d3-cec2-41cf-86c1-59d591b92eea
+25589027-913e-4e1e-b2af-7a5849b166c9
+6d71fa67-3837-45b8-a96f-176156d94d81
+b2abb09f-f90c-4f2c-8939-f204b249cdeb
+25db5c81-0878-4180-88eb-3082ebd9a64b
+dd48b605-dff4-42d7-afa2-60edd157b61b
+87a2a875-9b0a-4103-be3f-8cf89aded763
+a63db862-8254-45c7-9baf-78795c7340b6
+40b123b1-b146-45be-8bad-db8cc0c2654f
+49c17210-b380-4847-bd11-fad8cc08dd71
+9dafa22f-209d-4795-87d9-0b42f4fec261
+0fd812df-a613-46d5-8c2e-d8894af4d023
+c963b09b-d31b-4eea-9880-1c31788636a4
+8dfa6880-44ed-4e6e-8a0d-ef8e2e90f382
+a3054b26-eeb7-45ba-98c7-cca9c2aeee80
+b9908fe0-6615-4289-b088-02e44aa06c9e
+7672f6b8-f8c5-48b2-8144-0d778cdb4285
+b38fd925-9554-4f28-9701-ec34b8d38b42
+5df94c12-1216-45df-a1fc-eee7ed5336cd
+ea92abfd-1e73-4377-845c-c8bffe0d7943
+6aa3c808-8224-48dc-9576-38ec43fb4974
+fb817dbf-5add-4d7a-a344-7a66fc068d72
+44e55c48-05ec-4bf4-9892-bd6c40885a99
+3bfd5833-1cde-4fe1-abb7-32f2e75c0fcc
+9a82c8f3-4212-4d3d-8dc9-378a6981b2d8
+19e1bbda-c197-4e76-af79-0a929850a3e6
+21899c79-da95-46ac-be73-a04b3acc41e9
+b804bcff-30c0-40ed-9aa0-a42ebbdabbf8
+637825a2-d9ef-41cb-b619-10afaaec86c8
+8557dce4-8fbe-4f6f-a973-361ef9950433
+c6a53b98-56ec-4b45-a9cf-065bb7db4bd4
+e307b08d-4b54-4d20-97da-346de79f314e
+eac02054-a977-46de-8ae4-31e690710716
+725c2640-c81d-44d4-ae4d-029fa5ce7821
+abe7844f-2fcf-47c3-95c7-f7f49d902fde
+c06f8a64-383b-408a-8c46-14aef9f73d3d
+81caba3e-5911-4878-81a5-85200873f5cb
+dd6fc3d3-5e5d-4d65-b162-b8183dedac44
+f773be3d-885d-478b-ae81-30788f3f8c50
+6bb313e0-031f-4a9a-aed0-97a609e12e74
+a69ea22c-cbd1-47ff-b2a7-d393d837432c
+9e56ae35-89df-4ea3-a35d-2dfada404c25
+dd052bb6-7bb8-4082-b42c-18465957d95e
+b55ce306-23bc-433d-af12-e61564abb87b
+c47ce9ce-81f4-4c4f-a66c-70b97bf9381f
+f68a8d8a-d20f-41f7-a9ce-d15bbb3a1e25
+07edd66c-6364-46f2-9718-ddec52bc9d7e
+e242a5a3-258e-4c89-84ee-0e87b2ec300b
+f7e85faa-c803-4aaf-bd8a-d69e9824e126
+84a2566e-42bc-48b8-965f-3c3af2e4ab0c
+d76f1040-e4b0-4f93-a937-fb076e300f80
+72b7963a-2430-4465-a885-5e0b160b4fa3
+72a4b244-7b17-43da-84b3-45474fb86deb
+be165793-e718-4426-99a4-f038f7bceb0d
+a20f39f8-2772-4b6d-be95-9bd0735d0971
+7f03fc8f-c1ab-4ee0-8c76-c27e6e779647
+885d4f06-2711-4b8e-a7c2-8e6383d45ca1
+50e266aa-ce0f-4a2f-bac7-8e9e6c17b117
+0d24db4e-44cf-4d87-83d2-b07f5d1ab75b
+1c826b06-db0c-4e0b-ab61-6ecb8c8a6977
+b6e1814c-c271-4c2d-a7d2-11a3ee3750d4
+15cb1111-60ef-41a9-a1a7-aba811c9d40b
+82c4c93c-f1e0-49de-9fe6-2c450ea3c3d2
+77710baf-c3cd-4f29-a2b0-ac402737f27e
+68e1c247-b5ed-4270-b240-7b24722cefc6
+0a30223f-2927-41d5-8236-0eb0c4a9655d
+c514133c-636d-4ea4-b0f9-c3f943c6ff39
+feb9b94e-1f3e-4b75-b317-b1c90fe92668
+860594ef-8ed5-4871-a964-92c329c819e6
+a08b76e8-bea0-4360-8b9f-33927c25b76f
+3c2b2938-5524-455c-8565-4484ccb0205c
+20e701c0-2e24-400b-a2ce-d55f63ab94eb
+2f935b01-b16d-40b1-92d8-8a17a34c3b50
+08ca2083-1e33-4a34-91d6-a5d16b07d7ff
+b6b724fa-fd53-448b-99c2-99750acdd149
+bd7874d1-df2c-4cec-beaa-154c20deed96
+f494f1e4-2193-403f-89c6-26983302fce0
+7f09b156-9914-4aad-b7bd-d3c684073834
+84604d14-1e29-4715-8642-9387dd70fd51
+8e93b452-1d18-435a-8e8d-7a43614ec8fe
+c570142b-f06e-44e0-b7ee-bbf9b223fe7b
+69284b00-1561-4008-a8fd-96601b543443
+b83ea584-fec7-4a4d-ad9f-68195a602ce0
+8c5e8d10-0cd6-4022-a397-56fb45af63d8
+99fe5abb-4e7a-4110-8b14-e14fa6ab1d64
+624efab4-b916-42fc-a61a-1d003c6473e4
+ad97d88f-8075-40ee-a753-00e91763cee6
+ed71dcb0-3246-4ccf-b77b-93d2d7d0f239
+35a98f60-2c5f-4aea-8b98-7572442da16d
+721f085d-1191-4b22-a470-bcb947f83cb8
+0093b708-f779-42aa-bf04-4ddc461965bf
+c973db6d-23c7-46ae-89bf-c46c6504a290
+6bff5168-9c74-401d-ad1f-e50bc49b6bdc
+7406996b-c593-4166-8b54-e4cb4b729053
+153163fb-428a-4964-9c31-9779335a6598
+e55cdae1-fff6-4ad3-9e6c-a3fab76d7b09
+aaf45449-1454-41a4-bc39-b61417cadee5
+4eee7d16-a04c-42a1-ba07-1202a37f2f7b
+4e61127a-dcd5-4bfd-bdf2-8f5470761bb0
+dfe6055d-e140-419c-8db9-95ab0e651b25
+e2142aa7-f1ac-4bb1-a4fa-f95c610d6213
+e7d477c4-65a8-42d0-87c5-7995e1746459
+75bba15d-eec9-414a-9947-1cb2c4f0ebaa
+5b9d58d5-4cd2-4728-88c9-f89ede0d1d8c
+5b7ee2f0-f26a-45e4-a9df-d73d213d7ab9
+c8b81afd-23cb-4a97-8e81-0294476a776a
+644a342c-06c4-4f1d-b79b-bc82b4767410
+adc83255-0997-47ee-9946-26e95f69f2b0
+46fc490f-80b4-4245-9715-7e18e165a398
+33af520e-a979-432a-aafe-a924c4d69dc2
+5d547329-8775-42b9-a887-8de2d4932fc3
+33520655-1d62-4c89-b1f5-30cc5a3edae9
+50a0fb3a-4641-4314-9be6-42ee41407e48
+84ee6215-eb2c-49f4-947d-f3ed4ca6c0ed
+f877c409-ecff-45ca-89bf-e607346719e2
+056981be-8328-442b-b552-b46062f96919
+1bf94293-d9ca-4e09-98b4-b8f730edc82d
+7c12575e-64b7-4621-b2d8-8a7b5e263f42
+c133a978-91be-49f5-8d61-cd4a9ea9fd19
+22665d52-c8ae-4cb1-80c5-239724adc1b2
+a496c73c-87b1-415f-8fff-fe9bdc11b003
+78e0ca8d-aab3-45bb-af1c-7e11aab3c1c7
+e0e7d8d6-9159-413f-8c40-e070ef3418ff
+8c03914e-3488-4ffc-8241-63a8061397f1
+234bf284-ed9d-4c9d-82cb-9c891e353d2b
+8ba11237-7629-4cdc-ae70-cc38fa0e62b8
+03e66f75-5387-4a58-b981-25abfe09f075
+bcb5b1f7-786f-4c9c-b7ae-963f90622349
+2f00288b-0ccb-485e-8d93-9db29967f820
+d7040b85-f590-4cf6-a0d5-cddbaa2a8a3d
+96ca74af-753d-44fb-bb8c-485dc21fbcb9
+d5d729a2-08e5-416a-81e7-7259760e32a2
+dde211ca-dde9-4598-ac7e-3cc7fd819ec9
+13d81b5c-9f66-466b-ab6c-f39587fda112
+8c232637-a92b-48cc-98a1-b75105428b3b
+10415711-5e0d-437b-8e5d-00a2657b5d83
+1c08a543-4ac3-4941-99d3-4ee3d9ed4663
+72eb4935-f5a0-46f8-9004-df80e6a29b58
+b842201c-6f87-4095-87ef-e74b428ce2c9
+fdb48cef-a834-436e-b8ec-76306f651e1f
+28771fa9-e2c4-489c-91f1-23cd10851f10
+707085e9-7670-4cee-9fb3-59c82913e6dc
+083ffeea-d97e-4afc-8bcb-c4d1e70586b7
+bd168a73-a404-4528-852a-4338cdffdcb7
+394d7499-fdec-4179-8335-4bf4b6dcd27a
+5146c1f6-098b-4b36-bd3e-2a7593935fc7
+c7589b62-7344-41fa-8185-b506907883d9
+a1a7c285-862c-43c4-875d-90410a6e0d78
+8444c824-5d07-4f84-941b-8c75106396ac
+c8a12109-a5be-4839-879a-a046fffa20d5
+5c8ef3e3-2fdb-4582-b6b4-141fc7a8ef49
+0d3f9a22-26c5-45a0-be06-686ee33c0c09
+251f8907-02ae-4209-923f-fc0c8ebd2bf3
+d787d06b-e892-4b2c-8080-45e2d4185830
+538e4dfb-8b2e-4aa7-9c69-d350b497ee00
+3b45b4f0-2e6c-4bd6-9223-882910e5c31c
+0b116ea3-3ae7-4a2a-8773-b48cbce6a46e
+0fdfe5a8-4680-4758-8c88-7a9cda86b3fa
+4d004469-39cb-4b9d-9231-fc2e06c89b45
+e1efe049-e394-4987-a38f-bb7f571be803
+902be587-9350-4257-9ec9-e56450c363e6
+3b2e4a34-723e-4a66-9d3d-62abcc1d91c8
+04faaa88-03b1-4e34-8742-41a0c4917168
+a077e055-8d81-4f29-99cb-d196b9670e1f
+4ff3ba11-37c0-4c26-b84a-7f302305e368
+7471a336-534b-49f1-9086-281be4e7c955
+d36ff686-0dfc-497f-82ac-60bf839da74f
+2de2aaef-23c4-4181-bf18-0175d676de09
+a5968a64-1301-4250-95d1-5fb16dec6d30
+25d3fc51-4f7d-4444-9001-b9b526ca7dab
+d115fe6d-22de-434c-9fbd-eed3e2b89faf
+0c4c0762-433e-4934-900d-2741da9ed6e5
+52a54df5-449f-4e96-98e2-cfe2e0dc60bd
+8ae7ebbb-f918-4e80-be54-a14ee1a5c6e9
+c846455f-7895-4be3-b47a-3ebe2752c613
+b3b94a27-224d-4ceb-9daf-3ebf0bde1adc
+3b6b1471-d742-421d-9d5f-ce93230b6a97
+e3c5f46c-e2bf-4065-a178-8cff9bd70dc7
+21e7dffc-f0b9-48fc-a027-e74f779e8a84
+349dafa7-97fd-4f9c-8443-ac9f5cf4f068
+c0d721ae-51c9-40cc-9585-80ffb07f39d1
+f31dc75a-813a-4918-9647-975ec2b934e5
+013feb85-3a34-4184-b98b-7f71bd12426f
+4204b574-6c1f-4740-b892-52cf55d27920
