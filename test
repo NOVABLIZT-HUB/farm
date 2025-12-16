@@ -1571,7 +1571,7 @@ local function Start_Farm()
                 if coinToTeleport == "NoCoins" then
                      -- Watchdog logic for stuck "NoCoins"
                      NoCoinFoundCount = NoCoinFoundCount + 1
-                     if NoCoinFoundCount > 60 then -- Approx 20 seconds
+                     if NoCoinFoundCount > 10 then -- Approx 20 seconds
                         debug_print("Stuck on NoCoins for too long. Clearing visited list.")
                         visited = {}
                         NoCoinFoundCount = 0
@@ -1653,7 +1653,7 @@ local function Start_Farm()
 			local status = FindCoin(false)
             if status == "NoCoins" then
                  NoCoinFoundCount = NoCoinFoundCount + 1
-                 if NoCoinFoundCount > 60 then 
+                 if NoCoinFoundCount > 10 then 
                     debug_print("Stuck on NoCoins for too long. Clearing visited list.")
                     visited = {}
                     NoCoinFoundCount = 0
