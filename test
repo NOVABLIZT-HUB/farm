@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true, 
 
-		["FPS"] = 60, -- Increased slightly for physics calculation reliability
+		["FPS"] = 60,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.6 Fix Update (Stuck Fix)\n"
+local Version = "v2.9 (Old Logic Restored)"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -896,6 +896,7 @@ local function TeleportToCoin(coin)
 		return false
 	end
 
+    local coinsBefore = getCurrentCoins()
     local pos = coin.Position
 	local currentPos = HumanoidRootPart.Position
 	local directionVector = (pos - currentPos)
@@ -913,24 +914,25 @@ local function TeleportToCoin(coin)
 
 	local startTime = tick()
 	
-	-- IMPROVED: Check if coin actually disappears (Parent becomes nil)
+	-- OLD LOGIC: Wait and check if coins increased 
 	repeat
 		firetouchinterest(coin, HumanoidRootPart, 0)
-		task.wait(0.15) -- Faster ticks
+		task.wait(0.3) -- Old slower wait
 		firetouchinterest(coin, HumanoidRootPart, 1)
-		task.wait(0.15)
+		task.wait(0.3) -- Old slower wait
 		
-		if not coin or not coin.Parent or not coin:FindFirstChild("TouchInterest") then
-			return true -- Success
+		if not coin or not coin:FindFirstChild("TouchInterest") then
+			break
 		end
-	until (tick() - startTime) > 1.5 -- Increased timeout slightly
+	until (tick() - startTime) > 1 
     
-    -- Final check
-    if not coin or not coin.Parent then
+    local coinsAfter = getCurrentCoins()
+
+    if coinsAfter > coinsBefore then
         return true
+    else
+        return false
     end
-    
-    return false
 end
 
 local function FindBestCoin(searchRadius, neighborRadius)
