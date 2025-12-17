@@ -44,7 +44,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 60,
+		["FPS"] = 3,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1, -- 1 = Hop, 2 = Shutdown
