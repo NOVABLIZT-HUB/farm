@@ -69,10 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.5 Christmass Update 🎄 (Hop Fix)\n"
-local NewestVersion
-local usernameRevealed = false
-local ChromaAnimation = false
+local Version = "v2.5 Christmass Update 🎄 (No GUI)\n"
 local last_print = ""
 
 local GoodPlayers = {}
@@ -103,7 +100,7 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
--- [CHANGE] Changed from hardcoded ID to game.PlaceId
+-- Changed to use current game ID for flexibility
 local TargetPlaceId = game.PlaceId 
 
 local headers = {
@@ -269,18 +266,20 @@ end)
 
 HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
--- [CHANGE] GUI CREATION REMOVED
+-- No GUI setup here anymore
 
 if rconsoleprint then
     rconsoleprint("@@BLUE@@")
-    rconsoleprint("Hasty MM2 Coin Farmer Loaded\n")
+    rconsoleprint("Hasty MM2 Coin Farmer Loaded (No GUI Mode)\n")
 end
 
 local function debug_print(...)
 	last_print = ...
-	if string.find(..., "Status:") or string.find(..., "Collected") then
-        -- [CHANGE] Fallback printing since consoleprint might not be standard, using standard print or rconsoleprint
-		print("[" .. player.Name .. "] " .. ... .. "\n")
+    local msg = "[" .. player.Name .. "] " .. ...
+	if rconsoleprint then
+        rconsoleprint(msg .. "\n")
+    else
+        print(msg)
 	end
 end
 
@@ -330,7 +329,7 @@ local function CPUSaversIGMA()
 
                   if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
                          if child:FindFirstChild("Humanoid") then
-                             continue
+                            continue
                         end
                          pcall(function() child:Destroy() end)
                      end
@@ -431,10 +430,6 @@ local function GetHumanoid()
 end
 
 local startTime = os.time()
-local function updateTimer()
-    -- [CHANGE] Removed TimerLabel update
-end
-
 
 local function getCurrentCoins()
     Data = require(Modules.ProfileData)
@@ -457,17 +452,14 @@ local function updatePlayerInfo()
 	)
 
 	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
-    -- [CHANGE] Removed LevelLabel update
-    
+	
 	if cfg["Other"]["Auto Prestige"] then
 		if PlayerLevel == 100 and player:GetAttribute("Prestige") < 10 then
 			Remotes.Inventory.Prestige:FireServer()
-            -- [CHANGE] Removed PrestigeLabel update
 		end
 	end
 
 	totalCoins = getCurrentCoins()
-    -- [CHANGE] Removed CurrentCoinsLabel update
 
 	OwnedWeapons = Data["Weapons"]["Owned"] or {}
 
@@ -482,8 +474,6 @@ local function updatePlayerInfo()
 		end
 		TotalWeapons = TotalWeapons + weaponamount
 	end
-
-    -- [CHANGE] Removed Label updates for weapons/godlies
 
 	if cfg["Auto Open"]["Enabled"] and tonumber(Data["Materials"]["Owned"][EventInfoService.GetEventCurrency()] or 0) >= 800 then
 		local Item = ReplicatedStorage.Remotes.Shop.OpenCrate:InvokeServer(cfg["Auto Open"]["Crate"], "MysteryBox", "Candies2025")
@@ -628,7 +618,6 @@ local function updatePlayerInfo()
 
 		ClaimRewards()
 	end
-    -- [CHANGE] Removed SessionCoinsLabel update
 	
 	if cfg["Misc"]["AutoShutdown"]["Minutes"] ~= 0 and cfg["Misc"]["AutoShutdown"]["MinCoins"] ~= 0 then
 	    if tick() - lastShutdownCheck >= cfg["Misc"]["AutoShutdown"]["Minutes"] * 60 then
@@ -636,8 +625,7 @@ local function updatePlayerInfo()
 	        
             local coinsEarned = totalCoins - StartedCoins
 	        if coinsEarned < (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks) then
-            
-                print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
+               debug_print("AutoShutdown Triggered: Earned " .. coinsEarned .. ", expected " .. (cfg["Misc"]["AutoShutdown"]["MinCoins"] * TotalSessionChecks))
 	            if cfg["Misc"]["AutoShutdown"]["Mode"] == 1 then
 					if SmartServerHop then
 						SmartServerHop(true)
@@ -658,13 +646,11 @@ local function updatePlayerInfo()
 	    end
 	end
 
-    -- [CHANGE] Removed Round Role/Coins label update
 	Data = nil
 	PlayerLevel, NextLevelXP = nil, nil
 end
 task.spawn(function()
 	while true do
-		updateTimer()
 		updatePlayerInfo()
 		task.wait(.5)
 		task.spawn(function()
@@ -680,7 +666,7 @@ local function ProccessMap(child)
 
 	repeat task.wait(0.3) until child:FindFirstChild("CoinContainer")
 
-	print("Map found: " .. child.Name)
+	debug_print("Map found: " .. child.Name)
 
 	local conn = nil
 	AllCoins = {}
@@ -1201,7 +1187,6 @@ SmartServerHop = function(forceAnyBackup)
 	
      if #ServerHopData.BackupIds > 0 then
         debug_print("Đang hop đến server Random (từ danh sách server tìm được)...")
-        -- [CHANGE] Removed StatusText update
 
         local randomIndex = math.random(1, #ServerHopData.BackupIds)
         local jobId = ServerHopData.BackupIds[randomIndex]
@@ -1414,7 +1399,6 @@ local function Start_Farm()
 			
 			if type(coinToTeleport) == "string" then
 				if coinToTeleport == "Dead" then
-                    -- [CHANGE] StatusText.Text removed, using debug_print
                     debug_print("Status: You are dead!")
 					repeat
                         debug_print("Status: Respawning...")
@@ -1474,7 +1458,6 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                -- [CHANGE] Ensure this is 20 and print says 20
                 if FailFarmCount >= 20 then
                     debug_print("20x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
@@ -1568,7 +1551,6 @@ local function Start_Farm()
                                      break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    -- [CHANGE] Ensure this is 20 and print says 20
                                     if FailFarmCount >= 20 then
                                         debug_print("20x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
@@ -1585,7 +1567,6 @@ local function Start_Farm()
                  else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    -- [CHANGE] Ensure this is 20 and print says 20
                     if FailFarmCount >= 20 then
                        debug_print("20x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
