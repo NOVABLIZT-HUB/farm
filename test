@@ -881,13 +881,6 @@ local function TeleportToCoin(coin)
             task.wait(0.3)
         end
         
-        -- Optional: If WE collected it, we can break early? 
-        -- If you want to wait regardless of success, remove this block. 
-        -- But usually speed farmers want to move if they get the coin.
-        if getCurrentCoins() > coinsBefore then
-            break
-        end
-
     until (tick() - startTime) > maxWaitTime
     
     local coinsAfter = getCurrentCoins()
@@ -1586,6 +1579,8 @@ local function Start_Farm()
                 isFirstCoinOfRound = false
                 local Dist = (coinToTeleport.Position - HumanoidRootPart.Position).Magnitude
                 debug_print("Teleported to first coin of round at " .. string.format("%.2f", Dist))
+                -- RESTORED: Specific wait time after collecting the first coin
+                task.wait(2)
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
