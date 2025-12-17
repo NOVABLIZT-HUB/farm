@@ -388,6 +388,24 @@ local function CPUSaversIGMA()
 
 	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 
+    -- [ADDED] Rendering Disable (Black Screen to save resources)
+    pcall(function()
+        RunService:Set3dRenderingEnabled(false)
+    end)
+
+    -- [ADDED] Graphics Reduction (Remove Textures, make everything plastic)
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.Plastic
+            v.Reflectance = 0
+            v.CastShadow = false
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Enabled = false
+        end
+    end
+
 	local success, err = pcall(function()
 		RunService:UnbindFromRenderStep("Humanoid")
 		RunService:UnbindFromRenderStep("Animation")
