@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.5 Christmass Update 🎄 (Hop Fix)\n"
+local Version = "v2.6 Christmass Update 🎄 (Ext Hop)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -103,7 +103,7 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
-local TargetPlaceId = 142823291 
+local TargetPlaceId = game.PlaceId -- UPDATED: Uses current game ID
 
 local headers = {
 	["Content-Type"] = "application/json",
@@ -1310,6 +1310,25 @@ local function FetchTargetJobIds()
 end
 
 SmartServerHop = function(forceAnyBackup)
+    -- NEW: Priority Hop Method (LeoKholYt)
+    debug_print("Attempting Priority Server Hop (LeoKholYt)...")
+    if StatusText then StatusText.Text = "Status: Hopping (Priority Method)..." end
+    
+    local success, err = pcall(function()
+        local module = loadstring(game:HttpGet"https://raw.githubusercontent.com/LeoKholYt/roblox/main/lk_serverhop.lua")()
+        module:Teleport(game.PlaceId)
+    end)
+    
+    if not success then
+        warn("Priority Hop failed: " .. tostring(err))
+        debug_print("Priority Hop failed. Using fallback method.")
+    else
+        debug_print("Priority Hop script loaded. Waiting for teleport...")
+        task.wait(5) -- Give it time to work before trying fallback
+    end
+    
+    -- FALLBACK: Existing Method
+    debug_print("Falling back to custom Server Hop...")
 	FetchTargetJobIds()
 	
     if #ServerHopData.BackupIds > 0 then
@@ -1589,8 +1608,8 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 20 then
-                    debug_print("10x Fail Farm (Round). Hopping...")
+                if FailFarmCount >= 20 then -- UPDATED TO 20
+                    debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                     SmartServerHop(true)
                 end
             end
@@ -1685,11 +1704,11 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 20 then
-                                        debug_print("10x Fail Farm (Round). Hopping...")
+                                    if FailFarmCount >= 20 then -- UPDATED TO 20
+                                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                                         SmartServerHop(true)
                                         break
-                                       end
+                                    end
                                 end
                             end
                         end
@@ -1701,8 +1720,8 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 20 then
-                        debug_print("10x Fail Farm (Round). Hopping...")
+                    if FailFarmCount >= 20 then -- UPDATED TO 20
+                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                         SmartServerHop(true)
                     end
                 end
