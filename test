@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 3,
+		["FPS"] = 60,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.6 Christmass Update 🎄 (Ext Hop)\n"
+local Version = "v2.5 Christmass Update 🎄 (Hop Fix)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -103,7 +103,7 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
-local TargetPlaceId = game.PlaceId -- UPDATED: Uses current game ID
+local TargetPlaceId = 142823291 
 
 local headers = {
 	["Content-Type"] = "application/json",
@@ -268,17 +268,26 @@ end)
 
 HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
--- // GUI CREATION START // --
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
+local RoleDisplay = Instance.new("TextLabel")
+local PrestigeLabel = Instance.new("TextLabel")
+local LevelLabel = Instance.new("TextLabel")
+local Title = Instance.new("TextLabel")
+local TimerLabel = Instance.new("TextLabel")
+local RevealUsernameButton = Instance.new("TextButton")
+local Logo = Instance.new("ImageButton")
+local StatusText = Instance.new("TextLabel")
+local TotalGodlyLabel = Instance.new("TextLabel")
+local TotalWeaponsLabel = Instance.new("TextLabel")
+local TotalChromasLabel = Instance.new("TextLabel")
 local CurrentCoinsLabel = Instance.new("TextLabel")
 local RoundCoinsLabel = Instance.new("TextLabel")
 local SessionCoinsLabel = Instance.new("TextLabel")
-local TimerLabel = Instance.new("TextLabel") -- [ADDED BACK] Timer Label
+local VersionLabel = Instance.new("TextLabel")
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = 10000 -- Ensures GUI is top-most
 
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
@@ -301,11 +310,50 @@ local function setupLabel(label, pos, size, text)
     label.TextScaled = true
 end
 
--- Simplified Layout
-setupLabel(CurrentCoinsLabel, UDim2.new(0.2, 0, 0.1, 0), UDim2.new(0.6, 0, 0.15, 0), "Current Coins: 0")
-setupLabel(SessionCoinsLabel, UDim2.new(0.2, 0, 0.3, 0), UDim2.new(0.6, 0, 0.15, 0), "Session Coins: 0")
-setupLabel(RoundCoinsLabel, UDim2.new(0.2, 0, 0.5, 0), UDim2.new(0.6, 0, 0.15, 0), "Round Coins: 0")
-setupLabel(TimerLabel, UDim2.new(0.2, 0, 0.7, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00") -- [ADDED BACK] Timer Position
+setupLabel(RoleDisplay, UDim2.new(0.39165011, 0, 0.172029704, 0), UDim2.new(0.200000018, 0, 0.100000001, 0), "Role: Innocent (Placeholder)")
+setupLabel(PrestigeLabel, UDim2.new(0.390987396, 0, 0.376237631, 0), UDim2.new(0.200000018, 0, 0.0960000008, 0), "Prestige: 0")
+setupLabel(LevelLabel, UDim2.new(0.39165011, 0, 0.27722773, 0), UDim2.new(0.25, 0, 0.0962871313, 0), "Level: 0")
+setupLabel(Title, UDim2.new(0.274353892, 0, 0.0284653474, 0), UDim2.new(0.450629562, 0, 0.128712878, 0), "Hasty MM2 Coin Farmer")
+setupLabel(TimerLabel, UDim2.new(0.25, 0, 0.8, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00")
+setupLabel(StatusText, UDim2.new(0.259112, 0, 0.560643554, 0), UDim2.new(0.465871423, 0, 0.126237631, 0), "Status: Loading")
+setupLabel(TotalGodlyLabel, UDim2.new(0.0240000002, 100, 0.27722773, 0), UDim2.new(0.200000033, 0, 0.0962871313, 0), "Godly: 0")
+setupLabel(TotalWeaponsLabel, UDim2.new(0.0240000002, 100, 0.376237631, 0), UDim2.new(0.200000018, 0, 0.0960000008, 0), "Total: 0")
+setupLabel(TotalChromasLabel, UDim2.new(0.0240000002, 100, 0.172029704, 0), UDim2.new(0.200000018, 0, 0.100000001, 0), "Chromas: 0")
+setupLabel(CurrentCoinsLabel, UDim2.new(0.665341198, 0, 0.16707921, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Current Coins: 0")
+setupLabel(RoundCoinsLabel, UDim2.new(0.665341198, 0, 0.375, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Round Coins: 0")
+setupLabel(SessionCoinsLabel, UDim2.new(0.665341198, 0, 0.272277236, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Session Coins: 0")
+
+RevealUsernameButton.Parent = MainFrame
+RevealUsernameButton.BackgroundTransparency = 1.000
+RevealUsernameButton.Position = UDim2.new(0.258805811, 0, 0.756079197, 0)
+RevealUsernameButton.Size = UDim2.new(0.465871423, 0, 0.074257426, 0)
+RevealUsernameButton.Font = Enum.Font.FredokaOne
+RevealUsernameButton.Text = "Reveal Username"
+RevealUsernameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RevealUsernameButton.TextScaled = true
+
+Logo.Parent = MainFrame
+Logo.Size = UDim2.new(0, 100, 0, 100)
+Logo.Image = "rbxassetid://72063995210355"
+
+VersionLabel.Parent = MainFrame
+VersionLabel.BackgroundTransparency = 1.0
+VersionLabel.Position = UDim2.new(0.85, 0, 0.95, 0)
+VersionLabel.Size = UDim2.new(0.15, 0, 0.05, 0)
+VersionLabel.Font = Enum.Font.SourceSansBold
+VersionLabel.Text = Version
+VersionLabel.TextColor3 = Color3.new(1, 1, 1)
+VersionLabel.TextScaled = true
+
+RevealUsernameButton.MouseButton1Click:Connect(function()
+	if not usernameRevealed then
+		RevealUsernameButton.Text = "Username: " .. player.Name
+		usernameRevealed = true
+	else
+		RevealUsernameButton.Text = "Reveal Username"
+		usernameRevealed = false
+	end
+end)
 
 consolecreate("DEBUG")
 local function debug_print(...)
@@ -339,39 +387,6 @@ local function CPUSaversIGMA()
 	ReplicatedStorage:SetAttribute("ReplicateInstanceDestroy", false)
 
 	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-
-    -- [ADDED] Rendering Disable (Black Screen to save resources)
-    pcall(function()
-        RunService:Set3dRenderingEnabled(false)
-    end)
-
-    -- [ADDED] Graphics Reduction (Remove Textures, make everything plastic)
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-            v.Enabled = false
-        end
-    end
-
-    -- [ADDED] UI REMOVAL (Removes Game UI, keeps Script UI)
-    pcall(function()
-        -- Clear PlayerGui (Normal Game UIs)
-        if player:FindFirstChild("PlayerGui") then
-            player.PlayerGui:ClearAllChildren()
-        end
-    end)
-
-    -- Clear CoreGui (System UIs), preserving the Script's ScreenGui
-    for _, child in pairs(CoreGui:GetChildren()) do
-        if child ~= ScreenGui and child.Name ~= "RobloxGui" and child.Name ~= "CoreScripts" then
-            pcall(function() child:Destroy() end)
-        end
-    end
 
 	local success, err = pcall(function()
 		RunService:UnbindFromRenderStep("Humanoid")
@@ -504,6 +519,7 @@ local function updateTimer()
 	)
 end
 
+
 local function getCurrentCoins()
     Data = require(Modules.ProfileData)
 	if Event == nil then
@@ -525,9 +541,12 @@ local function updatePlayerInfo()
 	)
 
 	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
-	
+	LevelLabel.Text = "Level: " .. PlayerLevel .. " (" .. Data.NewXP .. "/" .. NextLevelXP .. ")"
+	PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
+
 	totalCoins = getCurrentCoins()
 	CurrentCoinsLabel.Text = "Current Coins: " .. totalCoins
+
 
 	OwnedWeapons = Data["Weapons"]["Owned"] or {}
 
@@ -543,6 +562,9 @@ local function updatePlayerInfo()
 		TotalWeapons = TotalWeapons + weaponamount
 	end
 
+	TotalChromasLabel.Text = "Chromas: " .. tostring(TotalChromas)
+	TotalGodlyLabel.Text = "Godly: " .. tostring(TotalGodlies)
+	TotalWeaponsLabel.Text = "Total: " .. tostring(TotalWeapons)
 
 	if TotalChromas >= 1 and not ChromaAnimation then
 		ChromaAnimation = true
@@ -635,6 +657,7 @@ local function updatePlayerInfo()
 	if cfg["Other"]["Auto Prestige"] then
 		if PlayerLevel == 100 and player:GetAttribute("Prestige") < 10 then
 			Remotes.Inventory.Prestige:FireServer()
+			PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
 		end
 	end
 
@@ -738,8 +761,10 @@ local function updatePlayerInfo()
 
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
+		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
 		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
 	else
+		RoleDisplay.Text = "Role: No Round"
 		RoundCoinsLabel.Text = "Round Coins: 0"
 	end
 	Data = nil
@@ -1285,28 +1310,11 @@ local function FetchTargetJobIds()
 end
 
 SmartServerHop = function(forceAnyBackup)
-    -- NEW: Priority Hop Method (LeoKholYt)
-    debug_print("Attempting Priority Server Hop (LeoKholYt)...")
-    
-    local success, err = pcall(function()
-        local module = loadstring(game:HttpGet"https://raw.githubusercontent.com/LeoKholYt/roblox/main/lk_serverhop.lua")()
-        module:Teleport(game.PlaceId)
-    end)
-    
-    if not success then
-        warn("Priority Hop failed: " .. tostring(err))
-        debug_print("Priority Hop failed. Using fallback method.")
-    else
-        debug_print("Priority Hop script loaded. Waiting for teleport...")
-        task.wait(5) -- Give it time to work before trying fallback
-    end
-    
-    -- FALLBACK: Existing Method
-    debug_print("Falling back to custom Server Hop...")
 	FetchTargetJobIds()
 	
     if #ServerHopData.BackupIds > 0 then
         debug_print("Đang hop đến server Random (từ danh sách server tìm được)...")
+        if StatusText then StatusText.Text = "Status: Hopping to Random Server..." end
 
         local randomIndex = math.random(1, #ServerHopData.BackupIds)
         local jobId = ServerHopData.BackupIds[randomIndex]
@@ -1473,6 +1481,11 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
+			if RoundTimerPart:GetAttribute("Time") == -1 then
+				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
+			else
+				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
+			end
 			task.wait(0.6)
 			HumanoidRootPart, Humanoid = GetHumanoid()
 
@@ -1498,6 +1511,7 @@ local function Start_Farm()
 				end
 			end
 
+			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
@@ -1513,12 +1527,15 @@ local function Start_Farm()
 			
 			if type(coinToTeleport) == "string" then
 				if coinToTeleport == "Dead" then
+					StatusText.Text = "Status: You are dead!"
 					repeat
+						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
 						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 						HumanoidRootPart, Humanoid = GetHumanoid()
 					until HumanoidRootPart
 
+					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
 					for i = 1, 3 do
 						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
@@ -1528,6 +1545,7 @@ local function Start_Farm()
 				end
 
 				if coinToTeleport == "Full" then
+					StatusText.Text = "Status: Coin inventory full! Resetting."
 					debug_print("Coin inventory full! Forcing reset...")
 					
 					local resetStartTime = tick()
@@ -1539,11 +1557,13 @@ local function Start_Farm()
 					task.wait(1)
 					
 					repeat
+						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
 						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 						HumanoidRootPart, Humanoid = GetHumanoid()
 					until HumanoidRootPart
 
+					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned after 'Full' reset!")
 					for i = 1, 3 do
 						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1569,8 +1589,8 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 25 then -- UPDATED TO 20
-                    debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                if FailFarmCount >= 20 then
+                    debug_print("10x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
                 end
             end
@@ -1578,12 +1598,15 @@ local function Start_Farm()
 		else
 			local status = FindCoin(false)
 			if status == "Dead" then
+				StatusText.Text = "Status: You are dead!"
 				repeat
+					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
 					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
+				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1591,6 +1614,7 @@ local function Start_Farm()
 				end
 				continue
 			elseif status == "Full" then
+				StatusText.Text = "Status: Coin inventory full! Resetting."
 				debug_print("Coin inventory full! Forcing reset...")
 				
 				local resetStartTime = tick()
@@ -1602,11 +1626,13 @@ local function Start_Farm()
 				task.wait(1)
 				
 				repeat
+					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
 					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
+				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1659,11 +1685,11 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 25 then -- UPDATED TO 20
-                                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                                     if FailFarmCount >= 20 then
+                                        debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break
-                                    end
+                                       end
                                 end
                             end
                         end
@@ -1675,8 +1701,8 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 25 then -- UPDATED TO 20
-                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                    if FailFarmCount >= 20 then
+                        debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
