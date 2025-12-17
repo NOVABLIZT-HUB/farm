@@ -274,6 +274,7 @@ local MainFrame = Instance.new("Frame")
 local CurrentCoinsLabel = Instance.new("TextLabel")
 local RoundCoinsLabel = Instance.new("TextLabel")
 local SessionCoinsLabel = Instance.new("TextLabel")
+local TimerLabel = Instance.new("TextLabel") -- [ADDED BACK] Timer Label
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
@@ -304,6 +305,7 @@ end
 setupLabel(CurrentCoinsLabel, UDim2.new(0.2, 0, 0.1, 0), UDim2.new(0.6, 0, 0.15, 0), "Current Coins: 0")
 setupLabel(SessionCoinsLabel, UDim2.new(0.2, 0, 0.3, 0), UDim2.new(0.6, 0, 0.15, 0), "Session Coins: 0")
 setupLabel(RoundCoinsLabel, UDim2.new(0.2, 0, 0.5, 0), UDim2.new(0.6, 0, 0.15, 0), "Round Coins: 0")
+setupLabel(TimerLabel, UDim2.new(0.2, 0, 0.7, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00") -- [ADDED BACK] Timer Position
 
 consolecreate("DEBUG")
 local function debug_print(...)
@@ -493,6 +495,14 @@ local function GetHumanoid()
 end
 
 local startTime = os.time()
+local function updateTimer()
+	TimerLabel.Text = string.format(
+		"Time Farming: %02d:%02d:%02d",
+		math.floor((os.time() - startTime) / 3600),
+		math.floor(((os.time() - startTime) % 3600) / 60),
+		(os.time() - startTime) % 60
+	)
+end
 
 local function getCurrentCoins()
     Data = require(Modules.ProfileData)
@@ -737,6 +747,7 @@ local function updatePlayerInfo()
 end
 task.spawn(function()
 	while true do
+		updateTimer()
 		updatePlayerInfo()
 		task.wait(.5)
 		task.spawn(function()
@@ -1558,7 +1569,7 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 20 then -- UPDATED TO 20
+                if FailFarmCount >= 25 then -- UPDATED TO 20
                     debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                     SmartServerHop(true)
                 end
@@ -1648,7 +1659,7 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                    if FailFarmCount >= 20 then -- UPDATED TO 20
+                                    if FailFarmCount >= 25 then -- UPDATED TO 20
                                         debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                                         SmartServerHop(true)
                                         break
@@ -1664,7 +1675,7 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 20 then -- UPDATED TO 20
+                    if FailFarmCount >= 25 then -- UPDATED TO 20
                         debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                         SmartServerHop(true)
                     end
