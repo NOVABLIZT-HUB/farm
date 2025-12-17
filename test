@@ -1589,7 +1589,7 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 10 then
+                if FailFarmCount >= 20 then
                     debug_print("10x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
                 end
@@ -1685,7 +1685,7 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 10 then
+                                     if FailFarmCount >= 20 then
                                         debug_print("10x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break
@@ -1701,7 +1701,7 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 10 then
+                    if FailFarmCount >= 20 then
                         debug_print("10x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
