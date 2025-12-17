@@ -1494,7 +1494,7 @@ local function Start_Farm()
 			local chainCoin = FindNextChainCoin()
 			
 			if not chainCoin then
-				task.wait(2)
+				task.wait(1)
 			else
 				local success = TeleportToCoin(chainCoin)
                 
