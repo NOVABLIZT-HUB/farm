@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 60,
+		["FPS"] = 3,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -268,26 +268,17 @@ end)
 
 HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
+-- // CUSTOM GUI START // --
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
-local RoleDisplay = Instance.new("TextLabel")
-local PrestigeLabel = Instance.new("TextLabel")
-local LevelLabel = Instance.new("TextLabel")
-local Title = Instance.new("TextLabel")
-local TimerLabel = Instance.new("TextLabel")
-local RevealUsernameButton = Instance.new("TextButton")
-local Logo = Instance.new("ImageButton")
-local StatusText = Instance.new("TextLabel")
-local TotalGodlyLabel = Instance.new("TextLabel")
-local TotalWeaponsLabel = Instance.new("TextLabel")
-local TotalChromasLabel = Instance.new("TextLabel")
 local CurrentCoinsLabel = Instance.new("TextLabel")
 local RoundCoinsLabel = Instance.new("TextLabel")
 local SessionCoinsLabel = Instance.new("TextLabel")
-local VersionLabel = Instance.new("TextLabel")
+local TimerLabel = Instance.new("TextLabel") -- [ADDED BACK] Timer Label
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 10000 -- Ensures GUI is top-most
 
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
@@ -310,50 +301,12 @@ local function setupLabel(label, pos, size, text)
     label.TextScaled = true
 end
 
-setupLabel(RoleDisplay, UDim2.new(0.39165011, 0, 0.172029704, 0), UDim2.new(0.200000018, 0, 0.100000001, 0), "Role: Innocent (Placeholder)")
-setupLabel(PrestigeLabel, UDim2.new(0.390987396, 0, 0.376237631, 0), UDim2.new(0.200000018, 0, 0.0960000008, 0), "Prestige: 0")
-setupLabel(LevelLabel, UDim2.new(0.39165011, 0, 0.27722773, 0), UDim2.new(0.25, 0, 0.0962871313, 0), "Level: 0")
-setupLabel(Title, UDim2.new(0.274353892, 0, 0.0284653474, 0), UDim2.new(0.450629562, 0, 0.128712878, 0), "Hasty MM2 Coin Farmer")
-setupLabel(TimerLabel, UDim2.new(0.25, 0, 0.8, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00")
-setupLabel(StatusText, UDim2.new(0.259112, 0, 0.560643554, 0), UDim2.new(0.465871423, 0, 0.126237631, 0), "Status: Loading")
-setupLabel(TotalGodlyLabel, UDim2.new(0.0240000002, 100, 0.27722773, 0), UDim2.new(0.200000033, 0, 0.0962871313, 0), "Godly: 0")
-setupLabel(TotalWeaponsLabel, UDim2.new(0.0240000002, 100, 0.376237631, 0), UDim2.new(0.200000018, 0, 0.0960000008, 0), "Total: 0")
-setupLabel(TotalChromasLabel, UDim2.new(0.0240000002, 100, 0.172029704, 0), UDim2.new(0.200000018, 0, 0.100000001, 0), "Chromas: 0")
-setupLabel(CurrentCoinsLabel, UDim2.new(0.665341198, 0, 0.16707921, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Current Coins: 0")
-setupLabel(RoundCoinsLabel, UDim2.new(0.665341198, 0, 0.375, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Round Coins: 0")
-setupLabel(SessionCoinsLabel, UDim2.new(0.665341198, 0, 0.272277236, 0), UDim2.new(0.281510949, 0, 0.100000001, 0), "Session Coins: 0")
-
-RevealUsernameButton.Parent = MainFrame
-RevealUsernameButton.BackgroundTransparency = 1.000
-RevealUsernameButton.Position = UDim2.new(0.258805811, 0, 0.756079197, 0)
-RevealUsernameButton.Size = UDim2.new(0.465871423, 0, 0.074257426, 0)
-RevealUsernameButton.Font = Enum.Font.FredokaOne
-RevealUsernameButton.Text = "Reveal Username"
-RevealUsernameButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-RevealUsernameButton.TextScaled = true
-
-Logo.Parent = MainFrame
-Logo.Size = UDim2.new(0, 100, 0, 100)
-Logo.Image = "rbxassetid://72063995210355"
-
-VersionLabel.Parent = MainFrame
-VersionLabel.BackgroundTransparency = 1.0
-VersionLabel.Position = UDim2.new(0.85, 0, 0.95, 0)
-VersionLabel.Size = UDim2.new(0.15, 0, 0.05, 0)
-VersionLabel.Font = Enum.Font.SourceSansBold
-VersionLabel.Text = Version
-VersionLabel.TextColor3 = Color3.new(1, 1, 1)
-VersionLabel.TextScaled = true
-
-RevealUsernameButton.MouseButton1Click:Connect(function()
-	if not usernameRevealed then
-		RevealUsernameButton.Text = "Username: " .. player.Name
-		usernameRevealed = true
-	else
-		RevealUsernameButton.Text = "Reveal Username"
-		usernameRevealed = false
-	end
-end)
+-- Simplified Layout
+setupLabel(CurrentCoinsLabel, UDim2.new(0.2, 0, 0.1, 0), UDim2.new(0.6, 0, 0.15, 0), "Current Coins: 0")
+setupLabel(SessionCoinsLabel, UDim2.new(0.2, 0, 0.3, 0), UDim2.new(0.6, 0, 0.15, 0), "Session Coins: 0")
+setupLabel(RoundCoinsLabel, UDim2.new(0.2, 0, 0.5, 0), UDim2.new(0.6, 0, 0.15, 0), "Round Coins: 0")
+setupLabel(TimerLabel, UDim2.new(0.2, 0, 0.7, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00") -- [ADDED BACK] Timer Position
+-- // CUSTOM GUI END // --
 
 consolecreate("DEBUG")
 local function debug_print(...)
@@ -387,11 +340,31 @@ local function CPUSaversIGMA()
 	ReplicatedStorage:SetAttribute("ReplicateInstanceDestroy", false)
 
 	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
-
+	
+    -- [ADDED] Rendering Disable (Black Screen to save resources)
+    pcall(function()
+        RunService:Set3dRenderingEnabled(false)
+    end)
+    
 	local success, err = pcall(function()
 		RunService:UnbindFromRenderStep("Humanoid")
 		RunService:UnbindFromRenderStep("Animation")
 	end)
+	
+	-- [ADDED] UI REMOVAL (Removes Game UI, keeps Script UI)
+    pcall(function()
+        -- Clear PlayerGui (Normal Game UIs)
+        if player:FindFirstChild("PlayerGui") then
+            player.PlayerGui:ClearAllChildren()
+        end
+    end)
+
+    -- Clear CoreGui (System UIs), preserving the Script's ScreenGui
+    for _, child in pairs(CoreGui:GetChildren()) do
+        if child ~= ScreenGui and child.Name ~= "RobloxGui" and child.Name ~= "CoreScripts" then
+            pcall(function() child:Destroy() end)
+        end
+    end
 
 
     task.spawn(function()
@@ -541,12 +514,9 @@ local function updatePlayerInfo()
 	)
 
 	PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
-	LevelLabel.Text = "Level: " .. PlayerLevel .. " (" .. Data.NewXP .. "/" .. NextLevelXP .. ")"
-	PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
-
+	
 	totalCoins = getCurrentCoins()
 	CurrentCoinsLabel.Text = "Current Coins: " .. totalCoins
-
 
 	OwnedWeapons = Data["Weapons"]["Owned"] or {}
 
@@ -561,10 +531,6 @@ local function updatePlayerInfo()
 		end
 		TotalWeapons = TotalWeapons + weaponamount
 	end
-
-	TotalChromasLabel.Text = "Chromas: " .. tostring(TotalChromas)
-	TotalGodlyLabel.Text = "Godly: " .. tostring(TotalGodlies)
-	TotalWeaponsLabel.Text = "Total: " .. tostring(TotalWeapons)
 
 	if TotalChromas >= 1 and not ChromaAnimation then
 		ChromaAnimation = true
@@ -657,7 +623,6 @@ local function updatePlayerInfo()
 	if cfg["Other"]["Auto Prestige"] then
 		if PlayerLevel == 100 and player:GetAttribute("Prestige") < 10 then
 			Remotes.Inventory.Prestige:FireServer()
-			PrestigeLabel.Text = "Prestige: " .. player:GetAttribute("Prestige")
 		end
 	end
 
@@ -761,10 +726,8 @@ local function updatePlayerInfo()
 
 
 	if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] then
-		RoleDisplay.Text = "Role: " .. (RoundData[player.Name]["Role"] or "Unknown")
 		RoundCoinsLabel.Text = "Round Coins: " .. RoundData[player.Name]["Coins"] or 0
 	else
-		RoleDisplay.Text = "Role: No Round"
 		RoundCoinsLabel.Text = "Round Coins: 0"
 	end
 	Data = nil
@@ -783,6 +746,16 @@ task.spawn(function()
 end)
 
 
+local function ClearMap()
+	if map then
+		for _, child in ipairs(map:GetChildren()) do
+			if child:IsA("Model") and child.Name ~= "CoinContainer" then
+				child.Parent = nil
+			end
+		end
+	end
+end
+
 local function ProccessMap(child)
 	if not child:GetAttribute("MapID") then return end
 
@@ -799,7 +772,10 @@ local function ProccessMap(child)
 		table.insert(AllCoins, coin)
 
 		task.wait(0.6)
-		
+		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
+			coin.CoinVisual:Destroy()
+		end
+
 		coin.Parent = CoinsFolder
 		coin:SetAttribute("Collected", false)
 		coin.Transparency = 1
@@ -1516,9 +1492,11 @@ local function Start_Farm()
 			
 			isFirstCoinOfRound = true
 			visited = {}
+            CoinsFolder:ClearAllChildren()
             FailFarmCount = 0 
 		end
 
+		ClearMap()
 		
 		GoodPeopleCount = 0
 
