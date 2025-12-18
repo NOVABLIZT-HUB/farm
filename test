@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.5 Christmass Update 🎄 (Hop Fix)\n"
+local Version = "v2.6 Fix Update 🎄 (Round Loop Fix)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -358,11 +358,6 @@ local function CPUSaversIGMA()
                         child:Destroy()
                         continue
                     end
-                    
-                    -- [UPDATED] Added "CoinContainer" and map components to whitelist implicitly by checking logic
-                    -- Since maps are usually Models, we need to be careful.
-                    -- The map name is dynamic, so we rely on protecting anything that HAS a CoinContainer inside it
-                    -- OR simply we rely on the specific list.
                     
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" or child.Name == "RoundTimerPart" then
                         continue
@@ -756,8 +751,6 @@ local function ProccessMap(child)
 
 	print("Map found: " .. child.Name)
 
-    -- [UPDATED] No longer moving coins to CoinsFolder
-    -- Just visual cleanup
 	local conn = nil
 	AllCoins = {}
 	
@@ -773,12 +766,10 @@ local function ProccessMap(child)
                 coin.CoinVisual:Destroy()
             end
 
-            -- coin.Parent = CoinsFolder -- DISABLED MOVEMENT
             coin:SetAttribute("Collected", false)
             coin.Transparency = 1
         end)
         
-        -- Process existing coins in the container
         for _, coin in ipairs(container:GetChildren()) do
              if not coin or coin:GetAttribute("Collected") then continue end
              table.insert(AllCoins, coin)
@@ -790,10 +781,8 @@ local function ProccessMap(child)
         end
     end
 
-    -- Keep checking while the container exists
 	while child:FindFirstChild("CoinContainer") and child.CoinContainer.Parent == child do
 		task.wait(0.3)
-        -- The coin interaction logic is main loop now, ProcessMap just monitors
 	end
 
 	if conn then conn:Disconnect() end
@@ -819,7 +808,6 @@ local function TeleportToCoin(coin)
 		return false
 	end
 
-    -- Initial Check: If the coin is ALREADY deleted/gone, do NOT teleport.
 	if not coin.Parent or not coin:FindFirstChild("TouchInterest") then
 		return false
 	end
@@ -840,26 +828,19 @@ local function TeleportToCoin(coin)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
 	end
     
-    -- FIXED: We now enter the loop and wait UNTIL DONE (maxWaitTime)
-    -- We do NOT break if the coin disappears.
     local startTime = tick()
     local maxWaitTime = 1.0 
     
     repeat
-        -- Try to fire touch interest
         if coin and coin.Parent and coin:FindFirstChild("TouchInterest") then
             firetouchinterest(coin, HumanoidRootPart, 0)
             task.wait(0.15)
             firetouchinterest(coin, HumanoidRootPart, 1)
             task.wait(0.15)
         else
-            -- Coin is gone? Just wait out the rest of the time as requested.
             task.wait(0.3)
         end
         
-        -- Optional: If WE collected it, we can break early? 
-        -- If you want to wait regardless of success, remove this block. 
-        -- But usually speed farmers want to move if they get the coin.
         if getCurrentCoins() > coinsBefore then
             break
         end
@@ -875,10 +856,8 @@ local function TeleportToCoin(coin)
     end
 end
 
--- [UPDATED] Helper to get all valid coins from ALL active maps
 local function GetAllValidCoins()
     local coins = {}
-    -- Iterate through workspace to find any map model with a CoinContainer
     for _, child in ipairs(Workspace:GetChildren()) do
         if child:IsA("Model") and child:FindFirstChild("CoinContainer") then
             for _, coin in ipairs(child.CoinContainer:GetChildren()) do
@@ -888,7 +867,7 @@ local function GetAllValidCoins()
             end
         end
     end
-    -- Also check CoinsFolder just in case logic reverts
+
     for _, coin in ipairs(CoinsFolder:GetChildren()) do
          if coin and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
             table.insert(coins, coin)
@@ -1482,7 +1461,10 @@ local function Start_Farm()
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
-				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
+            
+            -- Force clear visited again just in case
+            visited = {} 
+
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1640,6 +1622,9 @@ local function Start_Farm()
                     debug_print("Collected coin")
                     
                     for i = 2, 5 do
+                        -- Break loop immediately if round ends while chaining
+                        if RoundTimerPart:GetAttribute("Time") == -1 then break end 
+
                         if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 50 then
                             break
                         end
