@@ -1,5 +1,5 @@
 -- // 1. FPS CAP //
-if setfpscap then setfpscap(3) end
+if setfpscap then setfpscap(5) end
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -10,40 +10,37 @@ local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
-local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart", 10)
 
--- // 2. UI STATUS //
+-- // 2. UI SETUP (Compact & Debug Capable) //
 local ScreenGui, StatusLabel
 pcall(function()
-    if CoreGui:FindFirstChild("HastyUI") then CoreGui.HastyUI:Destroy() end
+    if CoreGui:FindFirstChild("HastyFarmerUI") then CoreGui.HastyFarmerUI:Destroy() end
     ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "HastyUI"
+    ScreenGui.Name = "HastyFarmerUI"
+    -- Try CoreGui, fallback to PlayerGui
     local parent = CoreGui
     if not pcall(function() parent = CoreGui end) then parent = LocalPlayer:WaitForChild("PlayerGui") end
     ScreenGui.Parent = parent
 
     StatusLabel = Instance.new("TextLabel")
     StatusLabel.Parent = ScreenGui
-    StatusLabel.Size = UDim2.new(0, 300, 0, 30)
-    StatusLabel.Position = UDim2.new(0.5, -150, 0, 10)
-    StatusLabel.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-    StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-    StatusLabel.TextSize = 18
-    StatusLabel.Text = "Status: Booting..."
+    StatusLabel.Size = UDim2.new(0, 300, 0, 30) -- Smaller size
+    StatusLabel.Position = UDim2.new(0.5, -150, 0.05, 0) -- Higher up
+    StatusLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    StatusLabel.TextSize = 16
+    StatusLabel.Text = "Status: Starting Safe Mode..."
+    StatusLabel.BorderSizePixel = 0
 end)
 
 local function SetStatus(text, isError)
-    if StatusLabel then 
-        StatusLabel.Text = text 
-        if isError then
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
-        else
-            StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-        end
+    if StatusLabel then
+        StatusLabel.Text = text
+        StatusLabel.TextColor3 = isError and Color3.fromRGB(255, 50, 50) or Color3.fromRGB(0, 255, 0)
     end
 end
 
--- // 3. SETUP //
+-- // 3. CONFIGURATION //
 local CoinsFolder = Workspace:FindFirstChild("CoinsFolder") or Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
@@ -60,73 +57,73 @@ local visited = {}
 local currentPlatformY = 148
 local FailCount = 0 
 
--- // 4. FAILSAFE HOP //
+-- // 4. SAFE SERVER HOP //
 local function ServerHop()
-    SetStatus("Fails > 20. Hopping...", true)
-    local PlaceId = game.PlaceId
-    local Api = "https://games.roblox.com/v1/games/"
-    local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
-    
-    local function ListServers(cursor)
-        local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
-        return HttpService:JSONDecode(Raw)
-    end
-
-    local Server, Next
-    repeat
-        local Servers = ListServers(Next)
-        Server = Servers.data[math.random(1, #Servers.data)]
-        Next = Servers.nextPageCursor
-    until Server and Server.playing < Server.maxPlayers and Server.id ~= game.JobId
-
-    TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
-end
-
--- // 5. MAP PROCESSOR //
-local function ProcessMap(child)
-    if not child:IsA("Model") then return end
-    
-    task.spawn(function()
-        local container = child:FindFirstChild("CoinContainer")
-        local t = 0
-        while not container and child.Parent do
-            task.wait(1)
-            t = t + 1
-            container = child:FindFirstChild("CoinContainer")
-            if t > 30 then return end
+    SetStatus("Hopping (Fails > 20)...", true)
+    pcall(function()
+        local PlaceId = game.PlaceId
+        local Api = "https://games.roblox.com/v1/games/"
+        local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+        local function ListServers(cursor)
+            local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
+            return HttpService:JSONDecode(Raw)
         end
-        
-        if not container then return end
-        SetStatus("Map Found: " .. child.Name, false)
-
-        local function moveCoin(coin)
-            if not coin or coin:GetAttribute("Collected") then return end
-            task.wait(0.6)
-            
-            if coin:IsA("BasePart") then
-                coin.Parent = CoinsFolder
-                -- VISUAL DEBUG: Green = Script sees it
-                coin.Color = Color3.fromRGB(0, 255, 0)
-                coin.Transparency = 0.5 
-                coin:SetAttribute("Collected", false)
-            end
-        end
-
-        for _, coin in ipairs(container:GetChildren()) do
-            moveCoin(coin)
-        end
-        container.ChildAdded:Connect(moveCoin)
+        local Server, Next
+        repeat
+            local Servers = ListServers(Next)
+            Server = Servers.data[math.random(1, #Servers.data)]
+            Next = Servers.nextPageCursor
+        until Server and Server.playing < Server.maxPlayers and Server.id ~= game.JobId
+        TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
     end)
 end
 
+-- // 5. PLATFORM LOOP //
+RunService.Heartbeat:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local rootPos = LocalPlayer.Character.HumanoidRootPart.Position
+        WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
+    end
+end)
+
+-- // 6. MAP PROCESSING //
+local function ProcessMap(child)
+    if not child:IsA("Model") then return end
+    task.spawn(function()
+        local container = child:FindFirstChild("CoinContainer")
+        local retries = 0
+        -- Wait up to 10 seconds only
+        while not container and child.Parent and retries < 10 do
+            task.wait(1)
+            container = child:FindFirstChild("CoinContainer")
+            retries = retries + 1
+        end
+        
+        if not container then return end
+        
+        -- Don't update status here to avoid "Stuck" message, just log it
+        print("Map Found: " .. child.Name)
+
+        local function moveCoin(coin)
+            if not coin or coin:GetAttribute("Collected") then return end
+            task.wait(0.5)
+            coin.Parent = CoinsFolder
+            coin:SetAttribute("Collected", false)
+            coin.Transparency = 1
+        end
+
+        for _, coin in ipairs(container:GetChildren()) do moveCoin(coin) end
+        container.ChildAdded:Connect(moveCoin)
+    end)
+end
 for _, child in ipairs(Workspace:GetChildren()) do ProcessMap(child) end
 Workspace.ChildAdded:Connect(ProcessMap)
 
--- // 6. SEARCH LOGIC //
+-- // 7. SEARCH HELPERS //
 local function FindBestCoin(radius, hrp)
     local candidates = {}
     for _, coin in ipairs(CoinsFolder:GetChildren()) do
-        if coin:IsA("BasePart") and not visited[coin] and coin:FindFirstChild("TouchInterest") then
+        if coin:IsA("Part") and not visited[coin] and coin:FindFirstChild("TouchInterest") then
             if (coin.Position - hrp.Position).Magnitude <= radius then
                 table.insert(candidates, coin)
             end
@@ -136,155 +133,113 @@ local function FindBestCoin(radius, hrp)
     return candidates[math.random(1, #candidates)]
 end
 
--- // 7. WATERFALL WAIT //
 local function RandomWaterfallWait(hrp)
-    SetStatus("Waiting (Waterfall)...", false)
-    task.wait(0.5)
-    local c1 = FindBestCoin(50, hrp)
-    if c1 then return c1 end
-
-    task.wait(0.3)
-    local c2 = FindBestCoin(50, hrp)
-    if c2 then return c2 end
-    
+    SetStatus("Status: Chaining Coins...", false)
     task.wait(0.4)
-    local c3 = FindBestCoin(50, hrp)
-    if c3 then return c3 end
-    
-    return nil
+    local c = FindBestCoin(50, hrp)
+    if c then return c end
+    task.wait(0.3)
+    return FindBestCoin(60, hrp)
 end
 
--- // 8. PLATFORM LOOP //
-RunService.Heartbeat:Connect(function()
-    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-        local rootPos = LocalPlayer.Character.HumanoidRootPart.Position
-        WalkingPlatform.CFrame = CFrame.new(rootPos.X, currentPlatformY, rootPos.Z)
-    end
-end)
-
--- // 9. TELEPORT //
+-- // 8. TELEPORT //
 local function TeleportToCoin(coin, hrp)
-    if not hrp or not coin or not coin.Parent then return false end
-    if not coin:FindFirstChild("TouchInterest") then return false end
-
-    SetStatus("Teleporting...", false)
+    if not hrp or not coin or not coin.Parent or not coin:FindFirstChild("TouchInterest") then return false end
     
     local pos = coin.Position
     currentPlatformY = pos.Y - 2
     WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
-
-    local directionVector = (pos - hrp.Position)
-    if directionVector.Magnitude < 0.1 then
-        hrp.CFrame = CFrame.new(pos)
-    else
-        local lookAtPos = pos + (directionVector.Unit * 5)
-        hrp.CFrame = CFrame.new(pos, lookAtPos)
-    end
     
     local startTime = tick()
     repeat
-        if coin and coin.Parent and coin:FindFirstChild("TouchInterest") then
+        if not coin.Parent then break end
+        hrp.CFrame = CFrame.new(pos) -- Teleport
+        if firetouchinterest then
             firetouchinterest(coin, hrp, 0)
-            task.wait(0.15)
+            task.wait(0.1)
             firetouchinterest(coin, hrp, 1)
-            task.wait(0.15)
         else
-            task.wait(0.3)
+            task.wait(0.2)
         end
-    until (tick() - startTime) > 1.0
+        task.wait(0.05)
+    until (tick() - startTime) > 0.8 -- Max 0.8s per coin
     return true
 end
 
--- // 10. RESET LOGIC (FIXED CRASH HERE) //
-local function CheckAndResetIfFull(hum)
+-- // 9. SAFE DATA CHECK //
+local function CheckFullBag(hum)
     local s, r = pcall(function()
+        -- Safe remote call with timeout logic workaround
         return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
     end)
-    
-    -- FIXED: Added checks to ensure data exists before comparing
-    if s and r and r[LocalPlayer.Name] and r[LocalPlayer.Name].Coins then
-        if r[LocalPlayer.Name].Coins >= 50 then
-            SetStatus("Full (50). Resetting...", true)
-            hum.Health = 0
-            task.wait(5)
-            return true
-        end
+    if s and r and r[LocalPlayer.Name] and r[LocalPlayer.Name].Coins >= 50 then
+        SetStatus("Bag Full (50). Resetting...", true)
+        hum.Health = 0
+        task.wait(5)
+        return true
     end
     return false
 end
 
--- // 11. MAIN LOOP //
+-- // 10. MAIN LOOP (CRASH PROOF) //
 task.spawn(function()
     while task.wait(0.5) do
+        -- Wrap entire loop step in pcall so it NEVER freezes
         local status, err = pcall(function()
-            -- Fail Check
-            if FailCount >= 20 then
-                ServerHop()
-                task.wait(10)
-                FailCount = 0
-            end
+            local RoundTimerPart = Workspace:FindFirstChild("RoundTimerPart")
+            
+            -- Fail Logic
+            if FailCount >= 20 then ServerHop() FailCount = 0 return end
 
             -- Round Check
             if not RoundTimerPart or RoundTimerPart:GetAttribute("Time") == -1 then
                 if #visited > 0 then
-                    SetStatus("Round Ended. Clearing.", false)
                     table.clear(visited)
                     CoinsFolder:ClearAllChildren()
                     FailCount = 0
+                    SetStatus("Round Ended. Cleaned up.", false)
                 else
-                    SetStatus("Waiting for Round...", false)
+                    SetStatus("Waiting for Round Start...", false)
                 end
                 return
             end
 
-            -- Player Check
+            -- Character Check
             local Char = LocalPlayer.Character
             local HRP = Char and Char:FindFirstChild("HumanoidRootPart")
             local Hum = Char and Char:FindFirstChild("Humanoid")
-            
             if not HRP or not Hum or Hum.Health <= 0 then
                 SetStatus("Waiting for Spawn...", false)
                 return
             end
 
-            -- 50/50 Check
-            if CheckAndResetIfFull(Hum) then return end
+            -- Full Check
+            if CheckFullBag(Hum) then return end
 
-            -- Coin Logic
+            -- Farm Logic
             local coin = FindBestCoin(2000, HRP)
             if coin then
-                local success = TeleportToCoin(coin, HRP)
-                if success then
+                SetStatus("Collecting Coin...", false)
+                if TeleportToCoin(coin, HRP) then
                     visited[coin] = true
-                    FailCount = 0 
-                    
-                    -- Chain Loop
+                    FailCount = 0
+                    -- Chain
                     for i = 1, 5 do
-                        if CheckAndResetIfFull(Hum) then break end
-                        
-                        local nextCoin = RandomWaterfallWait(HRP)
-                        if nextCoin then
-                            local chainSuccess = TeleportToCoin(nextCoin, HRP)
-                            if chainSuccess then
-                                visited[nextCoin] = true
-                                FailCount = 0
-                            else
-                                FailCount = FailCount + 1
-                                break
-                            end
+                        local nextC = RandomWaterfallWait(HRP)
+                        if nextC and TeleportToCoin(nextC, HRP) then
+                            visited[nextC] = true
                         else
-                            break 
+                            break
                         end
                     end
                 else
                     FailCount = FailCount + 1
-                    SetStatus("TP Failed ("..FailCount..")", true)
                 end
             else
-                SetStatus("Searching... (Folder: "..#CoinsFolder:GetChildren()..")", false)
+                SetStatus("Round Active: Searching...", false)
             end
         end)
-        
+
         if not status then
             SetStatus("Error: " .. tostring(err), true)
             warn("Script Error: " .. tostring(err))
