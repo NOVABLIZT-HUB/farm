@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 3,
+		["FPS"] = 60,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.6 Fix Update 🎄 (Round Loop Fix)\n"
+local Version = "v2.8 Fix Update 🎄 (Reset Restored)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -114,7 +114,7 @@ local knife = nil
 local gun = nil
 local GoodPeople = {}
 local visited = {}
-local AllCoins = {} -- This will now track coins but not hold them physically
+local AllCoins = {}
 
 local ServerHopData = {
 	BackupIds = {},
@@ -245,7 +245,6 @@ local PlayerLevel, NextLevelXP = LevelModule.GetLevel(Data.NewXP)
 local OwnedWeapons = Data["Weapons"]["Owned"]
 local totalCoins = StartedCoins
 
--- No longer using CoinsFolder for storage, but keeping reference safe just in case
 local CoinsFolder = Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
@@ -360,11 +359,6 @@ local function CPUSaversIGMA()
                     end
                     
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" or child.Name == "RoundTimerPart" then
-                        continue
-                    end
-                    
-                    -- PROTECT MAP MODELS (if they contain CoinContainer)
-                    if child:IsA("Model") and child:FindFirstChild("CoinContainer") then
                         continue
                     end
 
@@ -754,36 +748,35 @@ local function ProccessMap(child)
 	local conn = nil
 	AllCoins = {}
 	
-    local container = child:FindFirstChild("CoinContainer")
-    if container then
-        conn = container.ChildAdded:Connect(function(coin)
-            if not coin or coin:GetAttribute("Collected") then return end
+	conn = child.CoinContainer.ChildAdded:Connect(function(coin)
+		if not coin or coin:GetAttribute("Collected") then return end
 
-            table.insert(AllCoins, coin)
+		table.insert(AllCoins, coin)
 
-            task.wait(0.6)
-            if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
-                coin.CoinVisual:Destroy()
-            end
+		task.wait(0.6)
+		if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
+			coin.CoinVisual:Destroy()
+		end
 
-            coin:SetAttribute("Collected", false)
-            coin.Transparency = 1
-        end)
-        
-        for _, coin in ipairs(container:GetChildren()) do
-             if not coin or coin:GetAttribute("Collected") then continue end
-             table.insert(AllCoins, coin)
-             if coin:FindFirstChild("CoinVisual") and cfg["CPU Saver"] then
-                coin.CoinVisual:Destroy()
-            end
-            coin:SetAttribute("Collected", false)
-            coin.Transparency = 1
-        end
-    end
+		coin.Parent = CoinsFolder
+		coin:SetAttribute("Collected", false)
+		coin.Transparency = 1
+	end)
 
 	while child:FindFirstChild("CoinContainer") and child.CoinContainer.Parent == child do
 		task.wait(0.3)
+
+		for _, coin in ipairs(AllCoins) do
+			if coin and coin:IsA("Part") then
+				if (coin.Position - HumanoidRootPart.Position).Magnitude <= 20 then
+					firetouchinterest(coin, HumanoidRootPart, 0)
+					task.wait(0.05)
+					firetouchinterest(coin, HumanoidRootPart, 1)
+				end
+			end
+		end
 	end
+
 
 	if conn then conn:Disconnect() end
 end
@@ -808,6 +801,7 @@ local function TeleportToCoin(coin)
 		return false
 	end
 
+    -- Initial Check: If the coin is ALREADY deleted/gone, do NOT teleport.
 	if not coin.Parent or not coin:FindFirstChild("TouchInterest") then
 		return false
 	end
@@ -828,19 +822,26 @@ local function TeleportToCoin(coin)
 		HumanoidRootPart.CFrame = CFrame.new(pos, lookAtPos)
 	end
     
+    -- FIXED: We now enter the loop and wait UNTIL DONE (maxWaitTime)
+    -- We do NOT break if the coin disappears.
     local startTime = tick()
     local maxWaitTime = 1.0 
     
     repeat
+        -- Try to fire touch interest
         if coin and coin.Parent and coin:FindFirstChild("TouchInterest") then
             firetouchinterest(coin, HumanoidRootPart, 0)
             task.wait(0.15)
             firetouchinterest(coin, HumanoidRootPart, 1)
             task.wait(0.15)
         else
+            -- Coin is gone? Just wait out the rest of the time as requested.
             task.wait(0.3)
         end
         
+        -- Optional: If WE collected it, we can break early? 
+        -- If you want to wait regardless of success, remove this block. 
+        -- But usually speed farmers want to move if they get the coin.
         if getCurrentCoins() > coinsBefore then
             break
         end
@@ -856,30 +857,15 @@ local function TeleportToCoin(coin)
     end
 end
 
-local function GetAllValidCoins()
-    local coins = {}
-    for _, child in ipairs(Workspace:GetChildren()) do
-        if child:IsA("Model") and child:FindFirstChild("CoinContainer") then
-            for _, coin in ipairs(child.CoinContainer:GetChildren()) do
-                 if coin and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-                    table.insert(coins, coin)
-                end
-            end
-        end
-    end
-
-    for _, coin in ipairs(CoinsFolder:GetChildren()) do
-         if coin and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
-            table.insert(coins, coin)
-        end
-    end
-    return coins
-end
-
 local function FindBestCoin(searchRadius, neighborRadius)
 	if not HumanoidRootPart then return nil end
 
-	local allValidCoins = GetAllValidCoins()
+	local allValidCoins = {}
+	for _, coin in ipairs(CoinsFolder:GetChildren()) do
+		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
+			table.insert(allValidCoins, coin)
+		end
+	end
 
 	if #allValidCoins == 0 then return nil end
 
@@ -921,7 +907,12 @@ end
 local function FindNearestUnvisitedCoin(radius)
 	if not HumanoidRootPart then return nil end
 
-	local allValidCoins = GetAllValidCoins()
+	local allValidCoins = {}
+	for _, coin in ipairs(CoinsFolder:GetChildren()) do
+		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
+			table.insert(allValidCoins, coin)
+		end
+	end
 
 	if #allValidCoins == 0 then return nil end
 
@@ -942,7 +933,12 @@ end
 local function FindRandomUnvisitedCoin(radius)
 	if not HumanoidRootPart then return nil end
 
-	local allValidCoins = GetAllValidCoins()
+	local allValidCoins = {}
+	for _, coin in ipairs(CoinsFolder:GetChildren()) do
+		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
+			table.insert(allValidCoins, coin)
+		end
+	end
 
 	if #allValidCoins == 0 then return nil end
 
@@ -1115,11 +1111,16 @@ local function FindCoin(isFirst)
 		return "Full"
 	end
 
-	if not HumanoidRootPart then
+	if not HumanoidRootPart or not AllCoins then
 		return nil
 	end
 
-	local allValidCoins = GetAllValidCoins()
+	local allValidCoins = {}
+	for _, coin in ipairs(CoinsFolder:GetChildren()) do
+		if coin and coin.Parent and coin:IsA("Part") and coin.Name == "Coin_Server" and coin:FindFirstChild("TouchInterest") and not visited[coin] then
+			table.insert(allValidCoins, coin)
+		end
+	end
 
 	if #allValidCoins == 0 then
 		return "NoCoins"
@@ -1442,7 +1443,7 @@ local function Start_Farm()
             if RoundTimerPart:GetAttribute("Time") == -1 then
                  task.wait(0.6)
                  -- Only clear when round is truly ending/restarting
-                 -- CoinsFolder:ClearAllChildren() -- [UPDATED] Not needed, we farm from map
+                 CoinsFolder:ClearAllChildren()
                  FailFarmCount = 0 
                  isFirstCoinOfRound = true
 			     visited = {}
