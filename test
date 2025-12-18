@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 60,
+		["FPS"] = 3,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -1457,11 +1457,6 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
-			if RoundTimerPart:GetAttribute("Time") == -1 then
-				StatusText.Text = "Status: Round ended. Waiting for new round to start... "
-			else
-				StatusText.Text = "Status: Waiting for Round to End and for new Round to start... "
-			end
 			task.wait(0.6)
 			HumanoidRootPart, Humanoid = GetHumanoid()
 
@@ -1487,7 +1482,6 @@ local function Start_Farm()
 				end
 			end
 
-			StatusText.Text = "Status: New round active. Safe platform reached!"
 			debug_print("Status: New round active. Safe platform reached!")
 			
 			isFirstCoinOfRound = true
@@ -1505,15 +1499,21 @@ local function Start_Farm()
 			
 			if type(coinToTeleport) == "string" then
 				if coinToTeleport == "Dead" then
-					StatusText.Text = "Status: You are dead!"
+                    -- UPDATED: Removed StatusText, added logic to reset player if dead in round
+					debug_print("Player is dead! Resetting...")
+					local resetStartTime = tick()
+					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
+						Humanoid.Health = 0
+						task.wait(0.3)
+					end
+					task.wait(1)
+
 					repeat
-						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
 						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 						HumanoidRootPart, Humanoid = GetHumanoid()
 					until HumanoidRootPart
 
-					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned!")
 					for i = 1, 3 do
 						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0) 
@@ -1523,7 +1523,6 @@ local function Start_Farm()
 				end
 
 				if coinToTeleport == "Full" then
-					StatusText.Text = "Status: Coin inventory full! Resetting."
 					debug_print("Coin inventory full! Forcing reset...")
 					
 					local resetStartTime = tick()
@@ -1535,13 +1534,11 @@ local function Start_Farm()
 					task.wait(1)
 					
 					repeat
-						StatusText.Text = "Status: Respawning..."
 						task.wait(1)
 						RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 						HumanoidRootPart, Humanoid = GetHumanoid()
 					until HumanoidRootPart
 
-					StatusText.Text = "Status: Respawned!"
 					debug_print("Player respawned after 'Full' reset!")
 					for i = 1, 3 do
 						HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1567,8 +1564,8 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 20 then
-                    debug_print("10x Fail Farm (Round). Hopping...")
+                if FailFarmCount >= 20 then -- UPDATED TO 20
+                    debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                     SmartServerHop(true)
                 end
             end
@@ -1576,15 +1573,21 @@ local function Start_Farm()
 		else
 			local status = FindCoin(false)
 			if status == "Dead" then
-				StatusText.Text = "Status: You are dead!"
+                -- UPDATED: Removed StatusText, added logic to reset player if dead in round
+				debug_print("Player is dead! Resetting...")
+				local resetStartTime = tick()
+				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
+					Humanoid.Health = 0
+					task.wait(0.3)
+				end
+				task.wait(1)
+
 				repeat
-					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
 					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
-				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned!")
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1592,7 +1595,6 @@ local function Start_Farm()
 				end
 				continue
 			elseif status == "Full" then
-				StatusText.Text = "Status: Coin inventory full! Resetting."
 				debug_print("Coin inventory full! Forcing reset...")
 				
 				local resetStartTime = tick()
@@ -1604,13 +1606,11 @@ local function Start_Farm()
 				task.wait(1)
 				
 				repeat
-					StatusText.Text = "Status: Respawning..."
 					task.wait(1)
 					RoundData = ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
 					HumanoidRootPart, Humanoid = GetHumanoid()
 				until HumanoidRootPart
 
-				StatusText.Text = "Status: Respawned!"
 				debug_print("Player respawned after 'Full' reset!")
 				for i = 1, 3 do
 					HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
@@ -1663,8 +1663,8 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 20 then
-                                        debug_print("10x Fail Farm (Round). Hopping...")
+                                     if FailFarmCount >= 20 then -- UPDATED TO 20
+                                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                                         SmartServerHop(true)
                                         break
                                        end
@@ -1679,8 +1679,8 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 20 then
-                        debug_print("10x Fail Farm (Round). Hopping...")
+                    if FailFarmCount >= 20 then -- UPDATED TO 20
+                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
                         SmartServerHop(true)
                     end
                 end
