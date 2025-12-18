@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 3,
+		["FPS"] = 60,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -103,7 +103,7 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
-local TargetPlaceId = game.PlaceId 
+local TargetPlaceId = game.PlaceId -- [UPDATED] Dynamic Place ID
 
 local headers = {
 	["Content-Type"] = "application/json",
@@ -268,7 +268,7 @@ end)
 
 HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
--- // SIMPLE GUI START // --
+-- // [UPDATED] SIMPLE GUI START // --
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local CurrentCoinsLabel = Instance.new("TextLabel")
@@ -340,7 +340,7 @@ local function CPUSaversIGMA()
 
 	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 	
-    -- [ADDED] Rendering Disable (Black Screen to save resources)
+    -- [UPDATED] Rendering Disable (Black Screen to save resources)
     pcall(function()
         RunService:Set3dRenderingEnabled(false)
     end)
@@ -350,9 +350,20 @@ local function CPUSaversIGMA()
 		RunService:UnbindFromRenderStep("Animation")
 	end)
 	
-	-- [REMOVED] Aggressive UI removal that was deleting CoreGui/PlayerGui. 
-    -- Now we trust the black screen + map cleanup to be enough.
+	-- [UPDATED] Clean up graphics but NOT UI to prevent breakage
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.Plastic
+            v.Reflectance = 0
+            v.CastShadow = false
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+            v.Enabled = false
+        end
+    end
 
+    -- [UPDATED] Aggressive Map Cleanup Loop
     task.spawn(function()
         while task.wait(3) do
             pcall(function()
@@ -362,7 +373,7 @@ local function CPUSaversIGMA()
                         continue
                     end
                     
-                    -- [UPDATED] Protected List: CoinsFolder, Platform, Camera, Player, Terrain, Lobby, RoundTimerPart
+                    -- [UPDATED] Protected List: RoundTimerPart added to prevent stuck bugs
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" or child.Name == "RoundTimerPart" then
                         continue
                     end
@@ -1444,10 +1455,9 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
-            -- Wait for round to ACTUALLY change before resetting everything
+            -- [UPDATED] Clear logic only when round actually ends
             if RoundTimerPart:GetAttribute("Time") == -1 then
                  task.wait(0.6)
-                 -- Only clear when round is truly ending/restarting
                  CoinsFolder:ClearAllChildren()
                  FailFarmCount = 0 
                  isFirstCoinOfRound = true
@@ -1491,7 +1501,7 @@ local function Start_Farm()
 			
 			if type(coinToTeleport) == "string" then
 				if coinToTeleport == "Dead" then
-                    -- UPDATED: Removed StatusText, added logic to reset player if dead in round
+                    -- [UPDATED] Fixed Dead logic loop
 					debug_print("Player is dead! Resetting...")
 					local resetStartTime = tick()
 					while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
@@ -1515,6 +1525,7 @@ local function Start_Farm()
 				end
 
 				if coinToTeleport == "Full" then
+                    -- [UPDATED] Fixed Full logic loop
 					debug_print("Coin inventory full! Forcing reset...")
 					
 					local resetStartTime = tick()
@@ -1556,8 +1567,8 @@ local function Start_Farm()
             else
                 FailFarmCount = FailFarmCount + 1
                 debug_print("Failed to collect first coin. Round Fail Count: " .. FailFarmCount)
-                if FailFarmCount >= 20 then -- UPDATED TO 20
-                    debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                if FailFarmCount >= 20 then
+                    debug_print("20x Fail Farm (Round). Hopping...")
                     SmartServerHop(true)
                 end
             end
@@ -1565,7 +1576,7 @@ local function Start_Farm()
 		else
 			local status = FindCoin(false)
 			if status == "Dead" then
-                -- UPDATED: Removed StatusText, added logic to reset player if dead in round
+                -- [UPDATED] Fixed Dead logic loop
 				debug_print("Player is dead! Resetting...")
 				local resetStartTime = tick()
 				while (Humanoid and Humanoid.Health > 0) and (tick() - resetStartTime < 5) do
@@ -1587,6 +1598,7 @@ local function Start_Farm()
 				end
 				continue
 			elseif status == "Full" then
+                -- [UPDATED] Fixed Full logic loop
 				debug_print("Coin inventory full! Forcing reset...")
 				
 				local resetStartTime = tick()
@@ -1655,8 +1667,8 @@ local function Start_Farm()
                                     break 
                                 else
                                     FailFarmCount = FailFarmCount + 1
-                                     if FailFarmCount >= 20 then -- UPDATED TO 20
-                                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                                     if FailFarmCount >= 20 then
+                                        debug_print("20x Fail Farm (Round). Hopping...")
                                         SmartServerHop(true)
                                         break
                                        end
@@ -1671,8 +1683,8 @@ local function Start_Farm()
                 else
                     FailFarmCount = FailFarmCount + 1
                     debug_print("Failed to collect chain start coin. Round Fail Count: " .. FailFarmCount)
-                    if FailFarmCount >= 20 then -- UPDATED TO 20
-                        debug_print("20x Fail Farm (Round). Hopping...") -- UPDATED TO 20
+                    if FailFarmCount >= 20 then
+                        debug_print("20x Fail Farm (Round). Hopping...")
                         SmartServerHop(true)
                     end
                 end
