@@ -1,4 +1,4 @@
--- // 1. FPS CAP (Added as requested) //
+-- // 1. FPS CAP //
 if setfpscap then
     setfpscap(3)
     print("FPS Capped to 3")
@@ -8,6 +8,8 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
@@ -45,6 +47,29 @@ WalkingPlatform.Parent = Workspace
 
 local visited = {}
 local currentPlatformY = 148
+local FailCount = 0 -- Track failures
+
+[cite_start]-- // SERVER HOP LOGIC [cite: 40, 49] //
+local function ServerHop()
+    SetStatus("Hopping Server...")
+    local PlaceId = game.PlaceId
+    local Api = "https://games.roblox.com/v1/games/"
+    local _servers = Api..PlaceId.."/servers/Public?sortOrder=Desc&limit=100"
+    
+    local function ListServers(cursor)
+        local Raw = game:HttpGet(_servers .. ((cursor and "&cursor="..cursor) or ""))
+        return HttpService:JSONDecode(Raw)
+    end
+
+    local Server, Next
+    repeat
+        local Servers = ListServers(Next)
+        Server = Servers.data[math.random(1, #Servers.data)]
+        Next = Servers.nextPageCursor
+    until Server and Server.playing < Server.maxPlayers and Server.id ~= game.JobId
+
+    TeleportService:TeleportToPlaceInstance(PlaceId, Server.id, LocalPlayer)
+end
 
 -- // PLATFORM UPDATE //
 RunService.Heartbeat:Connect(function()
@@ -72,7 +97,7 @@ local function ProcessMap(child)
 
         local function moveCoin(coin)
             if not coin or coin:GetAttribute("Collected") then return end
-            task.wait(0.6) -- [cite: 24]
+            task.wait(0.6)
             coin.Parent = CoinsFolder
             coin:SetAttribute("Collected", false)
             coin.Transparency = 1
@@ -99,23 +124,20 @@ local function FindBestCoin(radius, hrp)
         end
     end
     if #candidates == 0 then return nil end
-    return candidates[math.random(1, #candidates)] -- [cite: 36]
+    return candidates[math.random(1, #candidates)]
 end
 
 -- // WATERFALL WAIT LOGIC //
 local function RandomWaterfallWait(hrp)
     SetStatus("Waiting (Waterfall)...")
-    -- P1 [cite: 37]
     task.wait(0.5)
     local c1 = FindBestCoin(50, hrp)
     if c1 then return c1 end
 
-    -- P2 [cite: 37]
     task.wait(0.3)
     local c2 = FindBestCoin(50, hrp)
     if c2 then return c2 end
     
-    -- P3 [cite: 37]
     task.wait(0.4)
     local c3 = FindBestCoin(50, hrp)
     if c3 then return c3 end
@@ -123,12 +145,15 @@ local function RandomWaterfallWait(hrp)
     return nil
 end
 
--- // TELEPORT FUNCTION (EXACT LOGIC RESTORED) //
+-- // TELEPORT FUNCTION //
 local function TeleportToCoin(coin, hrp)
-    if not hrp or not coin or not coin.Parent then return false end
+    if not hrp or not coin or not coin.Parent then 
+        return false 
+    end
     
-    --  Check valid coin
-    if not coin.Parent or not coin:FindFirstChild("TouchInterest") then return false end
+    if not coin.Parent or not coin:FindFirstChild("TouchInterest") then 
+        return false 
+    end
 
     SetStatus("Teleporting to Coin...")
     
@@ -139,7 +164,6 @@ local function TeleportToCoin(coin, hrp)
     currentPlatformY = pos.Y - 2
     WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
 
-    --  Exact CFrame logic with lookAt
     if directionVector.Magnitude < 0.1 then
         hrp.CFrame = CFrame.new(pos)
     else
@@ -151,35 +175,62 @@ local function TeleportToCoin(coin, hrp)
     local startTime = tick()
     local maxWaitTime = 1.0 
     
-    -- [cite: 27, 28] Exact loop and wait times
     repeat
         if coin and coin.Parent and coin:FindFirstChild("TouchInterest") then
             firetouchinterest(coin, hrp, 0)
-            task.wait(0.15) -- 
+            task.wait(0.15)
             firetouchinterest(coin, hrp, 1)
-            task.wait(0.15) -- 
+            task.wait(0.15)
         else
-            task.wait(0.3) -- [cite: 30]
+            task.wait(0.3)
         end
     until (tick() - startTime) > maxWaitTime
     
     return true
 end
 
+-- // COIN CHECKER //
+local function CheckAndResetIfFull(hum)
+    local success, data = pcall(function()
+        return ReplicatedStorage.Remotes.Gameplay.GetCurrentPlayerData:InvokeServer()
+    end)
+    
+    if success and data and data[LocalPlayer.Name] then
+        local coins = data[LocalPlayer.Name].Coins or 0
+        [cite_start]if coins >= 50 then -- [cite: 39]
+            SetStatus("Bag Full (50/50). Resetting...")
+            hum.Health = 0
+            task.wait(3) -- Wait for respawn
+            return true
+        end
+    end
+    return false
+end
+
 -- // MAIN LOOP //
 task.spawn(function()
     while task.wait(0.5) do
+        [cite_start]-- A. Check Fail Count [cite: 70]
+        if FailCount >= 20 then
+            SetStatus("Too many fails (20+). Hopping...")
+            ServerHop()
+            task.wait(10)
+        end
+
+        -- B. Check Round Timer
         if not RoundTimerPart or RoundTimerPart:GetAttribute("Time") == -1 then
             if #visited > 0 then
                 SetStatus("Round Ended. Clearing cache.")
                 table.clear(visited)
                 CoinsFolder:ClearAllChildren()
+                [cite_start]FailCount = 0 -- Reset fails on new round [cite: 64]
             else
                 SetStatus("Waiting for Round Start...")
             end
             continue
         end
 
+        -- C. Check Character
         local Char = LocalPlayer.Character
         local HRP = Char and Char:FindFirstChild("HumanoidRootPart")
         local Hum = Char and Char:FindFirstChild("Humanoid")
@@ -189,26 +240,41 @@ task.spawn(function()
             continue
         end
 
+        [cite_start]-- D. Check Full Bag [cite: 68]
+        if CheckAndResetIfFull(Hum) then
+            continue
+        end
+
+        -- E. Farming
         local startCoin = FindBestCoin(2000, HRP)
         
         if startCoin then
             local success = TeleportToCoin(startCoin, HRP)
             if success then
                 visited[startCoin] = true
-                -- [cite: 74] Chain logic
+                FailCount = 0 -- Reset fail count on success
+                
+                -- Chain Loop
                 for i = 1, 5 do
+                    if CheckAndResetIfFull(Hum) then break end -- Check full during chain
+                    
                     local nextCoin = RandomWaterfallWait(HRP)
                     if nextCoin then
                         local chainSuccess = TeleportToCoin(nextCoin, HRP)
                         if chainSuccess then
                             visited[nextCoin] = true
+                            FailCount = 0
                         else
+                            FailCount = FailCount + 1
                             break
                         end
                     else
                         break 
                     end
                 end
+            else
+                FailCount = FailCount + 1
+                SetStatus("Failed Teleport. Count: " .. FailCount)
             end
         else
             SetStatus("Searching for valid coins...")
