@@ -1,13 +1,36 @@
+-- // 1. FPS CAP (Added as requested) //
+if setfpscap then
+    setfpscap(3)
+    print("FPS Capped to 3")
+end
+
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 local RoundTimerPart = Workspace:WaitForChild("RoundTimerPart", 10)
 
+-- // UI SETUP (Debug Status) //
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = CoreGui
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Parent = ScreenGui
+StatusLabel.Size = UDim2.new(0, 300, 0, 50)
+StatusLabel.Position = UDim2.new(0.5, -150, 0, 10)
+StatusLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+StatusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+StatusLabel.TextSize = 20
+StatusLabel.Text = "Status: Initializing..."
+
+local function SetStatus(text)
+    StatusLabel.Text = "Status: " .. text
+    print("[SCRIPT] " .. text)
+end
+
 -- // CONFIGURATION //
--- If coins are not "Coin_Server", we will accept them anyway if they are in the folder
 local CoinsFolder = Workspace:FindFirstChild("CoinsFolder") or Instance.new("Folder")
 CoinsFolder.Name = "CoinsFolder"
 CoinsFolder.Parent = Workspace
@@ -23,9 +46,7 @@ WalkingPlatform.Parent = Workspace
 local visited = {}
 local currentPlatformY = 148
 
-print("Script Loaded. Waiting for Round...")
-
--- // 1. PLATFORM UPDATE //
+-- // PLATFORM UPDATE //
 RunService.Heartbeat:Connect(function()
     if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         local rootPos = LocalPlayer.Character.HumanoidRootPart.Position
@@ -33,25 +54,25 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- // 2. MAP PROCESSING //
+-- // MAP PROCESSING //
 local function ProcessMap(child)
     if not child:IsA("Model") then return end
     
-    -- Robust wait logic (matches Source 24) 
     task.spawn(function()
         local container = child:FindFirstChild("CoinContainer")
-        while not container and child.Parent do
+        local retries = 0
+        while not container and child.Parent and retries < 30 do
             task.wait(1)
             container = child:FindFirstChild("CoinContainer")
+            retries = retries + 1
         end
         
         if not container then return end
-        print("Map CoinContainer Found: " .. child.Name)
+        SetStatus("Map Found: " .. child.Name)
 
         local function moveCoin(coin)
             if not coin or coin:GetAttribute("Collected") then return end
-            -- Wait slight delay before moving
-            task.wait(0.6) 
+            task.wait(0.6) -- [cite: 24]
             coin.Parent = CoinsFolder
             coin:SetAttribute("Collected", false)
             coin.Transparency = 1
@@ -64,27 +85,12 @@ local function ProcessMap(child)
     end)
 end
 
--- Scan existing and new maps
 for _, child in ipairs(Workspace:GetChildren()) do ProcessMap(child) end
 Workspace.ChildAdded:Connect(ProcessMap)
 
--- // 3. SEARCH FUNCTIONS //
-local function IsPlayerNearMe(radius, hrp)
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            local otherHrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if otherHrp and (otherHrp.Position - hrp.Position).Magnitude <= radius then
-                return true
-            end
-        end
-    end
-    return false
-end
-
+-- // SEARCH FUNCTIONS //
 local function FindBestCoin(radius, hrp)
     local candidates = {}
-    
-    -- Relaxed check: Accept any part in CoinsFolder with TouchInterest
     for _, coin in ipairs(CoinsFolder:GetChildren()) do
         if coin:IsA("Part") and not visited[coin] and coin:FindFirstChild("TouchInterest") then
             if (coin.Position - hrp.Position).Magnitude <= radius then
@@ -92,27 +98,24 @@ local function FindBestCoin(radius, hrp)
             end
         end
     end
-    
     if #candidates == 0 then return nil end
-    
-    -- Return random nearby coin (matches Source 39 logic for randomness) [cite: 39]
-    return candidates[math.random(1, #candidates)]
+    return candidates[math.random(1, #candidates)] -- [cite: 36]
 end
 
--- // 4. WAIT LOGIC (Waterfall) //
+-- // WATERFALL WAIT LOGIC //
 local function RandomWaterfallWait(hrp)
-    -- This matches the sequence from Source 37/75
-    -- P1: 50 stud, 0.5s
+    SetStatus("Waiting (Waterfall)...")
+    -- P1 [cite: 37]
     task.wait(0.5)
     local c1 = FindBestCoin(50, hrp)
     if c1 then return c1 end
 
-    -- P2: 50 stud, 0.3s
+    -- P2 [cite: 37]
     task.wait(0.3)
     local c2 = FindBestCoin(50, hrp)
     if c2 then return c2 end
     
-    -- P3: 50 stud, 0.4s
+    -- P3 [cite: 37]
     task.wait(0.4)
     local c3 = FindBestCoin(50, hrp)
     if c3 then return c3 end
@@ -120,67 +123,79 @@ local function RandomWaterfallWait(hrp)
     return nil
 end
 
--- // 5. TELEPORT FUNCTION //
+-- // TELEPORT FUNCTION (EXACT LOGIC RESTORED) //
 local function TeleportToCoin(coin, hrp)
     if not hrp or not coin or not coin.Parent then return false end
     
+    --  Check valid coin
+    if not coin.Parent or not coin:FindFirstChild("TouchInterest") then return false end
+
+    SetStatus("Teleporting to Coin...")
+    
     local pos = coin.Position
+    local currentPos = hrp.Position
+    local directionVector = (pos - currentPos)
+
     currentPlatformY = pos.Y - 2
     WalkingPlatform.CFrame = CFrame.new(pos.X, currentPlatformY, pos.Z)
-    hrp.CFrame = CFrame.new(pos)
 
-    local startTime = tick()
-    local maxWait = 1.0
-    
-    -- Try to collect
-    repeat
-        if not coin.Parent then break end
-        
-        -- Keep teleporting to ensure sync
+    --  Exact CFrame logic with lookAt
+    if directionVector.Magnitude < 0.1 then
         hrp.CFrame = CFrame.new(pos)
-        
-        if firetouchinterest then
+    else
+        local directionUnit = directionVector.Unit
+        local lookAtPos = pos + (directionUnit * 5)
+        hrp.CFrame = CFrame.new(pos, lookAtPos)
+    end
+    
+    local startTime = tick()
+    local maxWaitTime = 1.0 
+    
+    -- [cite: 27, 28] Exact loop and wait times
+    repeat
+        if coin and coin.Parent and coin:FindFirstChild("TouchInterest") then
             firetouchinterest(coin, hrp, 0)
-            task.wait(0.05)
+            task.wait(0.15) -- 
             firetouchinterest(coin, hrp, 1)
+            task.wait(0.15) -- 
+        else
+            task.wait(0.3) -- [cite: 30]
         end
-        task.wait(0.1)
-    until (tick() - startTime) > maxWait
+    until (tick() - startTime) > maxWaitTime
     
     return true
 end
 
--- // 6. MAIN LOOP //
+-- // MAIN LOOP //
 task.spawn(function()
     while task.wait(0.5) do
-        -- 1. Check Round Status
         if not RoundTimerPart or RoundTimerPart:GetAttribute("Time") == -1 then
-            -- Reset when round ends
-            table.clear(visited)
-            CoinsFolder:ClearAllChildren()
-            -- print("Waiting for round to start...") -- Uncomment to debug
+            if #visited > 0 then
+                SetStatus("Round Ended. Clearing cache.")
+                table.clear(visited)
+                CoinsFolder:ClearAllChildren()
+            else
+                SetStatus("Waiting for Round Start...")
+            end
             continue
         end
 
-        -- 2. Get Character
         local Char = LocalPlayer.Character
         local HRP = Char and Char:FindFirstChild("HumanoidRootPart")
         local Hum = Char and Char:FindFirstChild("Humanoid")
         
         if not HRP or not Hum or Hum.Health <= 0 then
+            SetStatus("Waiting for Respawn...")
             continue
         end
 
-        -- 3. Find Initial Coin (Global Search)
-        local startCoin = FindBestCoin(2000, HRP) -- Large radius to find first coin
+        local startCoin = FindBestCoin(2000, HRP)
         
         if startCoin then
-            print("Found Start Coin, Teleporting...")
             local success = TeleportToCoin(startCoin, HRP)
             if success then
                 visited[startCoin] = true
-                
-                -- 4. Chain Logic (Collect nearby coins)
+                -- [cite: 74] Chain logic
                 for i = 1, 5 do
                     local nextCoin = RandomWaterfallWait(HRP)
                     if nextCoin then
@@ -191,12 +206,12 @@ task.spawn(function()
                             break
                         end
                     else
-                        break -- No more nearby coins, go back to global search
+                        break 
                     end
                 end
             end
         else
-            -- print("No coins found yet...")
+            SetStatus("Searching for valid coins...")
         end
     end
 end)
