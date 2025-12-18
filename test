@@ -351,21 +351,8 @@ local function CPUSaversIGMA()
 		RunService:UnbindFromRenderStep("Animation")
 	end)
 	
-	-- [ADDED] UI REMOVAL (Removes Game UI, keeps Script UI)
-    pcall(function()
-        -- Clear PlayerGui (Normal Game UIs)
-        if player:FindFirstChild("PlayerGui") then
-            player.PlayerGui:ClearAllChildren()
-        end
-    end)
-
-    -- Clear CoreGui (System UIs), preserving the Script's ScreenGui
-    for _, child in pairs(CoreGui:GetChildren()) do
-        if child ~= ScreenGui and child.Name ~= "RobloxGui" and child.Name ~= "CoreScripts" then
-            pcall(function() child:Destroy() end)
-        end
-    end
-
+	-- [REMOVED] Aggressive UI removal that was deleting CoreGui/PlayerGui. 
+    -- Now we trust the black screen + map cleanup to be enough.
 
     task.spawn(function()
         while task.wait(3) do
@@ -376,7 +363,7 @@ local function CPUSaversIGMA()
                         continue
                     end
                     
-                    if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" then
+                    if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" or child.Name == "RoundTimerPart" then
                         continue
                     end
 
