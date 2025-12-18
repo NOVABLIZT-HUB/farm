@@ -1444,6 +1444,16 @@ local function Start_Farm()
 			or (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"])
 			or (RoundData and not RoundData[player.Name])
 		then
+            -- Wait for round to ACTUALLY change before resetting everything
+            if RoundTimerPart:GetAttribute("Time") == -1 then
+                 task.wait(0.6)
+                 -- Only clear when round is truly ending/restarting
+                 CoinsFolder:ClearAllChildren()
+                 FailFarmCount = 0 
+                 isFirstCoinOfRound = true
+			     visited = {}
+            end
+
 			task.wait(0.6)
 			HumanoidRootPart, Humanoid = GetHumanoid()
 
@@ -1470,11 +1480,6 @@ local function Start_Farm()
 			end
 
 			debug_print("Status: New round active. Safe platform reached!")
-			
-			isFirstCoinOfRound = true
-			visited = {}
-            CoinsFolder:ClearAllChildren()
-            FailFarmCount = 0 
 		end
 
 		ClearMap()
