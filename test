@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 60,
+		["FPS"] = 3,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -69,7 +69,7 @@ end
 local cfg = (getgenv and getgenv().Config) or _G.Config or {}
 cfg = mergeConfig(Default_Config, cfg)
 
-local Version = "v2.8 Fix Update 🎄 (Reset Restored)\n"
+local Version = "v2.6 Christmass Update 🎄 (Simple UI & Opt)\n"
 local NewestVersion
 local usernameRevealed = false
 local ChromaAnimation = false
@@ -268,7 +268,7 @@ end)
 
 HumanoidRootPart.CFrame = CFrame.new(0, 150, 0)
 
--- // CUSTOM GUI START // --
+-- // SIMPLE GUI START // --
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
 local CurrentCoinsLabel = Instance.new("TextLabel")
@@ -278,7 +278,7 @@ local TimerLabel = Instance.new("TextLabel")
 
 ScreenGui.Parent = CoreGui
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.DisplayOrder = 10000
+ScreenGui.DisplayOrder = 10000 -- Top-most
 
 MainFrame.Parent = ScreenGui
 MainFrame.BackgroundColor3 = Color3.new(0, 0, 0)
@@ -305,7 +305,7 @@ setupLabel(CurrentCoinsLabel, UDim2.new(0.2, 0, 0.1, 0), UDim2.new(0.6, 0, 0.15,
 setupLabel(SessionCoinsLabel, UDim2.new(0.2, 0, 0.3, 0), UDim2.new(0.6, 0, 0.15, 0), "Session Coins: 0")
 setupLabel(RoundCoinsLabel, UDim2.new(0.2, 0, 0.5, 0), UDim2.new(0.6, 0, 0.15, 0), "Round Coins: 0")
 setupLabel(TimerLabel, UDim2.new(0.2, 0, 0.7, 0), UDim2.new(0.6, 0, 0.15, 0), "Time Farming: 00:00:00")
--- // CUSTOM GUI END // --
+-- // END OF SIMPLE GUI // --
 
 consolecreate("DEBUG")
 local function debug_print(...)
@@ -340,6 +340,7 @@ local function CPUSaversIGMA()
 
 	settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 	
+    -- [ADDED] Rendering Disable (Black Screen to save resources)
     pcall(function()
         RunService:Set3dRenderingEnabled(false)
     end)
@@ -349,6 +350,9 @@ local function CPUSaversIGMA()
 		RunService:UnbindFromRenderStep("Animation")
 	end)
 	
+	-- [REMOVED] Aggressive UI removal that was deleting CoreGui/PlayerGui. 
+    -- Now we trust the black screen + map cleanup to be enough.
+
     task.spawn(function()
         while task.wait(3) do
             pcall(function()
@@ -358,6 +362,7 @@ local function CPUSaversIGMA()
                         continue
                     end
                     
+                    -- [UPDATED] Protected List: CoinsFolder, Platform, Camera, Player, Terrain, Lobby, RoundTimerPart
                     if child.Name == "CoinsFolder" or child.Name == "WalkingPlatform" or child:IsA("Camera") or child.Name == player.Name or child:IsA("Terrain") or child.Name == "Lobby" or child.Name == "RoundTimerPart" then
                         continue
                     end
@@ -1462,10 +1467,7 @@ local function Start_Farm()
 				end
 				task.wait(1)
 			until RoundTimerPart:GetAttribute("Time") ~= -1
-            
-            -- Force clear visited again just in case
-            visited = {} 
-
+				and (RoundData and RoundData[player.Name] and RoundData[player.Name]["Dead"] == false)
 			task.wait(1)
 
 			HumanoidRootPart, Humanoid = GetHumanoid()
@@ -1623,9 +1625,6 @@ local function Start_Farm()
                     debug_print("Collected coin")
                     
                     for i = 2, 5 do
-                        -- Break loop immediately if round ends while chaining
-                        if RoundTimerPart:GetAttribute("Time") == -1 then break end 
-
                         if RoundData and RoundData[player.Name] and RoundData[player.Name]["Coins"] >= 50 then
                             break
                         end
