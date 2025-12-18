@@ -39,7 +39,7 @@ local Default_Config = {
 
 		["KILL_BAD_PEOPLE"] = true,
 
-		["FPS"] = 3,
+		["FPS"] = 60,
 
 		["AutoShutdown"] = {
 			["Mode"] = 1,
@@ -103,7 +103,7 @@ local VirtualUser = game:GetService("VirtualUser")
 
 local Api = "https://games.roblox.com/v1/games/"
 local PlaceId = game.PlaceId
-local TargetPlaceId = 142823291 
+local TargetPlaceId = game.PlaceId -- UPDATED: Uses current game ID dynamically
 
 local headers = {
 	["Content-Type"] = "application/json",
